@@ -222,7 +222,29 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
                 resolvedEntryPath = resolve(workspaceDirectory, conditionValue);
               }
             }
-          } else if (!subpath) {
+          }
+
+          if (subpath && !resolvedEntryPath) {
+            const directSubpath = resolve(workspaceDirectory, subpath);
+            for (const candidateExtension of RESOLVER_EXTENSIONS) {
+              const candidate = directSubpath + candidateExtension;
+              if (existsSync(candidate)) {
+                resolvedEntryPath = candidate;
+                break;
+              }
+            }
+            if (!resolvedEntryPath) {
+              for (const candidateExtension of RESOLVER_EXTENSIONS) {
+                const indexCandidate = join(directSubpath, `index${candidateExtension}`);
+                if (existsSync(indexCandidate)) {
+                  resolvedEntryPath = indexCandidate;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!subpath) {
             const mainField = workspacePackageJson.main ?? workspacePackageJson.module;
             if (typeof mainField === "string") {
               resolvedEntryPath = resolve(workspaceDirectory, mainField);
