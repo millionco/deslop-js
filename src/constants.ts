@@ -15,10 +15,19 @@ export const DEFAULT_IGNORE_PATTERNS = [
   "**/build/**",
   "**/.git/**",
   "**/coverage/**",
+  "**/*.d.ts",
+];
+
+export const TEST_FILE_PATTERNS = [
   "**/__tests__/**",
   "**/*.test.*",
   "**/*.spec.*",
-  "**/*.d.ts",
+  "**/tests/**",
+  "**/test/**",
+  "**/__mocks__/**",
+  "**/__snapshots__/**",
+  "**/fixtures/**",
+  "**/__fixtures__/**",
 ];
 
 export const DEFAULT_ENTRY_PATTERNS = [

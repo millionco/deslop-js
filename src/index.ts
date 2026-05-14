@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import type { DeslopConfig, AnalysisResult } from "./types.js";
 import { DEFAULT_ENTRY_PATTERNS, DEFAULT_EXTENSIONS } from "./constants.js";
 import { discoverFiles, discoverEntryPoints } from "./scanner/discover.js";
+import { discoverWorkspacePackages } from "./scanner/workspaces.js";
 import { parseModule } from "./scanner/parse.js";
 import { createModuleResolver } from "./resolver/resolve.js";
 import { buildModuleGraph } from "./graph/build.js";
@@ -31,7 +32,11 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
   const entryPoints = await discoverEntryPoints(config);
   const entryPointSet = new Set(entryPoints);
 
-  const moduleResolver = createModuleResolver(config);
+  const workspacePackages = discoverWorkspacePackages(resolve(config.rootDir));
+  const moduleResolver = createModuleResolver(config, workspacePackages.map((workspacePackage) => ({
+    name: workspacePackage.name,
+    directory: workspacePackage.directory,
+  })));
   const graphInputs: GraphBuildInput[] = [];
 
   for (const file of files) {
