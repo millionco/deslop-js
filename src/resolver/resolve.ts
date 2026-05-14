@@ -134,7 +134,6 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
         }
       }
     } catch {
-      // tsconfig parse failed
     }
     tsconfigPathAliasCache.set(tsconfigFile, aliasMap);
     return aliasMap;
@@ -256,7 +255,6 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
             }
           }
         } catch {
-          // workspace package.json read failed, fall through to normal resolution
         }
       }
     }
