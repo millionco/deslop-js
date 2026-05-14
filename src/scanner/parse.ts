@@ -116,7 +116,16 @@ export const parseModule = (filePath: string): ParsedModule => {
       ? filePath.replace(/\.astro$/, ".tsx")
       : filePath;
 
-  const result = parseSync(parseFileName, textToParse);
+  let result = parseSync(parseFileName, textToParse);
+
+  const hasJsxError = result.errors.length > 0
+    && result.errors.some((parseError) => String(parseError.message ?? "").includes("JSX"))
+    && (parseFileName.endsWith(".js") || parseFileName.endsWith(".mjs") || parseFileName.endsWith(".cjs"));
+
+  if (hasJsxError) {
+    const jsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".jsx");
+    result = parseSync(jsxFileName, textToParse);
+  }
 
   if (result.errors.length > 0) {
     return { imports, exports };
