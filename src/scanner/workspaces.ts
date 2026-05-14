@@ -367,6 +367,16 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
     "src/instrumentation-client.{ts,tsx,js,jsx}",
     "env.{ts,js,mjs}",
     "src/env.{ts,js,mjs}",
+    "src/routeTree.gen.{ts,tsx}",
+    "src/router.{ts,tsx}",
+    "src/entry-client.{ts,tsx,js,jsx}",
+    "src/entry-server.{ts,tsx,js,jsx}",
+    "src/entry.client.{ts,tsx,js,jsx}",
+    "src/entry.server.{ts,tsx,js,jsx}",
+    "src/root.{ts,tsx,js,jsx}",
+    "app/entry.client.{ts,tsx,js,jsx}",
+    "app/entry.server.{ts,tsx,js,jsx}",
+    "app/root.{ts,tsx,js,jsx}",
   ];
 
   const configFiles = fg.sync(configPatterns, {
@@ -378,16 +388,17 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   });
   entryPoints.push(...configFiles);
 
-  const testDirs = ["e2e", "cypress"];
-  for (const testDir of testDirs) {
-    const dirPath = join(rootDir, testDir);
+  const alwaysEntryDirs = ["e2e", "cypress", ".github"];
+  for (const entryDir of alwaysEntryDirs) {
+    const dirPath = join(rootDir, entryDir);
     if (existsSync(dirPath) && statSync(dirPath).isDirectory()) {
-      const testFiles = fg.sync(FRAMEWORK_FILE_GLOB, {
+      const dirFiles = fg.sync(FRAMEWORK_FILE_GLOB, {
         cwd: dirPath,
         absolute: true,
         onlyFiles: true,
+        dot: entryDir.startsWith("."),
       });
-      entryPoints.push(...testFiles);
+      entryPoints.push(...dirFiles);
     }
   }
 
