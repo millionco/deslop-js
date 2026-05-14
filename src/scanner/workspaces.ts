@@ -10,12 +10,16 @@ export interface WorkspacePackage {
 
 export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] => {
   const patterns = collectWorkspacePatterns(rootDir);
-  if (patterns.length === 0) return [];
+  const expandedDirectories = patterns.length > 0
+    ? expandWorkspaceGlobs(patterns, rootDir)
+    : [];
 
-  const expandedDirectories = expandWorkspaceGlobs(patterns, rootDir);
+  const implicitSubProjects = discoverImplicitSubProjects(rootDir, expandedDirectories);
+  const allDirectories = [...new Set([...expandedDirectories, ...implicitSubProjects])];
+
   const workspacePackages: WorkspacePackage[] = [];
 
-  for (const directory of expandedDirectories) {
+  for (const directory of allDirectories) {
     const packageJsonPath = join(directory, "package.json");
     if (!existsSync(packageJsonPath)) continue;
 
@@ -35,6 +39,34 @@ export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] =
   }
 
   return workspacePackages;
+};
+
+const IMPLICIT_SUB_PROJECT_SEARCH_DEPTH = 3;
+
+const discoverImplicitSubProjects = (
+  rootDir: string,
+  alreadyDiscoveredDirectories: string[],
+): string[] => {
+  const knownDirectories = new Set(alreadyDiscoveredDirectories);
+  const subProjectDirectories: string[] = [];
+
+  const subPackageJsonPaths = fg.sync("**/package.json", {
+    cwd: rootDir,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.git/**"],
+    deep: IMPLICIT_SUB_PROJECT_SEARCH_DEPTH + 1,
+  });
+
+  for (const packageJsonPath of subPackageJsonPaths) {
+    const directory = packageJsonPath.replace(/\/package\.json$/, "");
+    if (directory === rootDir) continue;
+    if (knownDirectories.has(directory)) continue;
+
+    subProjectDirectories.push(directory);
+  }
+
+  return subProjectDirectories;
 };
 
 const collectWorkspacePatterns = (rootDir: string): string[] => {
