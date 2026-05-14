@@ -1,0 +1,49 @@
+{
+  "name": "deslop",
+  "version": "0.1.0",
+  "description": "High-performance dead code detector for TypeScript/JavaScript using the OXC toolchain",
+  "type": "module",
+  "bin": {
+    "deslop": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "dead-code",
+    "unused",
+    "exports",
+    "files",
+    "dependencies",
+    "typescript",
+    "javascript",
+    "oxc"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@oxc-project/types": "^0.130.0",
+    "fast-glob": "^3.3.3",
+    "oxc-parser": "^0.130.0",
+    "oxc-resolver": "^11.19.1",
+    "picomatch": "^4.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.0"
+  }
+}
