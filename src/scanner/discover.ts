@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { FileId, DeslopConfig } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, TEST_FILE_PATTERNS, SCRIPT_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS } from "../constants.js";
+import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, SCRIPT_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, TEST_FILE_PATTERNS } from "../constants.js";
 import { discoverWorkspacePackages, discoverFrameworkEntryPoints } from "./workspaces.js";
 
 export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => {
@@ -71,12 +71,7 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
     ignore: [...DEFAULT_IGNORE_PATTERNS],
   });
 
-  const testEntryFiles = await fg(TEST_FILE_PATTERNS, {
-    cwd: absoluteRoot,
-    absolute: true,
-    onlyFiles: true,
-    ignore: [...DEFAULT_IGNORE_PATTERNS],
-  });
+  const testEntryFiles = await discoverTestEntryPoints(absoluteRoot, workspacePackages.map((workspacePackage) => workspacePackage.directory));
 
   return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...scriptPatternFiles, ...testEntryFiles])];
 };
@@ -145,6 +140,77 @@ const extractScriptEntries = (directory: string): string[] => {
   }
 
   return entries;
+};
+
+const TEST_RUNNER_CONFIG_PATTERNS = [
+  "vitest.config.*",
+  "jest.config.*",
+  "jest.setup.*",
+  "playwright.config.*",
+  "cypress.config.*",
+  ".mocharc.*",
+  "karma.conf.*",
+  "ava.config.*",
+];
+
+const hasTestRunnerConfig = (directory: string): boolean => {
+  const configSearchPatterns = [
+    ...TEST_RUNNER_CONFIG_PATTERNS,
+    ...TEST_RUNNER_CONFIG_PATTERNS.map((pattern) => `**/${pattern}`),
+  ];
+  const configFiles = fg.sync(configSearchPatterns, {
+    cwd: directory,
+    onlyFiles: true,
+    dot: true,
+    ignore: ["**/node_modules/**"],
+    deep: 3,
+  });
+  if (configFiles.length > 0) return true;
+
+  try {
+    const packageJsonPath = resolve(directory, "package.json");
+    if (existsSync(packageJsonPath)) {
+      const content = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(content);
+      if (packageJson.jest || packageJson.mocha || packageJson.ava) return true;
+      const devDependencies = packageJson.devDependencies ?? {};
+      const dependencies = packageJson.dependencies ?? {};
+      const allDependencies = { ...dependencies, ...devDependencies };
+      const hasTestingDependency = Boolean(
+        allDependencies.vitest || allDependencies.jest || allDependencies["@jest/core"] ||
+        allDependencies.mocha || allDependencies.ava || allDependencies["@vitest/runner"]
+      );
+      if (hasTestingDependency) return true;
+
+      const testScript = packageJson.scripts?.test;
+      if (typeof testScript === "string" && testScript.length > 0) return true;
+    }
+  } catch {
+  }
+
+  return false;
+};
+
+const discoverTestEntryPoints = async (
+  rootDir: string,
+  workspaceDirectories: string[],
+): Promise<string[]> => {
+  const directoriesToCheck = [rootDir, ...workspaceDirectories];
+  const testEntries: string[] = [];
+
+  for (const directory of directoriesToCheck) {
+    if (!hasTestRunnerConfig(directory)) continue;
+
+    const testFiles = await fg(TEST_FILE_PATTERNS, {
+      cwd: directory,
+      absolute: true,
+      onlyFiles: true,
+      ignore: [...DEFAULT_IGNORE_PATTERNS],
+    });
+    testEntries.push(...testFiles);
+  }
+
+  return testEntries;
 };
 
 const collectExportPaths = (

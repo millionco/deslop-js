@@ -264,27 +264,56 @@ const collectExportPaths = (
   }
 };
 
+const NEXTJS_APP_ROUTER_CONVENTIONS = [
+  "page", "layout", "loading", "error", "not-found",
+  "template", "default", "route", "global-error",
+  "middleware", "instrumentation",
+];
+
+const FRAMEWORK_FILE_GLOB = "**/*.{ts,tsx,js,jsx,mdx,mjs,cjs,astro}";
+
 export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   const entryPoints: string[] = [];
 
-  const frameworkDirs = [
-    join(rootDir, "app"),
-    join(rootDir, "src", "app"),
+  const allFileDirs = [
     join(rootDir, "pages"),
     join(rootDir, "src", "pages"),
     join(rootDir, "src", "routes"),
     join(rootDir, "routes"),
+    join(rootDir, "src", "layouts"),
+    join(rootDir, "layouts"),
   ];
 
-  for (const frameworkDir of frameworkDirs) {
+  for (const frameworkDir of allFileDirs) {
     if (existsSync(frameworkDir) && statSync(frameworkDir).isDirectory()) {
-      const frameworkFiles = fg.sync("**/*.{ts,tsx,js,jsx,mdx,mjs,cjs}", {
+      const frameworkFiles = fg.sync(FRAMEWORK_FILE_GLOB, {
         cwd: frameworkDir,
         absolute: true,
         onlyFiles: true,
         ignore: ["**/node_modules/**"],
       });
       entryPoints.push(...frameworkFiles);
+    }
+  }
+
+  const appRouterConventionGlob = NEXTJS_APP_ROUTER_CONVENTIONS
+    .map((convention) => `**/${convention}.{ts,tsx,js,jsx,mdx}`)
+    .join(",");
+
+  const appDirs = [
+    join(rootDir, "app"),
+    join(rootDir, "src", "app"),
+  ];
+
+  for (const appDir of appDirs) {
+    if (existsSync(appDir) && statSync(appDir).isDirectory()) {
+      const conventionFiles = fg.sync(`{${appRouterConventionGlob}}`, {
+        cwd: appDir,
+        absolute: true,
+        onlyFiles: true,
+        ignore: ["**/node_modules/**"],
+      });
+      entryPoints.push(...conventionFiles);
     }
   }
 
