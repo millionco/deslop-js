@@ -1,0 +1,362 @@
+import { resolve, join, relative } from "node:path";
+import { readFileSync, existsSync, statSync } from "node:fs";
+import fg from "fast-glob";
+
+export interface WorkspacePackage {
+  name: string;
+  directory: string;
+  entryFiles: string[];
+}
+
+export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] => {
+  const patterns = collectWorkspacePatterns(rootDir);
+  if (patterns.length === 0) return [];
+
+  const expandedDirectories = expandWorkspaceGlobs(patterns, rootDir);
+  const workspacePackages: WorkspacePackage[] = [];
+
+  for (const directory of expandedDirectories) {
+    const packageJsonPath = join(directory, "package.json");
+    if (!existsSync(packageJsonPath)) continue;
+
+    try {
+      const packageContent = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(packageContent);
+      const packageName = packageJson.name || relative(rootDir, directory);
+      const entryFiles = extractWorkspaceEntries(packageJson, directory);
+
+      workspacePackages.push({
+        name: packageName,
+        directory,
+        entryFiles,
+      });
+    } catch {
+      // skip invalid package.json
+    }
+  }
+
+  return workspacePackages;
+};
+
+const collectWorkspacePatterns = (rootDir: string): string[] => {
+  const patterns: string[] = [];
+
+  const packageJsonPath = join(rootDir, "package.json");
+  if (existsSync(packageJsonPath)) {
+    try {
+      const content = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(content);
+      if (Array.isArray(packageJson.workspaces)) {
+        patterns.push(...packageJson.workspaces);
+      } else if (packageJson.workspaces?.packages) {
+        patterns.push(...packageJson.workspaces.packages);
+      }
+    } catch {
+      // skip invalid package.json
+    }
+  }
+
+  const pnpmWorkspacePath = join(rootDir, "pnpm-workspace.yaml");
+  if (existsSync(pnpmWorkspacePath)) {
+    try {
+      const content = readFileSync(pnpmWorkspacePath, "utf-8");
+      const packageLines = extractPnpmWorkspacePackages(content);
+      patterns.push(...packageLines);
+    } catch {
+      // skip invalid pnpm-workspace.yaml
+    }
+  }
+
+  return patterns;
+};
+
+const extractPnpmWorkspacePackages = (yamlContent: string): string[] => {
+  const packages: string[] = [];
+  let inPackagesSection = false;
+
+  for (const line of yamlContent.split("\n")) {
+    const trimmedLine = line.trim();
+    if (trimmedLine === "packages:") {
+      inPackagesSection = true;
+      continue;
+    }
+    if (inPackagesSection) {
+      if (trimmedLine.startsWith("- ")) {
+        const pattern = trimmedLine
+          .slice(2)
+          .trim()
+          .replace(/^["']|["']$/g, "");
+        if (pattern && !pattern.startsWith("!")) {
+          packages.push(pattern);
+        }
+      } else if (trimmedLine && !trimmedLine.startsWith("#")) {
+        break;
+      }
+    }
+  }
+
+  return packages;
+};
+
+const expandWorkspaceGlobs = (
+  patterns: string[],
+  rootDir: string,
+): string[] => {
+  const directories: string[] = [];
+
+  for (const pattern of patterns) {
+    if (pattern.includes("*")) {
+      const globPattern = pattern.endsWith("/")
+        ? `${pattern}package.json`
+        : `${pattern}/package.json`;
+      try {
+        const matchedFiles = fg.sync(globPattern, {
+          cwd: rootDir,
+          absolute: true,
+          onlyFiles: true,
+        });
+        for (const matchedPath of matchedFiles) {
+          directories.push(matchedPath.replace(/\/package\.json$/, ""));
+        }
+      } catch {
+        // skip invalid glob
+      }
+    } else {
+      const absoluteDirectory = resolve(rootDir, pattern);
+      if (existsSync(join(absoluteDirectory, "package.json"))) {
+        directories.push(absoluteDirectory);
+      }
+    }
+  }
+
+  return [...new Set(directories)];
+};
+
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".cts", ".cjs"];
+
+const resolveSourcePath = (distPath: string, directory: string): string[] => {
+  const candidates: string[] = [distPath];
+
+  const relativeToDist = relative(directory, distPath);
+  const sourceVariants = [
+    relativeToDist.replace(/^dist\//, "src/"),
+    relativeToDist.replace(/^build\//, "src/"),
+    relativeToDist.replace(/^lib\//, "src/"),
+    relativeToDist.replace(/^out\//, "src/"),
+    relativeToDist.replace(/^\.\/dist\//, "src/"),
+  ];
+
+  for (const variant of sourceVariants) {
+    if (variant === relativeToDist) continue;
+
+    const withoutExtension = variant.replace(/\.[^.]+$/, "");
+    for (const sourceExtension of SOURCE_EXTENSIONS) {
+      const sourceCandidate = resolve(directory, withoutExtension + sourceExtension);
+      if (existsSync(sourceCandidate)) {
+        candidates.push(sourceCandidate);
+      }
+    }
+
+    const asDirectory = resolve(directory, withoutExtension);
+    for (const indexExtension of SOURCE_EXTENSIONS) {
+      const indexCandidate = join(asDirectory, `index${indexExtension}`);
+      if (existsSync(indexCandidate)) {
+        candidates.push(indexCandidate);
+      }
+    }
+  }
+
+  return candidates;
+};
+
+const extractWorkspaceEntries = (
+  packageJson: Record<string, unknown>,
+  directory: string,
+): string[] => {
+  const entries: string[] = [];
+
+  const addWithSourceResolution = (filePath: string) => {
+    const resolved = resolve(directory, filePath);
+    entries.push(resolved);
+    const sourceVariants = resolveSourcePath(resolved, directory);
+    entries.push(...sourceVariants);
+  };
+
+  const entryFields = ["main", "module", "browser", "types", "typings", "source"];
+  for (const field of entryFields) {
+    if (typeof packageJson[field] === "string") {
+      addWithSourceResolution(packageJson[field] as string);
+    }
+  }
+
+  if (packageJson.exports) {
+    const exportPaths: string[] = [];
+    collectExportPaths(packageJson.exports, directory, exportPaths);
+    for (const exportPath of exportPaths) {
+      entries.push(exportPath);
+      const sourceVariants = resolveSourcePath(exportPath, directory);
+      entries.push(...sourceVariants);
+    }
+  }
+
+  if (packageJson.bin) {
+    if (typeof packageJson.bin === "string") {
+      addWithSourceResolution(packageJson.bin);
+    } else if (typeof packageJson.bin === "object" && packageJson.bin !== null) {
+      for (const binPath of Object.values(packageJson.bin)) {
+        if (typeof binPath === "string") {
+          addWithSourceResolution(binPath);
+        }
+      }
+    }
+  }
+
+  const defaultEntryFiles = [
+    "src/index.ts",
+    "src/index.tsx",
+    "src/index.js",
+    "src/index.jsx",
+    "src/main.ts",
+    "src/main.tsx",
+    "index.ts",
+    "index.tsx",
+    "index.js",
+    "index.jsx",
+  ];
+
+  for (const defaultEntry of defaultEntryFiles) {
+    const absolutePath = resolve(directory, defaultEntry);
+    if (existsSync(absolutePath)) {
+      entries.push(absolutePath);
+    }
+  }
+
+  return [...new Set(entries)];
+};
+
+const collectExportPaths = (
+  exportValue: unknown,
+  rootDir: string,
+  entries: string[],
+): void => {
+  if (typeof exportValue === "string") {
+    if (exportValue.startsWith(".")) {
+      if (exportValue.includes("*")) {
+        const globPattern = exportValue.replace(/^\.\/?/, "");
+        try {
+          const expandedFiles = fg.sync(globPattern, {
+            cwd: rootDir,
+            absolute: true,
+            onlyFiles: true,
+            ignore: ["**/node_modules/**"],
+          });
+          entries.push(...expandedFiles);
+        } catch {
+          // skip invalid glob
+        }
+      } else {
+        entries.push(resolve(rootDir, exportValue));
+      }
+    }
+    return;
+  }
+
+  if (typeof exportValue !== "object" || exportValue === null) return;
+
+  for (const nestedValue of Object.values(exportValue)) {
+    collectExportPaths(nestedValue, rootDir, entries);
+  }
+};
+
+export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
+  const entryPoints: string[] = [];
+
+  const frameworkDirs = [
+    join(rootDir, "app"),
+    join(rootDir, "src", "app"),
+    join(rootDir, "pages"),
+    join(rootDir, "src", "pages"),
+    join(rootDir, "src", "routes"),
+    join(rootDir, "routes"),
+  ];
+
+  for (const frameworkDir of frameworkDirs) {
+    if (existsSync(frameworkDir) && statSync(frameworkDir).isDirectory()) {
+      const frameworkFiles = fg.sync("**/*.{ts,tsx,js,jsx}", {
+        cwd: frameworkDir,
+        absolute: true,
+        onlyFiles: true,
+        ignore: ["**/node_modules/**"],
+      });
+      entryPoints.push(...frameworkFiles);
+    }
+  }
+
+  const storyPatterns = [
+    "**/*.stories.{ts,tsx,js,jsx,mts,mjs}",
+    "**/*.story.{ts,tsx,js,jsx,mts,mjs}",
+    ".storybook/**/*.{ts,tsx,js,jsx,mts,mjs}",
+  ];
+
+  const storyFiles = fg.sync(storyPatterns, {
+    cwd: rootDir,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**"],
+    dot: true,
+  });
+  entryPoints.push(...storyFiles);
+
+  const configPatterns = [
+    "*.config.{ts,tsx,js,jsx,mjs,cjs}",
+    ".*.{ts,tsx,js,jsx,mjs,cjs}",
+    "tailwind.config.*",
+    "postcss.config.*",
+    "next.config.*",
+    "vite.config.*",
+    "vitest.config.*",
+    "astro.config.*",
+    "nuxt.config.*",
+    "svelte.config.*",
+    "webpack.config.*",
+    "rollup.config.*",
+    "jest.config.*",
+    "babel.config.*",
+    "playwright.config.*",
+    "drizzle.config.*",
+    "knip.config.*",
+    "contentlayer.config.*",
+    "middleware.{ts,tsx,js,jsx}",
+    "src/middleware.{ts,tsx,js,jsx}",
+    "instrumentation.{ts,tsx,js,jsx}",
+    "instrumentation-client.{ts,tsx,js,jsx}",
+    "src/instrumentation.{ts,tsx,js,jsx}",
+    "src/instrumentation-client.{ts,tsx,js,jsx}",
+    "env.{ts,js,mjs}",
+    "src/env.{ts,js,mjs}",
+  ];
+
+  const configFiles = fg.sync(configPatterns, {
+    cwd: rootDir,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**"],
+    dot: true,
+  });
+  entryPoints.push(...configFiles);
+
+  const scriptDirs = ["scripts", "bin", "tools", "e2e", "cypress"];
+  for (const scriptDir of scriptDirs) {
+    const dirPath = join(rootDir, scriptDir);
+    if (existsSync(dirPath) && statSync(dirPath).isDirectory()) {
+      const scriptFiles = fg.sync("**/*.{ts,tsx,js,jsx,mjs,cjs}", {
+        cwd: dirPath,
+        absolute: true,
+        onlyFiles: true,
+      });
+      entryPoints.push(...scriptFiles);
+    }
+  }
+
+  return [...new Set(entryPoints)];
+};

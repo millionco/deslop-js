@@ -2,7 +2,8 @@ import fg from "fast-glob";
 import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import type { FileId, DeslopConfig } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS } from "../constants.js";
+import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, TEST_FILE_PATTERNS } from "../constants.js";
+import { discoverWorkspacePackages, discoverFrameworkEntryPoints } from "./workspaces.js";
 
 export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => {
   const extensions =
@@ -46,7 +47,25 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
   const packageJsonPath = resolve(absoluteRoot, "package.json");
   const packageJsonEntries = await extractPackageJsonEntries(packageJsonPath);
 
-  return [...new Set([...entryFiles, ...packageJsonEntries])];
+  const workspacePackages = discoverWorkspacePackages(absoluteRoot);
+  const workspaceEntries: string[] = [];
+  for (const workspacePackage of workspacePackages) {
+    workspaceEntries.push(...workspacePackage.entryFiles);
+
+    const workspaceFrameworkEntries = discoverFrameworkEntryPoints(workspacePackage.directory);
+    workspaceEntries.push(...workspaceFrameworkEntries);
+  }
+
+  const frameworkEntries = discoverFrameworkEntryPoints(absoluteRoot);
+
+  const testEntryFiles = await fg(TEST_FILE_PATTERNS, {
+    cwd: absoluteRoot,
+    absolute: true,
+    onlyFiles: true,
+    ignore: [...DEFAULT_IGNORE_PATTERNS],
+  });
+
+  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...testEntryFiles])];
 };
 
 const extractPackageJsonEntries = async (packageJsonPath: string): Promise<string[]> => {
@@ -92,7 +111,22 @@ const collectExportPaths = (
   entries: string[],
 ): void => {
   if (typeof exportValue === "string") {
-    entries.push(resolve(rootDir, exportValue));
+    if (exportValue.includes("*")) {
+      const globPattern = exportValue.replace(/^\.\/?/, "");
+      try {
+        const expandedFiles = fg.sync(globPattern, {
+          cwd: rootDir,
+          absolute: true,
+          onlyFiles: true,
+          ignore: ["**/node_modules/**"],
+        });
+        entries.push(...expandedFiles);
+      } catch {
+        entries.push(resolve(rootDir, exportValue));
+      }
+    } else {
+      entries.push(resolve(rootDir, exportValue));
+    }
     return;
   }
 
