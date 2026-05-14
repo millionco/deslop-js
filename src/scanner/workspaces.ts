@@ -267,7 +267,9 @@ const collectExportPaths = (
 const NEXTJS_APP_ROUTER_CONVENTIONS = [
   "page", "layout", "loading", "error", "not-found",
   "template", "default", "route", "global-error",
-  "middleware", "instrumentation",
+  "middleware", "instrumentation", "manifest", "robots",
+  "sitemap", "opengraph-image", "twitter-image", "icon",
+  "apple-icon", "actions",
 ];
 
 const FRAMEWORK_FILE_GLOB = "**/*.{ts,tsx,js,jsx,mdx,mjs,cjs,astro}";
@@ -340,6 +342,7 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
     "next.config.*",
     "vite.config.*",
     "vitest.config.*",
+    "vitest.workspace.*",
     "astro.config.*",
     "nuxt.config.*",
     "svelte.config.*",
@@ -351,6 +354,11 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
     "drizzle.config.*",
     "knip.config.*",
     "contentlayer.config.*",
+    "source.config.*",
+    "eslint.config.*",
+    ".eslintrc.*",
+    "prettier.config.*",
+    ".prettierrc.*",
     "middleware.{ts,tsx,js,jsx}",
     "src/middleware.{ts,tsx,js,jsx}",
     "instrumentation.{ts,tsx,js,jsx}",
@@ -370,16 +378,16 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   });
   entryPoints.push(...configFiles);
 
-  const scriptDirs = ["scripts", "bin", "tools", "e2e", "cypress"];
-  for (const scriptDir of scriptDirs) {
-    const dirPath = join(rootDir, scriptDir);
+  const testDirs = ["e2e", "cypress"];
+  for (const testDir of testDirs) {
+    const dirPath = join(rootDir, testDir);
     if (existsSync(dirPath) && statSync(dirPath).isDirectory()) {
-      const scriptFiles = fg.sync("**/*.{ts,tsx,js,jsx,mjs,cjs}", {
+      const testFiles = fg.sync(FRAMEWORK_FILE_GLOB, {
         cwd: dirPath,
         absolute: true,
         onlyFiles: true,
       });
-      entryPoints.push(...scriptFiles);
+      entryPoints.push(...testFiles);
     }
   }
 

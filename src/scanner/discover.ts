@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { FileId, DeslopConfig } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, SCRIPT_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, TEST_FILE_PATTERNS } from "../constants.js";
+import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, TEST_FILE_PATTERNS } from "../constants.js";
 import { discoverWorkspacePackages, discoverFrameworkEntryPoints } from "./workspaces.js";
 
 export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => {
@@ -20,13 +20,28 @@ export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => 
   const ignorePatterns = [...DEFAULT_IGNORE_PATTERNS, ...config.ignorePatterns];
   const absoluteRoot = resolve(config.rootDir);
 
-  const files = await fg(extensionGlob, {
+  const mainFiles = await fg(extensionGlob, {
     cwd: absoluteRoot,
     absolute: true,
     ignore: ignorePatterns,
     dot: false,
     onlyFiles: true,
   });
+
+  const allowedHiddenGlobs = HIDDEN_DIRECTORY_ALLOWLIST.map(
+    (directory) => `${directory}/**/*{${extensions.join(",")}}`,
+  );
+  const hiddenFiles = allowedHiddenGlobs.length > 0
+    ? await fg(allowedHiddenGlobs, {
+        cwd: absoluteRoot,
+        absolute: true,
+        ignore: ignorePatterns,
+        dot: true,
+        onlyFiles: true,
+      })
+    : [];
+
+  const files = [...mainFiles, ...hiddenFiles];
 
   const sortedFiles = files.sort();
 
@@ -64,16 +79,9 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
     scriptEntries.push(...extractScriptEntries(workspacePackage.directory));
   }
 
-  const scriptPatternFiles = await fg(SCRIPT_ENTRY_PATTERNS, {
-    cwd: absoluteRoot,
-    absolute: true,
-    onlyFiles: true,
-    ignore: [...DEFAULT_IGNORE_PATTERNS],
-  });
-
   const testEntryFiles = await discoverTestEntryPoints(absoluteRoot, workspacePackages.map((workspacePackage) => workspacePackage.directory));
 
-  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...scriptPatternFiles, ...testEntryFiles])];
+  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...testEntryFiles])];
 };
 
 const extractPackageJsonEntries = async (packageJsonPath: string): Promise<string[]> => {

@@ -9,6 +9,7 @@ export interface ImportInfo {
   isTypeOnly: boolean;
   isDynamic: boolean;
   isSideEffect: boolean;
+  isGlob?: boolean;
   line: number;
   column: number;
 }

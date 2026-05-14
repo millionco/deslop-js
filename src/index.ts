@@ -1,4 +1,5 @@
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import fg from "fast-glob";
 import type { DeslopConfig, AnalysisResult } from "./types.js";
 import { DEFAULT_ENTRY_PATTERNS, DEFAULT_EXTENSIONS } from "./constants.js";
 import { discoverFiles, discoverEntryPoints } from "./scanner/discover.js";
@@ -47,6 +48,28 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
     >();
 
     for (const importInfo of parsedModule.imports) {
+      if (importInfo.isGlob) {
+        const fileDir = dirname(file.path);
+        const expandedFiles = fg.sync(importInfo.specifier, {
+          cwd: fileDir,
+          absolute: true,
+          onlyFiles: true,
+          ignore: ["**/node_modules/**"],
+        });
+        for (const expandedFile of expandedFiles) {
+          resolvedImportMap.set(expandedFile, {
+            resolvedPath: expandedFile,
+            isExternal: false,
+            packageName: undefined,
+          });
+        }
+        resolvedImportMap.set(importInfo.specifier, {
+          resolvedPath: undefined,
+          isExternal: false,
+          packageName: undefined,
+        });
+        continue;
+      }
       const resolvedImport = moduleResolver.resolveModule(
         importInfo.specifier,
         file.path,
