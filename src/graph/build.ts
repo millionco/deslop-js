@@ -4,6 +4,7 @@ import type {
   ModuleNode,
   Edge,
   ImportedSymbol,
+  ImportInfo,
 } from "../types.js";
 import type { ParsedModule } from "../scanner/parse.js";
 import type { ResolvedImport } from "../resolver/resolve.js";
@@ -55,6 +56,16 @@ export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
     const sourceIndex = input.fileId.index;
 
     for (const importInfo of input.parsed.imports) {
+      if (importInfo.isGlob) {
+        for (const [resolvedPath, resolvedImport] of input.resolvedImports) {
+          if (!resolvedImport.resolvedPath) continue;
+          const targetIndex = fileIdMap.get(resolvedImport.resolvedPath);
+          if (targetIndex === undefined) continue;
+          addEdge(sourceIndex, targetIndex, []);
+        }
+        continue;
+      }
+
       const resolved = input.resolvedImports.get(importInfo.specifier);
       if (!resolved?.resolvedPath) continue;
 

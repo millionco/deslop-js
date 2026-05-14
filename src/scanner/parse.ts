@@ -65,7 +65,14 @@ const getModuleExportNameValue = (exportName: ModuleExportName): string => {
   return "default";
 };
 
+const CSS_EXTENSIONS = [".css", ".scss", ".less", ".sass"];
+
 export const parseModule = (filePath: string): ParsedModule => {
+  const isCss = CSS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
+  if (isCss) {
+    return { imports: [], exports: [] };
+  }
+
   const sourceText = readFileSync(filePath, "utf-8");
   const imports: ImportInfo[] = [];
   const exports: ExportInfo[] = [];

@@ -7,6 +7,16 @@ export const DEFAULT_EXTENSIONS = [
   ".mjs",
   ".cts",
   ".cjs",
+  ".mdx",
+  ".astro",
+];
+
+export const HIDDEN_DIRECTORY_ALLOWLIST = [
+  ".storybook",
+  ".vitepress",
+  ".well-known",
+  ".changeset",
+  ".github",
 ];
 
 export const DEFAULT_IGNORE_PATTERNS = [
@@ -28,6 +38,13 @@ export const TEST_FILE_PATTERNS = [
   "**/__snapshots__/**",
   "**/fixtures/**",
   "**/__fixtures__/**",
+];
+
+export const SCRIPT_FILE_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|npx|bun)\s+(?:-[\w-]+\s+)*(?:[\w/-]+\s+)*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))/;
+
+export const SCRIPT_ENTRY_PATTERNS = [
+  "**/scripts/**/*.{ts,tsx,js,jsx,mts,mjs}",
+  "**/bin/**/*.{ts,tsx,js,jsx,mts,mjs}",
 ];
 
 export const DEFAULT_ENTRY_PATTERNS = [

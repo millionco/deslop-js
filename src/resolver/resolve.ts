@@ -172,7 +172,6 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
         for (const ext of RESOLVER_EXTENSIONS) {
           if (existsSync(resolvedTarget + ext)) return resolvedTarget + ext;
         }
-        if (existsSync(resolvedTarget)) return resolvedTarget;
         const indexCandidate = join(resolvedTarget, "index");
         for (const ext of RESOLVER_EXTENSIONS) {
           if (existsSync(indexCandidate + ext)) return indexCandidate + ext;
