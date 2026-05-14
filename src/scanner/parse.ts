@@ -67,10 +67,36 @@ const getModuleExportNameValue = (exportName: ModuleExportName): string => {
 
 const CSS_EXTENSIONS = [".css", ".scss", ".less", ".sass"];
 
+const CSS_IMPORT_PATTERN = /@import\s+(?:url\()?['"]([^'"]+)['"]\)?/g;
+
+const parseCssImports = (filePath: string): ParsedModule => {
+  const sourceText = readFileSync(filePath, "utf-8");
+  const imports: ImportInfo[] = [];
+
+  let match: RegExpExecArray | null;
+  CSS_IMPORT_PATTERN.lastIndex = 0;
+  while ((match = CSS_IMPORT_PATTERN.exec(sourceText)) !== null) {
+    const specifier = match[1];
+    if (specifier && !specifier.startsWith("http")) {
+      imports.push({
+        specifier,
+        importedNames: [],
+        isTypeOnly: false,
+        isDynamic: false,
+        isSideEffect: true,
+        line: sourceText.substring(0, match.index).split("\n").length,
+        column: 0,
+      });
+    }
+  }
+
+  return { imports, exports: [] };
+};
+
 export const parseModule = (filePath: string): ParsedModule => {
   const isCss = CSS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   if (isCss) {
-    return { imports: [], exports: [] };
+    return parseCssImports(filePath);
   }
 
   const sourceText = readFileSync(filePath, "utf-8");
