@@ -54,11 +54,13 @@ export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => 
 export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[]> => {
   const absoluteRoot = resolve(config.rootDir);
 
-  const entryFiles = await fg(config.entryPatterns, {
-    cwd: absoluteRoot,
-    absolute: true,
-    onlyFiles: true,
-  });
+  const entryFiles = config.entryPatterns.length > 0
+    ? await fg(config.entryPatterns, {
+        cwd: absoluteRoot,
+        absolute: true,
+        onlyFiles: true,
+      })
+    : [];
 
   const packageJsonPath = resolve(absoluteRoot, "package.json");
   const packageJsonEntries = await extractPackageJsonEntries(packageJsonPath);
@@ -190,8 +192,11 @@ const hasTestRunnerConfig = (directory: string): boolean => {
       );
       if (hasTestingDependency) return true;
 
-      const testScript = packageJson.scripts?.test;
-      if (typeof testScript === "string" && testScript.length > 0) return true;
+      const testScript = packageJson.scripts?.test ?? packageJson.scripts?.["test:unit"] ?? "";
+      if (typeof testScript === "string" && testScript.length > 0) {
+        const knownTestRunnerPattern = /\b(vitest|jest|mocha|ava|karma|jasmine|tap|node --test|vp test|turbo[\s]+.*test)\b/;
+        if (knownTestRunnerPattern.test(testScript)) return true;
+      }
     }
   } catch {
   }
@@ -203,11 +208,15 @@ const discoverTestEntryPoints = async (
   rootDir: string,
   workspaceDirectories: string[],
 ): Promise<string[]> => {
-  const directoriesToCheck = [rootDir, ...workspaceDirectories];
+  const rootHasTestRunner = hasTestRunnerConfig(rootDir);
   const testEntries: string[] = [];
 
+  const directoriesToCheck = [rootDir, ...workspaceDirectories];
   for (const directory of directoriesToCheck) {
-    if (!hasTestRunnerConfig(directory)) continue;
+    const directoryHasTestRunner = directory === rootDir
+      ? rootHasTestRunner
+      : rootHasTestRunner || hasTestRunnerConfig(directory);
+    if (!directoryHasTestRunner) continue;
 
     const testFiles = await fg(TEST_FILE_PATTERNS, {
       cwd: directory,
