@@ -1,8 +1,9 @@
 import fg from "fast-glob";
 import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
+import { readFileSync, existsSync } from "node:fs";
 import type { FileId, DeslopConfig } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, TEST_FILE_PATTERNS } from "../constants.js";
+import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, TEST_FILE_PATTERNS, SCRIPT_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS } from "../constants.js";
 import { discoverWorkspacePackages, discoverFrameworkEntryPoints } from "./workspaces.js";
 
 export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => {
@@ -58,6 +59,18 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
 
   const frameworkEntries = discoverFrameworkEntryPoints(absoluteRoot);
 
+  const scriptEntries = extractScriptEntries(absoluteRoot);
+  for (const workspacePackage of workspacePackages) {
+    scriptEntries.push(...extractScriptEntries(workspacePackage.directory));
+  }
+
+  const scriptPatternFiles = await fg(SCRIPT_ENTRY_PATTERNS, {
+    cwd: absoluteRoot,
+    absolute: true,
+    onlyFiles: true,
+    ignore: [...DEFAULT_IGNORE_PATTERNS],
+  });
+
   const testEntryFiles = await fg(TEST_FILE_PATTERNS, {
     cwd: absoluteRoot,
     absolute: true,
@@ -65,7 +78,7 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
     ignore: [...DEFAULT_IGNORE_PATTERNS],
   });
 
-  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...testEntryFiles])];
+  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...scriptPatternFiles, ...testEntryFiles])];
 };
 
 const extractPackageJsonEntries = async (packageJsonPath: string): Promise<string[]> => {
@@ -99,7 +112,36 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
       }
     }
   } catch {
-    // package.json not found or invalid — this is expected for some fixtures
+
+  }
+
+  return entries;
+};
+
+const extractScriptEntries = (directory: string): string[] => {
+  const packageJsonPath = resolve(directory, "package.json");
+  if (!existsSync(packageJsonPath)) return [];
+
+  const entries: string[] = [];
+  try {
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    const scripts = packageJson.scripts;
+    if (!scripts || typeof scripts !== "object") return entries;
+
+    for (const scriptCommand of Object.values(scripts)) {
+      if (typeof scriptCommand !== "string") continue;
+
+      const match = scriptCommand.match(SCRIPT_FILE_PATTERN);
+      if (match?.[1]) {
+        const scriptFilePath = resolve(directory, match[1]);
+        if (existsSync(scriptFilePath)) {
+          entries.push(scriptFilePath);
+        }
+      }
+    }
+  } catch {
+
   }
 
   return entries;

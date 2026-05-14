@@ -31,7 +31,6 @@ export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] =
         entryFiles,
       });
     } catch {
-      // skip invalid package.json
     }
   }
 
@@ -52,7 +51,6 @@ const collectWorkspacePatterns = (rootDir: string): string[] => {
         patterns.push(...packageJson.workspaces.packages);
       }
     } catch {
-      // skip invalid package.json
     }
   }
 
@@ -63,7 +61,6 @@ const collectWorkspacePatterns = (rootDir: string): string[] => {
       const packageLines = extractPnpmWorkspacePackages(content);
       patterns.push(...packageLines);
     } catch {
-      // skip invalid pnpm-workspace.yaml
     }
   }
 
@@ -119,7 +116,6 @@ const expandWorkspaceGlobs = (
           directories.push(matchedPath.replace(/\/package\.json$/, ""));
         }
       } catch {
-        // skip invalid glob
       }
     } else {
       const absoluteDirectory = resolve(rootDir, pattern);
@@ -184,8 +180,9 @@ const extractWorkspaceEntries = (
 
   const entryFields = ["main", "module", "browser", "types", "typings", "source"];
   for (const field of entryFields) {
-    if (typeof packageJson[field] === "string") {
-      addWithSourceResolution(packageJson[field] as string);
+    const fieldValue = packageJson[field];
+    if (typeof fieldValue === "string") {
+      addWithSourceResolution(fieldValue);
     }
   }
 
@@ -252,7 +249,6 @@ const collectExportPaths = (
           });
           entries.push(...expandedFiles);
         } catch {
-          // skip invalid glob
         }
       } else {
         entries.push(resolve(rootDir, exportValue));
@@ -282,7 +278,7 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
 
   for (const frameworkDir of frameworkDirs) {
     if (existsSync(frameworkDir) && statSync(frameworkDir).isDirectory()) {
-      const frameworkFiles = fg.sync("**/*.{ts,tsx,js,jsx}", {
+      const frameworkFiles = fg.sync("**/*.{ts,tsx,js,jsx,mdx,mjs,cjs}", {
         cwd: frameworkDir,
         absolute: true,
         onlyFiles: true,

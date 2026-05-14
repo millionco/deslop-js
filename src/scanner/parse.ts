@@ -1,5 +1,22 @@
 import { parseSync } from "oxc-parser";
 import { readFileSync } from "node:fs";
+import type {
+  Statement,
+  ImportDeclaration,
+  ExportNamedDeclaration,
+  ExportDefaultDeclaration,
+  ExportAllDeclaration,
+  Declaration,
+  VariableDeclaration,
+  BindingPattern,
+  ModuleExportName,
+  CallExpression,
+  StaticMemberExpression,
+  ImportExpression,
+  StringLiteral,
+  Expression,
+  ModuleDeclaration,
+} from "@oxc-project/types";
 import type { ImportInfo, ExportInfo, ImportedName } from "../types.js";
 import { getLineFromOffset, getColumnFromOffset } from "../utils/line-column.js";
 
@@ -8,19 +25,65 @@ export interface ParsedModule {
   exports: ExportInfo[];
 }
 
-interface AstNode {
-  type: string;
-  start: number;
-  end: number;
-  [key: string]: unknown;
-}
+const IMPORT_EXPORT_LINE_PATTERN = /^[a-zA-Z{}\s,*'"`]/;
+
+const extractMdxImportsExports = (sourceText: string): string => {
+  const lines = sourceText.split("\n");
+  const jsLines: string[] = [];
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    const isLineContinuation = jsLines.length > 0
+      && !jsLines[jsLines.length - 1].endsWith(";")
+      && !trimmedLine.startsWith("#")
+      && !trimmedLine.startsWith("<")
+      && trimmedLine.length > 0
+      && IMPORT_EXPORT_LINE_PATTERN.test(trimmedLine);
+
+    if (
+      trimmedLine.startsWith("import ") ||
+      trimmedLine.startsWith("export ") ||
+      trimmedLine.startsWith("from ") ||
+      isLineContinuation
+    ) {
+      jsLines.push(line);
+    }
+  }
+  return jsLines.join("\n");
+};
+
+const ASTRO_FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---/;
+
+const extractAstroFrontmatter = (sourceText: string): string => {
+  const frontmatterMatch = sourceText.match(ASTRO_FRONTMATTER_PATTERN);
+  if (!frontmatterMatch) return "";
+  return frontmatterMatch[1];
+};
+
+const getModuleExportNameValue = (exportName: ModuleExportName): string => {
+  if (exportName.type === "Identifier") return exportName.name;
+  if (exportName.type === "Literal") return exportName.value;
+  return "default";
+};
 
 export const parseModule = (filePath: string): ParsedModule => {
   const sourceText = readFileSync(filePath, "utf-8");
   const imports: ImportInfo[] = [];
   const exports: ExportInfo[] = [];
 
-  const result = parseSync(filePath, sourceText);
+  const isMdx = filePath.endsWith(".mdx");
+  const isAstro = filePath.endsWith(".astro");
+  const textToParse = isMdx
+    ? extractMdxImportsExports(sourceText)
+    : isAstro
+      ? extractAstroFrontmatter(sourceText)
+      : sourceText;
+  const parseFileName = isMdx
+    ? filePath.replace(/\.mdx$/, ".tsx")
+    : isAstro
+      ? filePath.replace(/\.astro$/, ".tsx")
+      : filePath;
+
+  const result = parseSync(parseFileName, textToParse);
 
   if (result.errors.length > 0) {
     return { imports, exports };
@@ -31,7 +94,7 @@ export const parseModule = (filePath: string): ParsedModule => {
     return { imports, exports };
   }
 
-  for (const node of program.body as AstNode[]) {
+  for (const node of program.body) {
     switch (node.type) {
       case "ImportDeclaration":
         extractImportDeclaration(node, sourceText, imports);
@@ -48,69 +111,56 @@ export const parseModule = (filePath: string): ParsedModule => {
     }
   }
 
-  collectDynamicImports(program.body as AstNode[], sourceText, imports);
+  collectDynamicImports(program.body, sourceText, imports);
 
   return { imports, exports };
 };
 
 const extractImportDeclaration = (
-  node: AstNode,
+  node: ImportDeclaration,
   sourceText: string,
   imports: ImportInfo[],
 ): void => {
-  const sourceNode = node.source as AstNode | undefined;
-  const specifier = (sourceNode as Record<string, unknown>)?.value as string | undefined;
+  const specifier = node.source.value;
   if (!specifier) return;
 
-  const isTypeOnly = (node as Record<string, unknown>).importKind === "type";
-  const specifiers = (node as Record<string, unknown>).specifiers as AstNode[] | undefined;
+  const isTypeOnly = node.importKind === "type";
   const importedNames: ImportedName[] = [];
 
-  if (specifiers) {
-    for (const specifierNode of specifiers) {
-      switch (specifierNode.type) {
-        case "ImportDefaultSpecifier": {
-          const localNode = specifierNode.local as AstNode | undefined;
-          importedNames.push({
-            name: "default",
-            alias: (localNode as Record<string, unknown>)?.name as string | undefined,
-            isNamespace: false,
-            isDefault: true,
-            isTypeOnly,
-          });
-          break;
-        }
-        case "ImportNamespaceSpecifier": {
-          const localNode = specifierNode.local as AstNode | undefined;
-          importedNames.push({
-            name: "*",
-            alias: (localNode as Record<string, unknown>)?.name as string | undefined,
-            isNamespace: true,
-            isDefault: false,
-            isTypeOnly,
-          });
-          break;
-        }
-        case "ImportSpecifier": {
-          const importedNode = specifierNode.imported as AstNode | undefined;
-          const localNode = specifierNode.local as AstNode | undefined;
-          const importedName =
-            ((importedNode as Record<string, unknown>)?.name as string) ??
-            ((importedNode as Record<string, unknown>)?.value as string) ??
-            "default";
-          const localName = (localNode as Record<string, unknown>)?.name as string | undefined;
+  for (const specifierNode of node.specifiers) {
+    switch (specifierNode.type) {
+      case "ImportDefaultSpecifier": {
+        importedNames.push({
+          name: "default",
+          alias: specifierNode.local.name,
+          isNamespace: false,
+          isDefault: true,
+          isTypeOnly,
+        });
+        break;
+      }
+      case "ImportNamespaceSpecifier": {
+        importedNames.push({
+          name: "*",
+          alias: specifierNode.local.name,
+          isNamespace: true,
+          isDefault: false,
+          isTypeOnly,
+        });
+        break;
+      }
+      case "ImportSpecifier": {
+        const importedName = getModuleExportNameValue(specifierNode.imported);
+        const localName = specifierNode.local.name;
 
-          importedNames.push({
-            name: importedName,
-            alias: localName !== importedName ? localName : undefined,
-            isNamespace: false,
-            isDefault: importedName === "default",
-            isTypeOnly:
-              isTypeOnly ||
-              (specifierNode as Record<string, unknown>).importKind === "type",
-          });
-          break;
-        }
+        importedNames.push({
+          name: importedName,
+          alias: localName !== importedName ? localName : undefined,
+          isNamespace: false,
+          isDefault: importedName === "default",
+          isTypeOnly: isTypeOnly || specifierNode.importKind === "type",
+        });
+        break;
       }
     }
   }
@@ -139,53 +189,37 @@ const extractImportDeclaration = (
 };
 
 const extractNamedExportDeclaration = (
-  node: AstNode,
+  node: ExportNamedDeclaration,
   sourceText: string,
   exports: ExportInfo[],
 ): void => {
-  const isTypeOnly = (node as Record<string, unknown>).exportKind === "type";
-  const sourceNode = (node as Record<string, unknown>).source as AstNode | undefined;
-  const reExportSource =
-    ((sourceNode as Record<string, unknown>)?.value as string) ?? undefined;
-  const declaration = (node as Record<string, unknown>).declaration as AstNode | undefined;
-  const specifiers = (node as Record<string, unknown>).specifiers as AstNode[] | undefined;
+  const isTypeOnly = node.exportKind === "type";
+  const reExportSource = node.source?.value ?? undefined;
 
-  if (declaration) {
-    extractDeclarationNames(declaration, isTypeOnly, sourceText, exports, node.start);
+  if (node.declaration) {
+    extractDeclarationNames(node.declaration, isTypeOnly, sourceText, exports, node.start);
   }
 
-  if (specifiers) {
-    for (const specifierNode of specifiers) {
-      const exportedNode = specifierNode.exported as AstNode | undefined;
-      const localNode = specifierNode.local as AstNode | undefined;
-      const exportedName =
-        ((exportedNode as Record<string, unknown>)?.name as string) ??
-        ((exportedNode as Record<string, unknown>)?.value as string) ??
-        "default";
-      const localName =
-        ((localNode as Record<string, unknown>)?.name as string) ??
-        ((localNode as Record<string, unknown>)?.value as string) ??
-        exportedName;
+  for (const specifierNode of node.specifiers) {
+    const exportedName = getModuleExportNameValue(specifierNode.exported);
+    const localName = getModuleExportNameValue(specifierNode.local);
 
-      exports.push({
-        name: exportedName,
-        isDefault: exportedName === "default",
-        isTypeOnly:
-          isTypeOnly ||
-          (specifierNode as Record<string, unknown>).exportKind === "type",
-        isReExport: reExportSource !== undefined,
-        reExportSource,
-        reExportOriginalName: reExportSource !== undefined ? localName : undefined,
-        isNamespaceReExport: false,
-        line: getLineFromOffset(sourceText, specifierNode.start ?? node.start),
-        column: getColumnFromOffset(sourceText, specifierNode.start ?? node.start),
-      });
-    }
+    exports.push({
+      name: exportedName,
+      isDefault: exportedName === "default",
+      isTypeOnly: isTypeOnly || specifierNode.exportKind === "type",
+      isReExport: reExportSource !== undefined,
+      reExportSource,
+      reExportOriginalName: reExportSource !== undefined ? localName : undefined,
+      isNamespaceReExport: false,
+      line: getLineFromOffset(sourceText, specifierNode.start ?? node.start),
+      column: getColumnFromOffset(sourceText, specifierNode.start ?? node.start),
+    });
   }
 };
 
 const extractDefaultExportDeclaration = (
-  node: AstNode,
+  node: ExportDefaultDeclaration,
   sourceText: string,
   exports: ExportInfo[],
 ): void => {
@@ -203,24 +237,21 @@ const extractDefaultExportDeclaration = (
 };
 
 const extractExportAllDeclaration = (
-  node: AstNode,
+  node: ExportAllDeclaration,
   sourceText: string,
   exports: ExportInfo[],
 ): void => {
-  const sourceNode = (node as Record<string, unknown>).source as AstNode | undefined;
-  const reExportSource = (sourceNode as Record<string, unknown>)?.value as string | undefined;
+  const reExportSource = node.source.value;
   if (!reExportSource) return;
 
-  const exportedNode = (node as Record<string, unknown>).exported as AstNode | undefined;
-  const exportedName =
-    ((exportedNode as Record<string, unknown>)?.name as string) ??
-    ((exportedNode as Record<string, unknown>)?.value as string) ??
-    undefined;
+  const exportedName = node.exported
+    ? getModuleExportNameValue(node.exported)
+    : undefined;
 
   exports.push({
     name: exportedName ?? "*",
     isDefault: false,
-    isTypeOnly: (node as Record<string, unknown>).exportKind === "type",
+    isTypeOnly: node.exportKind === "type",
     isReExport: true,
     reExportSource,
     reExportOriginalName: "*",
@@ -231,7 +262,7 @@ const extractExportAllDeclaration = (
 };
 
 const extractDeclarationNames = (
-  declaration: AstNode,
+  declaration: Declaration,
   isTypeOnly: boolean,
   sourceText: string,
   exports: ExportInfo[],
@@ -244,8 +275,8 @@ const extractDeclarationNames = (
     declarationType === "ClassDeclaration" ||
     declarationType === "TSEnumDeclaration"
   ) {
-    const identifierNode = (declaration as Record<string, unknown>).id as AstNode | undefined;
-    const declarationName = (identifierNode as Record<string, unknown>)?.name as string | undefined;
+    const declarationWithId = declaration as { id: { name: string } | null; start: number };
+    const declarationName = declarationWithId.id?.name;
     if (declarationName) {
       exports.push({
         name: declarationName,
@@ -266,8 +297,8 @@ const extractDeclarationNames = (
     declarationType === "TSTypeAliasDeclaration" ||
     declarationType === "TSInterfaceDeclaration"
   ) {
-    const identifierNode = (declaration as Record<string, unknown>).id as AstNode | undefined;
-    const declarationName = (identifierNode as Record<string, unknown>)?.name as string | undefined;
+    const typeDeclaration = declaration as { id: { name: string }; start: number };
+    const declarationName = typeDeclaration.id.name;
     if (declarationName) {
       exports.push({
         name: declarationName,
@@ -285,15 +316,10 @@ const extractDeclarationNames = (
   }
 
   if (declarationType === "VariableDeclaration") {
-    const declarations = (declaration as Record<string, unknown>).declarations as AstNode[] | undefined;
-    if (!declarations) return;
-
-    for (const declarator of declarations) {
-      const bindingPattern = (declarator as Record<string, unknown>).id as AstNode | undefined;
-      if (!bindingPattern) continue;
-
-      const names = extractBindingPatternNames(bindingPattern);
-      for (const bindingName of names) {
+    const variableDeclaration = declaration as VariableDeclaration;
+    for (const declarator of variableDeclaration.declarations) {
+      const bindingNames = extractBindingPatternNames(declarator.id);
+      for (const bindingName of bindingNames) {
         exports.push({
           name: bindingName,
           isDefault: false,
@@ -310,28 +336,20 @@ const extractDeclarationNames = (
   }
 };
 
-const extractBindingPatternNames = (pattern: AstNode): string[] => {
+const extractBindingPatternNames = (pattern: BindingPattern): string[] => {
   if (!pattern) return [];
 
   if (pattern.type === "Identifier") {
-    const identifierName = (pattern as Record<string, unknown>).name as string | undefined;
-    return identifierName ? [identifierName] : [];
+    return pattern.name ? [pattern.name] : [];
   }
 
   if (pattern.type === "ObjectPattern") {
     const names: string[] = [];
-    const properties = (pattern as Record<string, unknown>).properties as AstNode[] | undefined;
-    if (!properties) return names;
-
-    for (const property of properties) {
+    for (const property of pattern.properties) {
       if (property.type === "RestElement") {
-        const argument = (property as Record<string, unknown>).argument as AstNode | undefined;
-        if (argument) names.push(...extractBindingPatternNames(argument));
+        names.push(...extractBindingPatternNames(property.argument));
       } else {
-        const valueNode =
-          ((property as Record<string, unknown>).value as AstNode) ??
-          ((property as Record<string, unknown>).key as AstNode);
-        if (valueNode) names.push(...extractBindingPatternNames(valueNode));
+        names.push(...extractBindingPatternNames(property.value));
       }
     }
     return names;
@@ -339,14 +357,10 @@ const extractBindingPatternNames = (pattern: AstNode): string[] => {
 
   if (pattern.type === "ArrayPattern") {
     const names: string[] = [];
-    const elements = (pattern as Record<string, unknown>).elements as (AstNode | null)[] | undefined;
-    if (!elements) return names;
-
-    for (const element of elements) {
+    for (const element of pattern.elements) {
       if (!element) continue;
       if (element.type === "RestElement") {
-        const argument = (element as Record<string, unknown>).argument as AstNode | undefined;
-        if (argument) names.push(...extractBindingPatternNames(argument));
+        names.push(...extractBindingPatternNames(element.argument));
       } else {
         names.push(...extractBindingPatternNames(element));
       }
@@ -355,62 +369,120 @@ const extractBindingPatternNames = (pattern: AstNode): string[] => {
   }
 
   if (pattern.type === "AssignmentPattern") {
-    const leftNode = (pattern as Record<string, unknown>).left as AstNode | undefined;
-    return leftNode ? extractBindingPatternNames(leftNode) : [];
+    return extractBindingPatternNames(pattern.left);
   }
 
   return [];
 };
 
+const createNamespaceImportedName = (): ImportedName => ({
+  name: "*",
+  alias: undefined,
+  isNamespace: true,
+  isDefault: false,
+  isTypeOnly: false,
+});
+
+interface WalkableNode {
+  type: string;
+  start: number;
+  end: number;
+  [key: string]: unknown;
+}
+
+const isWalkableNode = (value: unknown): value is WalkableNode =>
+  Boolean(value) && typeof value === "object" && typeof (value as WalkableNode).type === "string";
+
+const extractStringLiteralFromArgument = (
+  callArguments: CallExpression["arguments"],
+): string | undefined => {
+  const firstArgument = callArguments[0];
+  if (!firstArgument) return undefined;
+  if (firstArgument.type === "SpreadElement") return undefined;
+  if (firstArgument.type !== "Literal") return undefined;
+  const literalValue = (firstArgument as StringLiteral).value;
+  return typeof literalValue === "string" ? literalValue : undefined;
+};
+
 const collectDynamicImports = (
-  bodyNodes: AstNode[],
+  bodyNodes: Array<Statement | ModuleDeclaration>,
   sourceText: string,
   imports: ImportInfo[],
 ): void => {
-  const walkNode = (node: unknown): void => {
-    if (!node || typeof node !== "object") return;
-
-    const astNode = node as Record<string, unknown>;
-
-    if (astNode.type === "ImportExpression") {
-      const sourceNode = astNode.source as AstNode | undefined;
-      if (sourceNode?.type === "Literal") {
-        const specifier = (sourceNode as Record<string, unknown>).value as string;
-        if (specifier) {
+  const walkNode = (node: WalkableNode): void => {
+    if (node.type === "ImportExpression") {
+      const importExpression = node as unknown as ImportExpression;
+      const sourceExpression = importExpression.source;
+      if (sourceExpression.type === "Literal") {
+        const specifierValue = (sourceExpression as StringLiteral).value;
+        if (specifierValue) {
           imports.push({
-            specifier,
-            importedNames: [
-              {
-                name: "*",
-                alias: undefined,
-                isNamespace: true,
-                isDefault: false,
-                isTypeOnly: false,
-              },
-            ],
+            specifier: specifierValue,
+            importedNames: [createNamespaceImportedName()],
             isTypeOnly: false,
             isDynamic: true,
             isSideEffect: false,
-            line: getLineFromOffset(sourceText, (astNode as AstNode).start ?? 0),
-            column: getColumnFromOffset(sourceText, (astNode as AstNode).start ?? 0),
+            line: getLineFromOffset(sourceText, importExpression.start),
+            column: getColumnFromOffset(sourceText, importExpression.start),
           });
         }
       }
       return;
     }
 
-    for (const value of Object.values(astNode)) {
+    if (node.type === "CallExpression") {
+      const callExpression = node as unknown as CallExpression;
+
+      if (callExpression.callee.type === "Identifier" && callExpression.callee.name === "require") {
+        const requireSpecifier = extractStringLiteralFromArgument(callExpression.arguments);
+        if (requireSpecifier) {
+          imports.push({
+            specifier: requireSpecifier,
+            importedNames: [createNamespaceImportedName()],
+            isTypeOnly: false,
+            isDynamic: true,
+            isSideEffect: false,
+            line: getLineFromOffset(sourceText, callExpression.start),
+            column: getColumnFromOffset(sourceText, callExpression.start),
+          });
+        }
+      }
+
+      if (callExpression.callee.type === "MemberExpression" && !callExpression.callee.computed) {
+        const memberExpression = callExpression.callee as StaticMemberExpression;
+        if (
+          memberExpression.object.type === "MetaProperty" &&
+          memberExpression.property.name === "glob"
+        ) {
+          const globSpecifier = extractStringLiteralFromArgument(callExpression.arguments);
+          if (globSpecifier) {
+            imports.push({
+              specifier: globSpecifier,
+              importedNames: [createNamespaceImportedName()],
+              isTypeOnly: false,
+              isDynamic: true,
+              isSideEffect: false,
+              isGlob: true,
+              line: getLineFromOffset(sourceText, callExpression.start),
+              column: getColumnFromOffset(sourceText, callExpression.start),
+            });
+          }
+        }
+      }
+    }
+
+    for (const value of Object.values(node)) {
       if (Array.isArray(value)) {
         for (const element of value) {
-          walkNode(element);
+          if (isWalkableNode(element)) walkNode(element);
         }
-      } else if (value && typeof value === "object" && (value as Record<string, unknown>).type) {
+      } else if (isWalkableNode(value)) {
         walkNode(value);
       }
     }
   };
 
   for (const topLevelNode of bodyNodes) {
-    walkNode(topLevelNode);
+    if (isWalkableNode(topLevelNode)) walkNode(topLevelNode);
   }
 };
