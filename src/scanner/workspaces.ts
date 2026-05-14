@@ -453,5 +453,76 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
     }
   }
 
+  const docEntryPoints = discoverDocumentationEntryPoints(rootDir);
+  entryPoints.push(...docEntryPoints);
+
   return [...new Set(entryPoints)];
+};
+
+const DOCUSAURUS_ENABLERS = ["@docusaurus/core", "@docusaurus/preset-classic"];
+
+const DOCUSAURUS_CONTENT_PATTERNS = [
+  "docs/**/*.{md,mdx}",
+  "blog/**/*.{md,mdx}",
+  "versioned_docs/**/*.{md,mdx}",
+  "src/pages/**/*.{ts,tsx,js,jsx,md,mdx}",
+  "sidebars.{js,ts}",
+  "src/theme/**/*.{ts,tsx,js,jsx}",
+  "i18n/**/*.{md,mdx}",
+];
+
+const VITEPRESS_ENABLERS = ["vitepress"];
+
+const VITEPRESS_CONTENT_PATTERNS = [
+  "**/*.md",
+  ".vitepress/**/*.{ts,tsx,js,jsx,vue}",
+];
+
+const NEXTRA_ENABLERS = ["nextra", "nextra-theme-docs", "nextra-theme-blog"];
+
+const NEXTRA_CONTENT_PATTERNS = [
+  "pages/**/*.{md,mdx}",
+  "content/**/*.{md,mdx}",
+];
+
+const discoverDocumentationEntryPoints = (directory: string): string[] => {
+  const packageJsonPath = join(directory, "package.json");
+  if (!existsSync(packageJsonPath)) return [];
+
+  try {
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    const allDependencies = {
+      ...packageJson.dependencies,
+      ...packageJson.devDependencies,
+    };
+
+    const detectedPatterns: string[] = [];
+
+    const hasDocusaurus = DOCUSAURUS_ENABLERS.some((enabler) => enabler in allDependencies);
+    if (hasDocusaurus) {
+      detectedPatterns.push(...DOCUSAURUS_CONTENT_PATTERNS);
+    }
+
+    const hasVitepress = VITEPRESS_ENABLERS.some((enabler) => enabler in allDependencies);
+    if (hasVitepress) {
+      detectedPatterns.push(...VITEPRESS_CONTENT_PATTERNS);
+    }
+
+    const hasNextra = NEXTRA_ENABLERS.some((enabler) => enabler in allDependencies);
+    if (hasNextra) {
+      detectedPatterns.push(...NEXTRA_CONTENT_PATTERNS);
+    }
+
+    if (detectedPatterns.length === 0) return [];
+
+    return fg.sync(detectedPatterns, {
+      cwd: directory,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**"],
+    });
+  } catch {
+    return [];
+  }
 };
