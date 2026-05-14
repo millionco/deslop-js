@@ -456,6 +456,9 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   const docEntryPoints = discoverDocumentationEntryPoints(rootDir);
   entryPoints.push(...docEntryPoints);
 
+  const mobileEntryPoints = discoverMobileEntryPoints(rootDir);
+  entryPoints.push(...mobileEntryPoints);
+
   return [...new Set(entryPoints)];
 };
 
@@ -484,6 +487,76 @@ const NEXTRA_CONTENT_PATTERNS = [
   "pages/**/*.{md,mdx}",
   "content/**/*.{md,mdx}",
 ];
+
+const EXPO_ENABLERS = ["expo"];
+const EXPO_ROUTER_ENABLERS = ["expo-router"];
+
+const EXPO_ENTRY_PATTERNS = [
+  "App.{ts,tsx,js,jsx}",
+  "src/App.{ts,tsx,js,jsx}",
+  "app.config.{ts,js,mjs,cjs}",
+  "metro.config.{ts,js,mjs,cjs}",
+  "babel.config.{ts,js,mjs,cjs}",
+];
+
+const EXPO_ROUTER_ENTRY_PATTERNS = [
+  "app/**/*.{ts,tsx,js,jsx}",
+  "app.config.{ts,js,mjs,cjs}",
+  "metro.config.{ts,js,mjs,cjs}",
+  "babel.config.{ts,js,mjs,cjs}",
+];
+
+const REACT_NATIVE_ENABLERS = ["react-native"];
+
+const REACT_NATIVE_ENTRY_PATTERNS = [
+  "index.{ts,tsx,js,jsx}",
+  "App.{ts,tsx,js,jsx}",
+  "src/App.{ts,tsx,js,jsx}",
+  "metro.config.{ts,js}",
+  "react-native.config.{ts,js}",
+];
+
+const discoverMobileEntryPoints = (directory: string): string[] => {
+  const packageJsonPath = join(directory, "package.json");
+  if (!existsSync(packageJsonPath)) return [];
+
+  try {
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    const allDependencies = {
+      ...packageJson.dependencies,
+      ...packageJson.devDependencies,
+    };
+
+    const detectedPatterns: string[] = [];
+
+    const hasExpoRouter = EXPO_ROUTER_ENABLERS.some((enabler) => enabler in allDependencies);
+    if (hasExpoRouter) {
+      detectedPatterns.push(...EXPO_ROUTER_ENTRY_PATTERNS);
+    } else {
+      const hasExpo = EXPO_ENABLERS.some((enabler) => enabler in allDependencies);
+      if (hasExpo) {
+        detectedPatterns.push(...EXPO_ENTRY_PATTERNS);
+      }
+    }
+
+    const hasReactNative = REACT_NATIVE_ENABLERS.some((enabler) => enabler in allDependencies);
+    if (hasReactNative) {
+      detectedPatterns.push(...REACT_NATIVE_ENTRY_PATTERNS);
+    }
+
+    if (detectedPatterns.length === 0) return [];
+
+    return fg.sync(detectedPatterns, {
+      cwd: directory,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**"],
+    });
+  } catch {
+    return [];
+  }
+};
 
 const discoverDocumentationEntryPoints = (directory: string): string[] => {
   const packageJsonPath = join(directory, "package.json");
