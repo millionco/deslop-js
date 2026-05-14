@@ -25,14 +25,18 @@ const COMMON_RESOLVER_OPTIONS = {
   extensionAlias: EXTENSION_ALIAS,
 };
 
+const TSCONFIG_FILENAMES = ["tsconfig.json", "tsconfig.web.json", "tsconfig.app.json", "tsconfig.base.json"];
+
 const findNearestTsconfig = (fromDir: string, rootDir: string): string | undefined => {
   let currentDirectory = fromDir;
   const normalizedRoot = resolve(rootDir);
 
   while (currentDirectory.length >= normalizedRoot.length) {
-    const tsconfigCandidate = join(currentDirectory, "tsconfig.json");
-    if (existsSync(tsconfigCandidate)) {
-      return tsconfigCandidate;
+    for (const tsconfigFilename of TSCONFIG_FILENAMES) {
+      const tsconfigCandidate = join(currentDirectory, tsconfigFilename);
+      if (existsSync(tsconfigCandidate)) {
+        return tsconfigCandidate;
+      }
     }
     const parentDirectory = dirname(currentDirectory);
     if (parentDirectory === currentDirectory) break;
@@ -90,9 +94,18 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
   if (config.tsConfigPath) {
     rootTsconfigPath = resolve(config.rootDir, config.tsConfigPath);
   } else {
-    const defaultTsConfig = resolve(config.rootDir, "tsconfig.json");
-    if (existsSync(defaultTsConfig)) {
-      rootTsconfigPath = defaultTsConfig;
+    const tsconfigCandidates = [
+      "tsconfig.json",
+      "tsconfig.web.json",
+      "tsconfig.app.json",
+      "tsconfig.base.json",
+    ];
+    for (const candidate of tsconfigCandidates) {
+      const candidatePath = resolve(config.rootDir, candidate);
+      if (existsSync(candidatePath)) {
+        rootTsconfigPath = candidatePath;
+        break;
+      }
     }
   }
 
