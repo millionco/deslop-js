@@ -81,9 +81,14 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
     scriptEntries.push(...extractScriptEntries(workspacePackage.directory));
   }
 
+  const webpackEntries = extractWebpackEntryPoints(absoluteRoot);
+  for (const workspacePackage of workspacePackages) {
+    webpackEntries.push(...extractWebpackEntryPoints(workspacePackage.directory));
+  }
+
   const testEntryFiles = await discoverTestEntryPoints(absoluteRoot, workspacePackages.map((workspacePackage) => workspacePackage.directory));
 
-  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...testEntryFiles])];
+  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...testEntryFiles])];
 };
 
 const extractPackageJsonEntries = async (packageJsonPath: string): Promise<string[]> => {
@@ -147,6 +152,43 @@ const extractScriptEntries = (directory: string): string[] => {
     }
   } catch {
 
+  }
+
+  return entries;
+};
+
+const WEBPACK_ENTRY_PATTERN = /entry\s*:\s*\{[^}]*\}/gs;
+const WEBPACK_ENTRY_VALUE_PATTERN = /['"]([^'"]+\.(?:js|ts|tsx|jsx))['"]/g;
+
+const extractWebpackEntryPoints = (directory: string): string[] => {
+  const entries: string[] = [];
+  const webpackConfigPaths = fg.sync("webpack.config.{js,ts,mjs,cjs}", {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+  });
+
+  for (const configPath of webpackConfigPaths) {
+    try {
+      const content = readFileSync(configPath, "utf-8");
+      let entryMatch: RegExpExecArray | null;
+      WEBPACK_ENTRY_PATTERN.lastIndex = 0;
+      while ((entryMatch = WEBPACK_ENTRY_PATTERN.exec(content)) !== null) {
+        const entryBlock = entryMatch[0];
+        let valueMatch: RegExpExecArray | null;
+        WEBPACK_ENTRY_VALUE_PATTERN.lastIndex = 0;
+        while ((valueMatch = WEBPACK_ENTRY_VALUE_PATTERN.exec(entryBlock)) !== null) {
+          const entryPath = valueMatch[1];
+          if (entryPath.startsWith("./") || entryPath.startsWith("../") || !entryPath.startsWith("/")) {
+            const absoluteEntryPath = resolve(directory, entryPath);
+            if (existsSync(absoluteEntryPath)) {
+              entries.push(absoluteEntryPath);
+            }
+          }
+        }
+      }
+    } catch {
+    }
   }
 
   return entries;
