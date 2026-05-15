@@ -244,6 +244,20 @@ const resolveSourcePath = (distPath: string, directory: string): string[] => {
     }
   }
 
+  const withoutJsExtension = relativeToDist.replace(/\.[cm]?js$/, "");
+  if (withoutJsExtension !== relativeToDist) {
+    for (const sourceExtension of SOURCE_EXTENSIONS) {
+      const directSourceCandidate = resolve(directory, withoutJsExtension + sourceExtension);
+      if (existsSync(directSourceCandidate) && !candidates.includes(directSourceCandidate)) {
+        candidates.push(directSourceCandidate);
+      }
+    }
+    const indexCandidate = resolve(directory, withoutJsExtension, "index.ts");
+    if (existsSync(indexCandidate) && !candidates.includes(indexCandidate)) {
+      candidates.push(indexCandidate);
+    }
+  }
+
   return candidates;
 };
 

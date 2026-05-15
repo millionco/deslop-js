@@ -134,6 +134,13 @@ export const BUILTIN_MODULES = new Set([
 
 export const PLATFORM_SUFFIXES = [".web", ".native", ".ios", ".android", ".desktop", ".windows", ".macos", ".any"];
 
+export const REACT_NATIVE_PLATFORM_EXTENSIONS = [
+  ".web.ts", ".web.tsx", ".web.js", ".web.jsx",
+  ".native.ts", ".native.tsx", ".native.js", ".native.jsx",
+  ".ios.ts", ".ios.tsx", ".ios.js", ".ios.jsx",
+  ".android.ts", ".android.tsx", ".android.js", ".android.jsx",
+];
+
 export const RESOLVER_EXTENSIONS = [
   ...DEFAULT_EXTENSIONS,
   ".json",

@@ -2,7 +2,7 @@ import { ResolverFactory } from "oxc-resolver";
 import { dirname, resolve, join } from "node:path";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import type { DeslopConfig } from "../types.js";
-import { BUILTIN_MODULES, RESOLVER_EXTENSIONS } from "../constants.js";
+import { BUILTIN_MODULES, RESOLVER_EXTENSIONS, REACT_NATIVE_PLATFORM_EXTENSIONS } from "../constants.js";
 import { resolveSourcePath } from "./source-path.js";
 
 const existsAsFile = (filePath: string): boolean => {
@@ -93,11 +93,24 @@ const resolveScssPartial = (specifier: string, fromDirectory: string): string | 
   return undefined;
 };
 
-export const createModuleResolver = (config: DeslopConfig, workspacePackages: WorkspacePackageMap[] = []) => {
+export interface ModuleResolverOptions {
+  hasReactNative?: boolean;
+}
+
+export const createModuleResolver = (config: DeslopConfig, workspacePackages: WorkspacePackageMap[] = [], options: ModuleResolverOptions = {}) => {
   const resolverCache = new Map<string, ResolverFactory>();
   const resolveResultCache = new Map<string, ResolvedImport>();
 
   const failedTsconfigPaths = new Set<string>();
+
+  const resolverExtensions = options.hasReactNative
+    ? [...REACT_NATIVE_PLATFORM_EXTENSIONS, ...RESOLVER_EXTENSIONS]
+    : RESOLVER_EXTENSIONS;
+
+  const resolverOptions = {
+    ...COMMON_RESOLVER_OPTIONS,
+    extensions: resolverExtensions,
+  };
 
   const getOrCreateResolver = (tsconfigPath: string | undefined): ResolverFactory => {
     const effectivePath = tsconfigPath && !failedTsconfigPaths.has(tsconfigPath)
@@ -109,7 +122,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
 
     try {
       const newResolver = new ResolverFactory({
-        ...COMMON_RESOLVER_OPTIONS,
+        ...resolverOptions,
         tsconfig: effectivePath
           ? { configFile: effectivePath, references: "auto" }
           : undefined,
