@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { FileId, DeslopConfig } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, TEST_FILE_PATTERNS } from "../constants.js";
+import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, TEST_FILE_PATTERNS } from "../constants.js";
 import { discoverWorkspacePackages, discoverFrameworkEntryPoints } from "./workspaces.js";
 
 export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => {
@@ -142,22 +142,30 @@ const extractScriptEntries = (directory: string): string[] => {
     const content = readFileSync(packageJsonPath, "utf-8");
     const packageJson = JSON.parse(content);
     const scripts = packageJson.scripts;
-    if (!scripts || typeof scripts !== "object") return entries;
+    if (scripts && typeof scripts === "object") {
+      for (const scriptCommand of Object.values(scripts)) {
+        if (typeof scriptCommand !== "string") continue;
 
-    for (const scriptCommand of Object.values(scripts)) {
-      if (typeof scriptCommand !== "string") continue;
-
-      const match = scriptCommand.match(SCRIPT_FILE_PATTERN);
-      if (match?.[1]) {
-        const scriptFilePath = resolve(directory, match[1]);
-        if (existsSync(scriptFilePath)) {
-          entries.push(scriptFilePath);
+        const match = scriptCommand.match(SCRIPT_FILE_PATTERN);
+        if (match?.[1]) {
+          const scriptFilePath = resolve(directory, match[1]);
+          if (existsSync(scriptFilePath)) {
+            entries.push(scriptFilePath);
+          }
         }
       }
     }
   } catch {
 
   }
+
+  const scriptDirectoryFiles = fg.sync(SCRIPT_ENTRY_PATTERNS, {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**"],
+  });
+  entries.push(...scriptDirectoryFiles);
 
   return entries;
 };
