@@ -1236,3 +1236,37 @@ describe("custom-test-extensions", () => {
     );
   });
 });
+
+describe("vue-sfc", () => {
+  it("should follow imports inside Vue SFC script blocks", async () => {
+    const result = await analyzeFixture("vue-sfc");
+    const fixtureDir = resolve(FIXTURES_DIR, "vue-sfc");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/App.vue"),
+      `App.vue should be used (imported from main.ts), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/components/HelloWorld.vue"),
+      `HelloWorld.vue should be used (imported from App.vue), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/utils.ts"),
+      `utils.ts should be used (imported from HelloWorld.vue), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan Vue components as unused", async () => {
+    const result = await analyzeFixture("vue-sfc");
+    const fixtureDir = resolve(FIXTURES_DIR, "vue-sfc");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/components/OrphanComponent.vue"),
+      `OrphanComponent.vue should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
