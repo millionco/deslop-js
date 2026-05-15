@@ -6,6 +6,7 @@ import type { FileId, DeslopConfig } from "../types.js";
 import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS } from "../constants.js";
 import { discoverWorkspacePackages, discoverFrameworkEntryPoints } from "./workspaces.js";
 import type { WorkspacePackage } from "./workspaces.js";
+import { resolveSourcePath } from "../resolver/source-path.js";
 import { join } from "node:path";
 
 export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => {
@@ -158,6 +159,11 @@ const extractScriptEntries = (directory: string): string[] => {
           const scriptFilePath = resolve(directory, match[1]);
           if (existsSync(scriptFilePath)) {
             entries.push(scriptFilePath);
+          } else {
+            const sourcePath = resolveSourcePath(scriptFilePath, directory);
+            if (sourcePath) {
+              entries.push(sourcePath);
+            }
           }
         }
 
@@ -166,6 +172,11 @@ const extractScriptEntries = (directory: string): string[] => {
           const configFilePath = resolve(directory, configMatch[1]);
           if (existsSync(configFilePath)) {
             entries.push(configFilePath);
+          } else {
+            const sourcePath = resolveSourcePath(configFilePath, directory);
+            if (sourcePath) {
+              entries.push(sourcePath);
+            }
           }
         }
       }
@@ -316,8 +327,9 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     alwaysUsed: [
       "vitest.config.{ts,js,mts,mjs}",
       "**/vitest.config.{ts,js,mts,mjs}",
+      "vitest.web.config.{ts,js,mts,mjs}",
       "vitest.setup.{ts,js}",
-      "vitest.workspace.{ts,js}",
+      "vitest.workspace.{ts,js,mts,mjs}",
       "vitest.globalSetup.{ts,js}",
       "**/setup-vitest.{ts,js}",
       "**/vitest.setup.{ts,js}",
@@ -325,6 +337,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/setupTests.{ts,tsx,js,jsx}",
       "**/src/setupTests.{ts,tsx,js,jsx}",
       "**/src/test-setup.{ts,tsx,js,jsx}",
+      "**/__mocks__/**/*.{ts,tsx,js,jsx,mts,mjs,cjs}",
     ],
   },
   {
@@ -344,6 +357,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     alwaysUsed: [
       "jest.config.{ts,js,mjs,cjs}",
       "jest.setup.{ts,js,tsx,jsx}",
+      "**/__mocks__/**/*.{ts,tsx,js,jsx,mts,mjs,cjs}",
     ],
   },
   {
@@ -530,8 +544,17 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "blog/**/*.{md,mdx}",
       "src/pages/**/*.{ts,tsx,js,jsx,md,mdx}",
       "src/components/**/*.{ts,tsx,js,jsx}",
+      "src/theme/**/*.{ts,tsx,js,jsx}",
     ],
-    alwaysUsed: ["docusaurus.config.{ts,js,mjs}"],
+    alwaysUsed: [
+      "docusaurus.config.{ts,js,mjs}",
+      "sidebars.{ts,js,mjs,cjs}",
+      "*-sidebar.{ts,js,mjs,cjs}",
+      "*-sidebars.{ts,js,mjs,cjs}",
+      "docs-sidebar.{ts,js,mjs,cjs}",
+      "src/css/custom.css",
+      "src/css/custom.scss",
+    ],
   },
   {
     enablers: ["eslint", "@eslint/js"],
@@ -726,6 +749,41 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "electron/preload.{ts,js}",
     ],
     alwaysUsed: [],
+  },
+  {
+    enablers: ["lage"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["lage.config.{js,cjs,mjs}"],
+  },
+  {
+    enablers: ["lefthook"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["lefthook.yml", "lefthook.yaml", ".lefthook.yml"],
+  },
+  {
+    enablers: ["syncpack"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: [".syncpackrc", ".syncpackrc.{json,yaml,yml}", "syncpack.config.{js,mjs,cjs}"],
+  },
+  {
+    enablers: ["@react-router/dev"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      "app/routes/**/*.{ts,tsx,js,jsx}",
+      "app/root.{ts,tsx,js,jsx}",
+      "app/entry.client.{ts,tsx,js,jsx}",
+      "app/entry.server.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: ["react-router.config.{ts,js,mjs,cjs}"],
+  },
+  {
+    enablers: ["@capacitor/core", "@capacitor/cli"],
+    enablerPrefixes: ["@capacitor/"],
+    entryPatterns: [],
+    alwaysUsed: ["capacitor.config.{ts,js,json}"],
   },
 ];
 
