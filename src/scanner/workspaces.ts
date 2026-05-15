@@ -334,10 +334,27 @@ const NEXTJS_APP_ROUTER_CONVENTIONS = [
   "apple-icon", "actions",
 ];
 
-const FRAMEWORK_FILE_GLOB = "**/*.{ts,tsx,js,jsx,mdx,mjs,cjs,astro}";
+const FRAMEWORK_FILE_GLOB = "**/*.{ts,tsx,js,jsx,mjs,cjs,astro}";
+
+const FRAMEWORK_FILE_GLOB_WITH_MDX = "**/*.{ts,tsx,js,jsx,mdx,md,mjs,cjs,astro}";
+
+const detectIsAstroProject = (rootDir: string): boolean => {
+  const packageJsonPath = join(rootDir, "package.json");
+  if (!existsSync(packageJsonPath)) return false;
+  try {
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    const allDependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+    return "astro" in allDependencies;
+  } catch {
+    return false;
+  }
+};
 
 export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   const entryPoints: string[] = [];
+  const isAstro = detectIsAstroProject(rootDir);
+  const pagesGlob = isAstro ? FRAMEWORK_FILE_GLOB_WITH_MDX : FRAMEWORK_FILE_GLOB;
 
   const allFileDirs = [
     join(rootDir, "pages"),
@@ -350,13 +367,30 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
 
   for (const frameworkDir of allFileDirs) {
     if (existsSync(frameworkDir) && statSync(frameworkDir).isDirectory()) {
-      const frameworkFiles = fg.sync(FRAMEWORK_FILE_GLOB, {
+      const frameworkFiles = fg.sync(pagesGlob, {
         cwd: frameworkDir,
         absolute: true,
         onlyFiles: true,
         ignore: ["**/node_modules/**"],
       });
       entryPoints.push(...frameworkFiles);
+    }
+  }
+
+  if (isAstro) {
+    const astroContentDirs = [
+      join(rootDir, "src", "content"),
+    ];
+    for (const contentDir of astroContentDirs) {
+      if (existsSync(contentDir) && statSync(contentDir).isDirectory()) {
+        const contentFiles = fg.sync(FRAMEWORK_FILE_GLOB_WITH_MDX, {
+          cwd: contentDir,
+          absolute: true,
+          onlyFiles: true,
+          ignore: ["**/node_modules/**"],
+        });
+        entryPoints.push(...contentFiles);
+      }
     }
   }
 
@@ -450,7 +484,7 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   });
   entryPoints.push(...configFiles);
 
-  const alwaysEntryDirs = ["e2e", "cypress", ".github", "migrations", "db/migrations", "db/seeds"];
+  const alwaysEntryDirs = ["e2e", "cypress", ".github"];
   for (const entryDir of alwaysEntryDirs) {
     const dirPath = join(rootDir, entryDir);
     if (existsSync(dirPath) && statSync(dirPath).isDirectory()) {

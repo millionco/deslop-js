@@ -559,11 +559,11 @@ describe("css-tracking", () => {
     assert.ok(!unusedFilePaths.includes("src/styles.css"), "styles.css is imported and should be reachable");
   });
 
-  it("should not discover CSS files that are not imported", async () => {
+  it("should flag unimported CSS files as unused", async () => {
     const result = await analyzeFixture("css-tracking");
     const fixtureDir = resolve(FIXTURES_DIR, "css-tracking");
     const unusedFilePaths = relativePaths(result, fixtureDir);
-    assert.ok(!unusedFilePaths.includes("src/unused.css"), "unused.css is not imported so not discovered");
+    assert.ok(unusedFilePaths.includes("src/unused.css"), "unused.css should be flagged as unused");
   });
 
   it("should flag orphan TS files", async () => {
@@ -684,7 +684,7 @@ describe("path-aliases-mixed-exports", () => {
 });
 
 describe("fixture-patterns", () => {
-  it("should treat __fixtures__ and __mocks__ files as entry points when vitest is present", async () => {
+  it("should treat __fixtures__ files as entry points when vitest is present", async () => {
     const result = await analyzeFixture("fixture-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -692,9 +692,15 @@ describe("fixture-patterns", () => {
       !unusedFilePaths.includes("src/__fixtures__/user-data.ts"),
       `__fixtures__/user-data.ts should be treated as entry point, got: ${unusedFilePaths}`,
     );
+  });
+
+  it("should flag __mocks__ files as unused since they are only consumed at runtime", async () => {
+    const result = await analyzeFixture("fixture-patterns");
+    const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/__mocks__/api-client.ts"),
-      `__mocks__/api-client.ts should be treated as entry point, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/__mocks__/api-client.ts"),
+      `__mocks__/api-client.ts should be unused (not statically imported), got: ${unusedFilePaths}`,
     );
   });
 
@@ -901,6 +907,104 @@ describe("graphql-files", () => {
     assert.ok(
       unusedFilePaths.includes("src/unused.graphql"),
       `unused.graphql should be flagged as unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("nextjs-pages-mdx", () => {
+  it("should not treat standalone MDX files in pages/ as entry points", async () => {
+    const result = await analyzeFixture("nextjs-pages-mdx");
+    const fixtureDir = resolve(FIXTURES_DIR, "nextjs-pages-mdx");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("pages/about.mdx"),
+      `about.mdx should be unused (not auto-discovered as page entry), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should still discover TSX files in pages/ as entry points", async () => {
+    const result = await analyzeFixture("nextjs-pages-mdx");
+    const fixtureDir = resolve(FIXTURES_DIR, "nextjs-pages-mdx");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("pages/index.tsx"),
+      `index.tsx should be entry point, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should mark components imported by pages as reachable", async () => {
+    const result = await analyzeFixture("nextjs-pages-mdx");
+    const fixtureDir = resolve(FIXTURES_DIR, "nextjs-pages-mdx");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/Home.ts"),
+      `Home.ts is imported by index.tsx and should be reachable, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("orm-migrations", () => {
+  it("should treat migration files as entry points when ORM is detected", async () => {
+    const result = await analyzeFixture("orm-migrations");
+    const fixtureDir = resolve(FIXTURES_DIR, "orm-migrations");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("migrations/001-create-users.ts"),
+      `migration file should be entry point when knex is present, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should still flag orphan files", async () => {
+    const result = await analyzeFixture("orm-migrations");
+    const fixtureDir = resolve(FIXTURES_DIR, "orm-migrations");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("migrations-no-orm", () => {
+  it("should NOT treat migration files as entry points without ORM dependency", async () => {
+    const result = await analyzeFixture("migrations-no-orm");
+    const fixtureDir = resolve(FIXTURES_DIR, "migrations-no-orm");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("migrations/001-create-users.ts"),
+      `migration file should be unused without ORM, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("css-imports", () => {
+  it("should track CSS files imported from TS as reachable", async () => {
+    const result = await analyzeFixture("css-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "css-imports");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/app.css"),
+      `app.css is imported by index.ts and should be reachable, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should track CSS @import chains as reachable", async () => {
+    const result = await analyzeFixture("css-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "css-imports");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("styles/base.css"),
+      `base.css is @imported from app.css and should be reachable, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan CSS files as unused", async () => {
+    const result = await analyzeFixture("css-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "css-imports");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("styles/orphan.css"),
+      `orphan.css is not imported and should be unused, got: ${unusedFilePaths}`,
     );
   });
 });

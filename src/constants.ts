@@ -11,6 +11,9 @@ export const DEFAULT_EXTENSIONS = [
   ".astro",
   ".graphql",
   ".gql",
+  ".css",
+  ".scss",
+  ".less",
 ];
 
 export const HIDDEN_DIRECTORY_ALLOWLIST = [
@@ -33,7 +36,7 @@ export const DEFAULT_IGNORE_PATTERNS = [
 export const SCRIPT_FILE_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|npx|bun|esr|esno|jiti)\s+(?:-[\w-]+\s+)*(?:[\w/-]+\s+)*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))/;
 
 export const SCRIPT_ENTRY_PATTERNS = [
-  "**/bin/**/*.{ts,tsx,js,jsx,mts,mjs}",
+  "bin/*.{ts,tsx,js,jsx,mts,mjs,cjs}",
 ];
 
 export const DEFAULT_ENTRY_PATTERNS = [

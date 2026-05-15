@@ -10,7 +10,6 @@ export const findUnusedExports = (
   for (const module of graph.modules) {
     if (!module.isReachable) continue;
     if (module.isDeclarationFile) continue;
-    if (module.isConfigFile) continue;
     if (module.isEntryPoint && !config.includeEntryExports) continue;
 
     for (const exportInfo of module.exports) {
