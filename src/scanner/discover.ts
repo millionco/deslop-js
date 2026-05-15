@@ -196,8 +196,8 @@ const extractScriptEntries = (directory: string): string[] => {
   return entries;
 };
 
-const WEBPACK_ENTRY_PATTERN = /entry\s*:\s*\{[^}]*\}/gs;
-const WEBPACK_ENTRY_VALUE_PATTERN = /['"]([^'"]+\.(?:js|ts|tsx|jsx))['"]/g;
+const WEBPACK_ENTRY_BLOCK_PATTERN = /entry\s*:\s*(?:\{[^}]*\}|\[[^\]]*\]|['"][^'"]+['"])/gs;
+const WEBPACK_ENTRY_FILE_PATTERN = /['"]([^'"]+\.(?:js|ts|tsx|jsx|mjs|mts))['"]/g;
 
 const extractWebpackEntryPoints = (directory: string): string[] => {
   const entries: string[] = [];
@@ -211,12 +211,12 @@ const extractWebpackEntryPoints = (directory: string): string[] => {
     try {
       const content = readFileSync(configPath, "utf-8");
       let entryMatch: RegExpExecArray | null;
-      WEBPACK_ENTRY_PATTERN.lastIndex = 0;
-      while ((entryMatch = WEBPACK_ENTRY_PATTERN.exec(content)) !== null) {
+      WEBPACK_ENTRY_BLOCK_PATTERN.lastIndex = 0;
+      while ((entryMatch = WEBPACK_ENTRY_BLOCK_PATTERN.exec(content)) !== null) {
         const entryBlock = entryMatch[0];
         let valueMatch: RegExpExecArray | null;
-        WEBPACK_ENTRY_VALUE_PATTERN.lastIndex = 0;
-        while ((valueMatch = WEBPACK_ENTRY_VALUE_PATTERN.exec(entryBlock)) !== null) {
+        WEBPACK_ENTRY_FILE_PATTERN.lastIndex = 0;
+        while ((valueMatch = WEBPACK_ENTRY_FILE_PATTERN.exec(entryBlock)) !== null) {
           const entryPath = valueMatch[1];
           if (entryPath.startsWith("./") || entryPath.startsWith("../") || !entryPath.startsWith("/")) {
             const absoluteEntryPath = resolve(directory, entryPath);
@@ -318,7 +318,10 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*-spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/*_spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
+      "**/__e2e__/**/*.{ts,tsx,js,jsx,mts,mjs}",
       "**/*.bench.{ts,tsx,js,jsx}",
+      "**/*.clienttest.{ts,tsx,js,jsx}",
+      "**/*.servertest.{ts,tsx,js,jsx}",
     ],
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
@@ -326,7 +329,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     ],
     alwaysUsed: [
       "vitest.config.{ts,js,mts,mjs}",
-      "**/vitest.config.{ts,js,mts,mjs}",
+      "**/vitest.config.{ts,js,mts,mjs,mts}",
       "vitest.web.config.{ts,js,mts,mjs}",
       "vitest.setup.{ts,js}",
       "vitest.workspace.{ts,js,mts,mjs}",
@@ -526,15 +529,37 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     alwaysUsed: [],
   },
   {
-    enablers: ["@remix-run/node", "@remix-run/react", "@remix-run/cloudflare"],
-    enablerPrefixes: ["@remix-run/"],
+    enablers: ["gatsby"],
+    enablerPrefixes: ["gatsby-"],
+    entryPatterns: [
+      "src/pages/**/*.{ts,tsx,js,jsx}",
+      "src/templates/**/*.{ts,tsx,js,jsx}",
+      "src/components/**/*.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: [
+      "gatsby-config.{ts,js,mjs}",
+      "gatsby-node.{ts,js,mjs}",
+      "gatsby-browser.{ts,tsx,js,jsx}",
+      "gatsby-ssr.{ts,tsx,js,jsx}",
+    ],
+  },
+  {
+    enablers: ["@remix-run/node", "@remix-run/react", "@remix-run/cloudflare", "@react-router/node", "@react-router/serve", "@react-router/dev"],
+    enablerPrefixes: ["@remix-run/", "@react-router/"],
     entryPatterns: [
       "app/routes/**/*.{ts,tsx,js,jsx}",
       "app/root.{ts,tsx,js,jsx}",
       "app/entry.client.{ts,tsx,js,jsx}",
       "app/entry.server.{ts,tsx,js,jsx}",
+      "app/**/page.{ts,tsx,js,jsx}",
+      "app/**/layout.{ts,tsx,js,jsx}",
+      "app/**/error.{ts,tsx,js,jsx}",
+      "app/**/loading.{ts,tsx,js,jsx}",
     ],
-    alwaysUsed: [],
+    alwaysUsed: [
+      "react-router.config.{ts,js,mjs}",
+      "remix.config.{ts,js,mjs}",
+    ],
   },
   {
     enablers: ["@docusaurus/core"],
