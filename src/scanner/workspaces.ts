@@ -258,6 +258,14 @@ const resolveSourcePath = (distPath: string, directory: string): string[] => {
     }
   }
 
+  const withoutTsExtension = relativeToDist.replace(/\.ts$/, "");
+  if (withoutTsExtension !== relativeToDist && !existsSync(resolve(directory, relativeToDist))) {
+    const tsxCandidate = resolve(directory, withoutTsExtension + ".tsx");
+    if (existsSync(tsxCandidate) && !candidates.includes(tsxCandidate)) {
+      candidates.push(tsxCandidate);
+    }
+  }
+
   return candidates;
 };
 

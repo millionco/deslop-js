@@ -515,6 +515,23 @@ const collectDynamicImports = (
             column: getColumnFromOffset(sourceText, importExpression.start),
           });
         }
+      } else if (sourceExpression.type === "TemplateLiteral") {
+        const templateLiteral = sourceExpression as unknown as { quasis: Array<{ value: { cooked: string } }> };
+        if (templateLiteral.quasis.length >= 2) {
+          const globPattern = templateLiteral.quasis.map((quasi) => quasi.value.cooked).join("*");
+          if (globPattern.startsWith("./") || globPattern.startsWith("../")) {
+            imports.push({
+              specifier: globPattern,
+              importedNames: [createNamespaceImportedName()],
+              isTypeOnly: false,
+              isDynamic: true,
+              isSideEffect: false,
+              isGlob: true,
+              line: getLineFromOffset(sourceText, importExpression.start),
+              column: getColumnFromOffset(sourceText, importExpression.start),
+            });
+          }
+        }
       }
       return;
     }
