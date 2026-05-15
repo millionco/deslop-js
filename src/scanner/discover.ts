@@ -647,6 +647,49 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       ".babelrc.{js,cjs,mjs,json}",
     ],
   },
+  {
+    enablers: ["i18next", "react-i18next", "vue-i18n", "next-i18next"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      "src/i18n.{ts,js,mjs}",
+      "src/i18n/index.{ts,js}",
+      "i18n.{ts,js,mjs}",
+      "i18n/index.{ts,js}",
+    ],
+    alwaysUsed: [
+      "src/i18n.{ts,js,mjs}",
+      "src/i18n/index.{ts,js}",
+      "i18n.{ts,js,mjs}",
+      "i18n/index.{ts,js}",
+      "i18next.config.{js,ts,mjs}",
+      "next-i18next.config.{js,mjs}",
+      "locales/**/*.json",
+      "public/locales/**/*.json",
+      "src/locales/**/*.json",
+    ],
+  },
+  {
+    enablers: ["turbo"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["turbo.json", "turbo/generators/config.{ts,js}"],
+  },
+  {
+    enablers: ["@sentry/nextjs", "@sentry/react", "@sentry/node", "@sentry/browser"],
+    enablerPrefixes: ["@sentry/"],
+    entryPatterns: [],
+    alwaysUsed: [
+      "sentry.client.config.{ts,js,mjs}",
+      "sentry.server.config.{ts,js,mjs}",
+      "sentry.edge.config.{ts,js,mjs}",
+    ],
+  },
+  {
+    enablers: ["nodemon"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["nodemon.json", ".nodemonrc", ".nodemonrc.{json,yml,yaml}"],
+  },
 ];
 
 const detectNodeTestRunner = (directory: string): boolean => {
