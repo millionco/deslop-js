@@ -3,8 +3,10 @@ import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { FileId, DeslopConfig } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, TEST_FILE_PATTERNS } from "../constants.js";
+import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS } from "../constants.js";
 import { discoverWorkspacePackages, discoverFrameworkEntryPoints } from "./workspaces.js";
+import type { WorkspacePackage } from "./workspaces.js";
+import { join } from "node:path";
 
 export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => {
   const extensions =
@@ -93,7 +95,7 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
     htmlScriptEntries.push(...extractHtmlScriptEntries(workspacePackage.directory));
   }
 
-  const testEntryFiles = await discoverTestEntryPoints(absoluteRoot, workspacePackages.map((workspacePackage) => workspacePackage.directory));
+  const testEntryFiles = discoverTestRunnerEntryPoints(absoluteRoot, workspacePackages);
 
   return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...htmlScriptEntries, ...testEntryFiles])];
 };
@@ -241,84 +243,6 @@ const extractHtmlScriptEntries = (directory: string): string[] => {
   return entries;
 };
 
-const TEST_RUNNER_CONFIG_PATTERNS = [
-  "vitest.config.*",
-  "jest.config.*",
-  "jest.setup.*",
-  "playwright.config.*",
-  "cypress.config.*",
-  ".mocharc.*",
-  "karma.conf.*",
-  "ava.config.*",
-];
-
-const hasTestRunnerConfig = (directory: string): boolean => {
-  const configSearchPatterns = [
-    ...TEST_RUNNER_CONFIG_PATTERNS,
-    ...TEST_RUNNER_CONFIG_PATTERNS.map((pattern) => `**/${pattern}`),
-  ];
-  const configFiles = fg.sync(configSearchPatterns, {
-    cwd: directory,
-    onlyFiles: true,
-    dot: true,
-    ignore: ["**/node_modules/**"],
-    deep: 3,
-  });
-  if (configFiles.length > 0) return true;
-
-  try {
-    const packageJsonPath = resolve(directory, "package.json");
-    if (existsSync(packageJsonPath)) {
-      const content = readFileSync(packageJsonPath, "utf-8");
-      const packageJson = JSON.parse(content);
-      if (packageJson.jest || packageJson.mocha || packageJson.ava) return true;
-      const devDependencies = packageJson.devDependencies ?? {};
-      const dependencies = packageJson.dependencies ?? {};
-      const allDependencies = { ...dependencies, ...devDependencies };
-      const hasTestingDependency = Boolean(
-        allDependencies.vitest || allDependencies.jest || allDependencies["@jest/core"] ||
-        allDependencies.mocha || allDependencies.ava || allDependencies["@vitest/runner"]
-      );
-      if (hasTestingDependency) return true;
-
-      const testScript = packageJson.scripts?.test ?? packageJson.scripts?.["test:unit"] ?? "";
-      if (typeof testScript === "string" && testScript.length > 0) {
-        const knownTestRunnerPattern = /\b(vitest|jest|mocha|ava|karma|jasmine|tap|node --test|vp test|turbo[\s]+.*test)\b/;
-        if (knownTestRunnerPattern.test(testScript)) return true;
-      }
-    }
-  } catch {
-  }
-
-  return false;
-};
-
-const discoverTestEntryPoints = async (
-  rootDir: string,
-  workspaceDirectories: string[],
-): Promise<string[]> => {
-  const rootHasTestRunner = hasTestRunnerConfig(rootDir);
-  const testEntries: string[] = [];
-
-  const directoriesToCheck = [rootDir, ...workspaceDirectories];
-  for (const directory of directoriesToCheck) {
-    const directoryHasTestRunner = directory === rootDir
-      ? rootHasTestRunner
-      : rootHasTestRunner || hasTestRunnerConfig(directory);
-    if (!directoryHasTestRunner) continue;
-
-    const testFiles = await fg(TEST_FILE_PATTERNS, {
-      cwd: directory,
-      absolute: true,
-      onlyFiles: true,
-      ignore: [...DEFAULT_IGNORE_PATTERNS],
-    });
-    testEntries.push(...testFiles);
-  }
-
-  return testEntries;
-};
-
 const collectExportPaths = (
   exportValue: unknown,
   rootDir: string,
@@ -349,4 +273,198 @@ const collectExportPaths = (
   for (const nestedValue of Object.values(exportValue)) {
     collectExportPaths(nestedValue, rootDir, entries);
   }
+};
+
+interface TestRunnerDefinition {
+  enablers: string[];
+  configFileActivators: string[];
+  entryPatterns: string[];
+  alwaysUsed: string[];
+}
+
+const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
+  {
+    enablers: ["vitest", "@vitest/runner", "vite-plus"],
+    configFileActivators: [
+      "vitest.config.ts", "vitest.config.js", "vitest.config.mts", "vitest.config.mjs",
+      "vite.config.ts", "vite.config.js", "vite.config.mts", "vite.config.mjs",
+    ],
+    entryPatterns: [
+      "**/*.test.{ts,tsx,js,jsx,mts,mjs}",
+      "**/*.spec.{ts,tsx,js,jsx,mts,mjs}",
+      "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
+      "**/*.bench.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: [
+      "vitest.config.{ts,js,mts,mjs}",
+      "vitest.setup.{ts,js}",
+      "vitest.workspace.{ts,js}",
+      "**/src/setupTests.{ts,tsx,js,jsx}",
+      "**/src/test-setup.{ts,tsx,js,jsx}",
+    ],
+  },
+  {
+    enablers: ["jest", "@jest/core", "ts-jest"],
+    configFileActivators: ["jest.config.ts", "jest.config.js", "jest.config.mjs", "jest.config.cjs"],
+    entryPatterns: [
+      "**/*.test.{ts,tsx,js,jsx,mts,mjs}",
+      "**/*.spec.{ts,tsx,js,jsx,mts,mjs}",
+      "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
+      "**/__mocks__/**/*.{ts,tsx,js,jsx,mjs,cjs}",
+    ],
+    alwaysUsed: [
+      "jest.config.{ts,js,mjs,cjs}",
+      "jest.setup.{ts,js,tsx,jsx}",
+    ],
+  },
+  {
+    enablers: ["@playwright/test", "playwright"],
+    configFileActivators: ["playwright.config.ts", "playwright.config.js"],
+    entryPatterns: [
+      "**/*.spec.{ts,tsx,js,jsx}",
+      "**/*.test.{ts,tsx,js,jsx}",
+      "tests/**/*.{ts,tsx,js,jsx}",
+      "e2e/**/*.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: [
+      "playwright.config.{ts,js}",
+    ],
+  },
+  {
+    enablers: ["mocha"],
+    configFileActivators: [".mocharc.js", ".mocharc.yaml", ".mocharc.yml", ".mocharc.json"],
+    entryPatterns: [
+      "**/*.test.{ts,tsx,js,jsx}",
+      "**/*.spec.{ts,tsx,js,jsx}",
+      "test/**/*.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: [
+      ".mocharc.*",
+    ],
+  },
+  {
+    enablers: ["cypress"],
+    configFileActivators: ["cypress.config.ts", "cypress.config.js"],
+    entryPatterns: [
+      "cypress/**/*.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: [
+      "cypress.config.{ts,js}",
+    ],
+  },
+  {
+    enablers: ["bun:test"],
+    configFileActivators: [],
+    entryPatterns: [
+      "**/*.test.{ts,tsx,js,jsx}",
+      "**/*.spec.{ts,tsx,js,jsx}",
+      "**/__tests__/**/*.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: [],
+  },
+];
+
+const detectBunTestRunner = (directory: string): boolean => {
+  try {
+    const packageJsonPath = join(directory, "package.json");
+    if (!existsSync(packageJsonPath)) return false;
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    const scripts = packageJson.scripts ?? {};
+    return Object.values(scripts).some(
+      (scriptValue) => typeof scriptValue === "string" && /\bbun\s+test\b/.test(scriptValue)
+    );
+  } catch {
+    return false;
+  }
+};
+
+const discoverTestRunnerEntryPoints = (
+  rootDir: string,
+  workspacePackages: WorkspacePackage[],
+): string[] => {
+  const allEntries: string[] = [];
+  const directoriesToCheck = [rootDir, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
+
+  for (const directory of directoriesToCheck) {
+    const packageJsonPath = join(directory, "package.json");
+    if (!existsSync(packageJsonPath)) continue;
+
+    let allDependencies: Record<string, string> = {};
+    try {
+      const content = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(content);
+      allDependencies = {
+        ...packageJson.dependencies,
+        ...packageJson.devDependencies,
+      };
+    } catch {
+      continue;
+    }
+
+    const activatedPatterns: string[] = [];
+    const activatedAlwaysUsed: string[] = [];
+
+    const isRunnerEnabled = (runner: TestRunnerDefinition, dependencies: Record<string, string>, directory: string): boolean => {
+      const hasDependency = runner.enablers.some((enabler) => {
+        if (enabler === "bun:test") return detectBunTestRunner(directory);
+        return enabler in dependencies;
+      });
+      if (hasDependency) return true;
+      return runner.configFileActivators.some((configFile) => existsSync(join(directory, configFile)));
+    };
+
+    for (const runner of TEST_RUNNER_DEFINITIONS) {
+      if (isRunnerEnabled(runner, allDependencies, directory)) {
+        activatedPatterns.push(...runner.entryPatterns);
+        activatedAlwaysUsed.push(...runner.alwaysUsed);
+      }
+    }
+
+    if (activatedPatterns.length === 0 && directory !== rootDir) {
+      const rootPackageJsonPath = join(rootDir, "package.json");
+      if (existsSync(rootPackageJsonPath)) {
+        try {
+          const rootContent = readFileSync(rootPackageJsonPath, "utf-8");
+          const rootPackageJson = JSON.parse(rootContent);
+          const rootDeps = {
+            ...rootPackageJson.dependencies,
+            ...rootPackageJson.devDependencies,
+          };
+          for (const runner of TEST_RUNNER_DEFINITIONS) {
+            if (isRunnerEnabled(runner, rootDeps, rootDir)) {
+              activatedPatterns.push(...runner.entryPatterns);
+              activatedAlwaysUsed.push(...runner.alwaysUsed);
+            }
+          }
+        } catch {
+        }
+      }
+    }
+
+    if (activatedPatterns.length === 0) continue;
+
+    const uniquePatterns = [...new Set(activatedPatterns)];
+    const testFiles = fg.sync(uniquePatterns, {
+      cwd: directory,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**"],
+    });
+    allEntries.push(...testFiles);
+
+    const uniqueAlwaysUsed = [...new Set(activatedAlwaysUsed)];
+    if (uniqueAlwaysUsed.length > 0) {
+      const alwaysUsedFiles = fg.sync(uniqueAlwaysUsed, {
+        cwd: directory,
+        absolute: true,
+        onlyFiles: true,
+        ignore: ["**/node_modules/**"],
+        dot: true,
+      });
+      allEntries.push(...alwaysUsedFiles);
+    }
+  }
+
+  return allEntries;
 };
