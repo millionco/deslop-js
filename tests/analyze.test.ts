@@ -1180,3 +1180,59 @@ describe("tsconfig-path-alias-wildcard", () => {
     );
   });
 });
+
+describe("scss-partials", () => {
+  it("should resolve SCSS partial imports with underscore prefix", async () => {
+    const result = await analyzeFixture("scss-partials");
+    const fixtureDir = resolve(FIXTURES_DIR, "scss-partials");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/styles/_variables.scss"),
+      `_variables.scss should be used (SCSS partial import), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/styles/_mixins.scss"),
+      `_mixins.scss should be used (SCSS @use), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan SCSS partials as unused", async () => {
+    const result = await analyzeFixture("scss-partials");
+    const fixtureDir = resolve(FIXTURES_DIR, "scss-partials");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/styles/_orphan.scss"),
+      `_orphan.scss should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("custom-test-extensions", () => {
+  it("should recognize .clienttest and .servertest as vitest test files", async () => {
+    const result = await analyzeFixture("custom-test-extensions");
+    const fixtureDir = resolve(FIXTURES_DIR, "custom-test-extensions");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/utils.clienttest.ts"),
+      `.clienttest.ts should be used (vitest custom test), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/api.servertest.ts"),
+      `.servertest.ts should be used (vitest custom test), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/__e2e__/login.test.ts"),
+      `__e2e__ test should be used (vitest e2e dir), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan files as unused", async () => {
+    const result = await analyzeFixture("custom-test-extensions");
+    const fixtureDir = resolve(FIXTURES_DIR, "custom-test-extensions");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});

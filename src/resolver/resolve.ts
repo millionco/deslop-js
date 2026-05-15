@@ -51,6 +51,40 @@ export interface WorkspacePackageMap {
   directory: string;
 }
 
+const STYLE_FILE_EXTENSIONS = [".css", ".scss", ".less", ".sass"];
+const SCSS_PARTIAL_EXTENSIONS = [".scss", ".sass", ".css"];
+
+const resolveScssPartial = (specifier: string, fromDirectory: string): string | undefined => {
+  const basePath = resolve(fromDirectory, specifier);
+  const baseDirectory = dirname(basePath);
+  const baseFileName = basePath.split("/").pop() ?? "";
+
+  const candidates: string[] = [];
+
+  for (const extension of SCSS_PARTIAL_EXTENSIONS) {
+    if (!basePath.endsWith(extension)) {
+      candidates.push(`${basePath}${extension}`);
+      candidates.push(join(baseDirectory, `_${baseFileName}${extension}`));
+    } else {
+      candidates.push(basePath);
+      candidates.push(join(baseDirectory, `_${baseFileName}`));
+    }
+  }
+
+  candidates.push(join(basePath, `index.scss`));
+  candidates.push(join(basePath, `_index.scss`));
+  candidates.push(join(basePath, `index.sass`));
+  candidates.push(join(basePath, `_index.sass`));
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+};
+
 export const createModuleResolver = (config: DeslopConfig, workspacePackages: WorkspacePackageMap[] = []) => {
   const resolverCache = new Map<string, ResolverFactory>();
   const resolveResultCache = new Map<string, ResolvedImport>();
@@ -233,6 +267,20 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
       };
       resolveResultCache.set(cacheKey, resolvedResult);
       return resolvedResult;
+    }
+
+    const isFromStyleFile = STYLE_FILE_EXTENSIONS.some((extension) => fromFile.endsWith(extension));
+    if (isFromStyleFile && isBareSpecifier(specifier)) {
+      const scssResolved = resolveScssPartial(specifier, fromDir);
+      if (scssResolved) {
+        const resolvedResult: ResolvedImport = {
+          resolvedPath: scssResolved,
+          isExternal: false,
+          packageName: undefined,
+        };
+        resolveResultCache.set(cacheKey, resolvedResult);
+        return resolvedResult;
+      }
     }
 
     if (isBareSpecifier(specifier) && workspaceNameToDirectory.size > 0) {
