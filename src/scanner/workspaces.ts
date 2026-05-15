@@ -171,6 +171,8 @@ const resolveSourcePath = (distPath: string, directory: string): string[] => {
     relativeToDist.replace(/^build\//, "src/"),
     relativeToDist.replace(/^lib\//, "src/"),
     relativeToDist.replace(/^lib-dist\//, "src/"),
+    relativeToDist.replace(/^esm\//, "src/"),
+    relativeToDist.replace(/^cjs\//, "src/"),
     relativeToDist.replace(/^out\//, "src/"),
     relativeToDist.replace(/^\.\/dist\//, "src/"),
     relativeToDist.replace(/^\.\/lib-dist\//, "src/"),
