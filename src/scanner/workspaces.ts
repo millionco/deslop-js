@@ -6,6 +6,7 @@ export interface WorkspacePackage {
   name: string;
   directory: string;
   entryFiles: string[];
+  isDeclaredWorkspace: boolean;
 }
 
 export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] => {
@@ -14,6 +15,7 @@ export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] =
     ? expandWorkspaceGlobs(patterns, rootDir)
     : [];
 
+  const declaredDirectorySet = new Set(expandedDirectories);
   const implicitSubProjects = discoverImplicitSubProjects(rootDir, expandedDirectories);
   const allDirectories = [...new Set([...expandedDirectories, ...implicitSubProjects])];
 
@@ -33,6 +35,7 @@ export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] =
         name: packageName,
         directory,
         entryFiles,
+        isDeclaredWorkspace: declaredDirectorySet.has(directory),
       });
     } catch {
     }

@@ -70,8 +70,10 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
   for (const workspacePackage of workspacePackages) {
     workspaceEntries.push(...workspacePackage.entryFiles);
 
-    const workspaceFrameworkEntries = discoverFrameworkEntryPoints(workspacePackage.directory);
-    workspaceEntries.push(...workspaceFrameworkEntries);
+    if (workspacePackage.isDeclaredWorkspace) {
+      const workspaceFrameworkEntries = discoverFrameworkEntryPoints(workspacePackage.directory);
+      workspaceEntries.push(...workspaceFrameworkEntries);
+    }
   }
 
   const frameworkEntries = discoverFrameworkEntryPoints(absoluteRoot);
