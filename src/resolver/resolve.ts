@@ -123,6 +123,28 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
     return tsconfigResult;
   };
 
+  const tsconfigBaseUrlCache = new Map<string, string | undefined>();
+
+  const getBaseUrlDirectory = (tsconfigFile: string): string | undefined => {
+    const cached = tsconfigBaseUrlCache.get(tsconfigFile);
+    if (cached !== undefined) return cached;
+
+    try {
+      const tsconfigContent = readFileSync(tsconfigFile, "utf-8");
+      const cleanedContent = stripJsonComments(tsconfigContent);
+      const tsconfigJson = JSON.parse(cleanedContent);
+      const baseUrl = tsconfigJson.compilerOptions?.baseUrl;
+      if (baseUrl) {
+        const absoluteBaseUrl = resolve(dirname(tsconfigFile), baseUrl);
+        tsconfigBaseUrlCache.set(tsconfigFile, absoluteBaseUrl);
+        return absoluteBaseUrl;
+      }
+    } catch {
+    }
+    tsconfigBaseUrlCache.set(tsconfigFile, undefined);
+    return undefined;
+  };
+
   const getPathAliases = (tsconfigFile: string): Map<string, string[]> => {
     const cached = tsconfigPathAliasCache.get(tsconfigFile);
     if (cached) return cached;
@@ -343,6 +365,38 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
     }
 
     if (isBareSpecifier(specifier)) {
+      const tsconfigFile = findTsconfigForFile(fromFile);
+      if (tsconfigFile) {
+        const baseUrlDirectory = getBaseUrlDirectory(tsconfigFile);
+        if (baseUrlDirectory) {
+          const baseUrlCandidate = resolve(baseUrlDirectory, specifier);
+          for (const candidateExtension of RESOLVER_EXTENSIONS) {
+            const fullCandidate = baseUrlCandidate + candidateExtension;
+            if (existsSync(fullCandidate)) {
+              const resolvedResult: ResolvedImport = {
+                resolvedPath: fullCandidate,
+                isExternal: false,
+                packageName: undefined,
+              };
+              resolveResultCache.set(cacheKey, resolvedResult);
+              return resolvedResult;
+            }
+          }
+          const indexCandidate = join(baseUrlCandidate, "index");
+          for (const candidateExtension of RESOLVER_EXTENSIONS) {
+            const fullCandidate = indexCandidate + candidateExtension;
+            if (existsSync(fullCandidate)) {
+              const resolvedResult: ResolvedImport = {
+                resolvedPath: fullCandidate,
+                isExternal: false,
+                packageName: undefined,
+              };
+              resolveResultCache.set(cacheKey, resolvedResult);
+              return resolvedResult;
+            }
+          }
+        }
+      }
       const packageName = extractPackageNameFromSpecifier(specifier);
       const resolvedResult: ResolvedImport = {
         resolvedPath: undefined,
