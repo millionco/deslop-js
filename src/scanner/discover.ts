@@ -68,11 +68,13 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
   const packageJsonEntries = await extractPackageJsonEntries(packageJsonPath);
 
   const workspacePackages = discoverWorkspacePackages(absoluteRoot);
+  const hasDeclaredWorkspaces = workspacePackages.some((workspacePackage) => workspacePackage.isDeclaredWorkspace);
   const workspaceEntries: string[] = [];
   for (const workspacePackage of workspacePackages) {
     workspaceEntries.push(...workspacePackage.entryFiles);
 
-    if (workspacePackage.isDeclaredWorkspace) {
+    const shouldRunFrameworkDetection = hasDeclaredWorkspaces ? workspacePackage.isDeclaredWorkspace : true;
+    if (shouldRunFrameworkDetection) {
       const workspaceFrameworkEntries = discoverFrameworkEntryPoints(workspacePackage.directory);
       workspaceEntries.push(...workspaceFrameworkEntries);
     }
@@ -279,6 +281,7 @@ interface TestRunnerDefinition {
   enablers: string[];
   configFileActivators: string[];
   entryPatterns: string[];
+  fixturePatterns: string[];
   alwaysUsed: string[];
 }
 
@@ -295,11 +298,18 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
       "**/*.bench.{ts,tsx,js,jsx}",
     ],
+    fixturePatterns: [
+      "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
+      "**/fixtures/**/*.{ts,tsx,js,jsx,json}",
+      "**/__mocks__/**/*.{ts,tsx,js,jsx,mjs,cjs}",
+    ],
     alwaysUsed: [
       "vitest.config.{ts,js,mts,mjs}",
       "vitest.setup.{ts,js}",
       "vitest.workspace.{ts,js}",
-      "**/src/setupTests.{ts,tsx,js,jsx}",
+      "**/setup-vitest.{ts,js}",
+      "**/vitest.setup.{ts,js}",
+      "**/setupTests.{ts,tsx,js,jsx}",
       "**/src/test-setup.{ts,tsx,js,jsx}",
     ],
   },
@@ -311,6 +321,10 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*.spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
       "**/__mocks__/**/*.{ts,tsx,js,jsx,mjs,cjs}",
+    ],
+    fixturePatterns: [
+      "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
+      "**/fixtures/**/*.{ts,tsx,js,jsx,json}",
     ],
     alwaysUsed: [
       "jest.config.{ts,js,mjs,cjs}",
@@ -326,6 +340,9 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "tests/**/*.{ts,tsx,js,jsx}",
       "e2e/**/*.{ts,tsx,js,jsx}",
     ],
+    fixturePatterns: [
+      "**/fixtures/**/*.{ts,tsx,js,jsx,json}",
+    ],
     alwaysUsed: [
       "playwright.config.{ts,js}",
     ],
@@ -338,6 +355,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*.spec.{ts,tsx,js,jsx}",
       "test/**/*.{ts,tsx,js,jsx}",
     ],
+    fixturePatterns: [],
     alwaysUsed: [
       ".mocharc.*",
     ],
@@ -347,6 +365,9 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     configFileActivators: ["cypress.config.ts", "cypress.config.js"],
     entryPatterns: [
       "cypress/**/*.{ts,tsx,js,jsx}",
+    ],
+    fixturePatterns: [
+      "**/fixtures/**/*.{ts,tsx,js,jsx,json}",
     ],
     alwaysUsed: [
       "cypress.config.{ts,js}",
@@ -359,6 +380,10 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*.test.{ts,tsx,js,jsx}",
       "**/*.spec.{ts,tsx,js,jsx}",
       "**/__tests__/**/*.{ts,tsx,js,jsx}",
+    ],
+    fixturePatterns: [
+      "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
+      "**/fixtures/**/*.{ts,tsx,js,jsx,json}",
     ],
     alwaysUsed: [],
   },
@@ -403,20 +428,22 @@ const discoverTestRunnerEntryPoints = (
     }
 
     const activatedPatterns: string[] = [];
+    const activatedFixturePatterns: string[] = [];
     const activatedAlwaysUsed: string[] = [];
 
-    const isRunnerEnabled = (runner: TestRunnerDefinition, dependencies: Record<string, string>, directory: string): boolean => {
+    const isRunnerEnabled = (runner: TestRunnerDefinition, dependencies: Record<string, string>, checkDirectory: string): boolean => {
       const hasDependency = runner.enablers.some((enabler) => {
-        if (enabler === "bun:test") return detectBunTestRunner(directory);
+        if (enabler === "bun:test") return detectBunTestRunner(checkDirectory);
         return enabler in dependencies;
       });
       if (hasDependency) return true;
-      return runner.configFileActivators.some((configFile) => existsSync(join(directory, configFile)));
+      return runner.configFileActivators.some((configFile) => existsSync(join(checkDirectory, configFile)));
     };
 
     for (const runner of TEST_RUNNER_DEFINITIONS) {
       if (isRunnerEnabled(runner, allDependencies, directory)) {
         activatedPatterns.push(...runner.entryPatterns);
+        activatedFixturePatterns.push(...runner.fixturePatterns);
         activatedAlwaysUsed.push(...runner.alwaysUsed);
       }
     }
@@ -434,6 +461,7 @@ const discoverTestRunnerEntryPoints = (
           for (const runner of TEST_RUNNER_DEFINITIONS) {
             if (isRunnerEnabled(runner, rootDeps, rootDir)) {
               activatedPatterns.push(...runner.entryPatterns);
+              activatedFixturePatterns.push(...runner.fixturePatterns);
               activatedAlwaysUsed.push(...runner.alwaysUsed);
             }
           }
@@ -452,6 +480,17 @@ const discoverTestRunnerEntryPoints = (
       ignore: ["**/node_modules/**"],
     });
     allEntries.push(...testFiles);
+
+    const uniqueFixturePatterns = [...new Set(activatedFixturePatterns)];
+    if (uniqueFixturePatterns.length > 0) {
+      const fixtureFiles = fg.sync(uniqueFixturePatterns, {
+        cwd: directory,
+        absolute: true,
+        onlyFiles: true,
+        ignore: ["**/node_modules/**"],
+      });
+      allEntries.push(...fixtureFiles);
+    }
 
     const uniqueAlwaysUsed = [...new Set(activatedAlwaysUsed)];
     if (uniqueAlwaysUsed.length > 0) {
