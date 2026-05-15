@@ -1429,6 +1429,19 @@ test("should detect vitest setupFiles as entry points", async () => {
   );
 });
 
+test("should detect new URL with import.meta.url as imports (web workers)", async () => {
+  const result = await analyzeFixture("new-url-worker");
+  const unusedFilePaths = result.unusedFiles.map((file) => file.path);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("worker.js")),
+    `worker.js should NOT be unused (referenced via new URL), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
+    `orphan.ts should be unused (not imported), got unused: ${unusedFilePaths}`,
+  );
+});
+
 test("should resolve CSS files imported via tsconfig path aliases", async () => {
   const result = await analyzeFixture("css-path-alias");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
