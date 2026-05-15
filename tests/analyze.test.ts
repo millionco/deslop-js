@@ -694,13 +694,13 @@ describe("fixture-patterns", () => {
     );
   });
 
-  it("should flag __mocks__ files as unused (matching fallow behavior)", async () => {
+  it("should treat __mocks__ files as test entries when test framework is detected", async () => {
     const result = await analyzeFixture("fixture-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/__mocks__/api-client.ts"),
-      `__mocks__/api-client.ts should be unused (fallow parity), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/__mocks__/api-client.ts"),
+      `__mocks__/api-client.ts should NOT be unused (test mock entry), got: ${unusedFilePaths}`,
     );
   });
 
@@ -1435,6 +1435,40 @@ test("should detect new URL with import.meta.url as imports (web workers)", asyn
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith("worker.js")),
     `worker.js should NOT be unused (referenced via new URL), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
+    `orphan.ts should be unused (not imported), got unused: ${unusedFilePaths}`,
+  );
+});
+
+test("should exclude multi-segment config files (e.g. cypress.config.contract.js)", async () => {
+  const result = await analyzeFixture("config-multi-segment");
+  const unusedFilePaths = result.unusedFiles.map((file) => file.path);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("cypress.config.contract.js")),
+    `cypress.config.contract.js should NOT be unused (config file), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("vitest.config.unit.ts")),
+    `vitest.config.unit.ts should NOT be unused (config file), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
+    `orphan.ts should be unused (not imported), got unused: ${unusedFilePaths}`,
+  );
+});
+
+test("should detect jest moduleNameMapper files and __mocks__ as entries", async () => {
+  const result = await analyzeFixture("jest-module-mapper");
+  const unusedFilePaths = result.unusedFiles.map((file) => file.path);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/styleMock.js")),
+    `styleMock.js should NOT be unused (referenced in moduleNameMapper), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/fileMock.js")),
+    `fileMock.js should NOT be unused (referenced in moduleNameMapper), got unused: ${unusedFilePaths}`,
   );
   assert.ok(
     unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
