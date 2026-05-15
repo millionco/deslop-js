@@ -13,6 +13,19 @@ const existsAsFile = (filePath: string): boolean => {
   }
 };
 
+const resolvePathWithExtensionFallback = (candidatePath: string): string => {
+  if (existsAsFile(candidatePath)) return candidatePath;
+  for (const extension of RESOLVER_EXTENSIONS) {
+    const withExtension = candidatePath + extension;
+    if (existsAsFile(withExtension)) return withExtension;
+  }
+  for (const extension of RESOLVER_EXTENSIONS) {
+    const indexCandidate = join(candidatePath, `index${extension}`);
+    if (existsAsFile(indexCandidate)) return indexCandidate;
+  }
+  return candidatePath;
+};
+
 export interface ResolvedImport {
   resolvedPath: string | undefined;
   isExternal: boolean;
@@ -351,11 +364,36 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
             const exportKey = `./${subpath}`;
             const exportValue = workspacePackageJson.exports[exportKey];
             if (typeof exportValue === "string") {
-              resolvedEntryPath = resolve(workspaceDirectory, exportValue);
+              resolvedEntryPath = resolvePathWithExtensionFallback(resolve(workspaceDirectory, exportValue));
             } else if (typeof exportValue === "object" && exportValue !== null) {
               const conditionValue = exportValue.import ?? exportValue.require ?? exportValue.default ?? exportValue.types;
               if (typeof conditionValue === "string") {
-                resolvedEntryPath = resolve(workspaceDirectory, conditionValue);
+                resolvedEntryPath = resolvePathWithExtensionFallback(resolve(workspaceDirectory, conditionValue));
+              }
+            }
+
+            if (!resolvedEntryPath) {
+              for (const [wildcardPattern, wildcardTarget] of Object.entries(workspacePackageJson.exports)) {
+                if (typeof wildcardPattern !== "string" || !wildcardPattern.includes("*")) continue;
+                const wildcardTargetRecord = typeof wildcardTarget === "object" && wildcardTarget !== null
+                  ? wildcardTarget as Record<string, unknown>
+                  : undefined;
+                const wildcardTargetValue = typeof wildcardTarget === "string"
+                  ? wildcardTarget
+                  : (wildcardTargetRecord
+                    ? String(wildcardTargetRecord["import"] ?? wildcardTargetRecord["require"] ?? wildcardTargetRecord["default"] ?? wildcardTargetRecord["types"] ?? "")
+                    : undefined);
+                if (typeof wildcardTargetValue !== "string") continue;
+
+                const wildcardPrefix = wildcardPattern.slice(0, wildcardPattern.indexOf("*"));
+                const wildcardSuffix = wildcardPattern.slice(wildcardPattern.indexOf("*") + 1);
+                if (exportKey.startsWith(wildcardPrefix) && exportKey.endsWith(wildcardSuffix)) {
+                  const matchedSegment = exportKey.slice(wildcardPrefix.length, exportKey.length - wildcardSuffix.length || undefined);
+                  const expandedTarget = wildcardTargetValue.replace("*", matchedSegment);
+                  const candidateWildcardPath = resolve(workspaceDirectory, expandedTarget);
+                  resolvedEntryPath = resolvePathWithExtensionFallback(candidateWildcardPath);
+                  break;
+                }
               }
             }
           }

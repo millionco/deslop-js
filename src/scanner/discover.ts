@@ -118,9 +118,6 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
   const workspaceEntries: string[] = [];
   for (const workspacePackage of workspacePackages) {
     const isEligible = isEntryEligible(workspacePackage);
-    if (isEligible) {
-      workspaceEntries.push(...workspacePackage.entryFiles);
-    }
 
     const shouldRunFrameworkDetection = workspaceDiscovery.hasRootLevelWorkspacePatterns && hasDeclaredWorkspaces
       ? workspacePackage.isDeclaredWorkspace && isEligible
@@ -128,6 +125,12 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
     if (shouldRunFrameworkDetection) {
       const workspaceFrameworkEntries = discoverFrameworkEntryPoints(workspacePackage.directory);
       workspaceEntries.push(...workspaceFrameworkEntries);
+    }
+
+    if (isEligible && workspacePackage.isDeclaredWorkspace) {
+      const workspacePackageJsonPath = resolve(workspacePackage.directory, "package.json");
+      const workspacePackageJsonEntries = await extractPackageJsonEntries(workspacePackageJsonPath);
+      workspaceEntries.push(...workspacePackageJsonEntries);
     }
   }
 
@@ -232,13 +235,38 @@ const resolveBuiltPathToSource = (builtAbsolutePath: string, rootDir: string): s
   return undefined;
 };
 
+const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist|build|lib|lib-dist|out|output|cjs|esm|es|umd|module)\//;
+
 const resolveEntryPath = (entryPath: string, rootDir: string): string => {
   const absolutePath = resolve(rootDir, entryPath);
   if (existsSync(absolutePath)) return absolutePath;
   const sourcePath = resolveBuiltPathToSource(absolutePath, rootDir);
   if (sourcePath) return sourcePath;
   const directSourceMatch = findSourceFile(rootDir, entryPath.replace(/^\.\//, ""));
-  return directSourceMatch ?? absolutePath;
+  if (directSourceMatch) return directSourceMatch;
+
+  if (BUILD_OUTPUT_DIRECTORY_PATTERN.test(entryPath)) {
+    const buildDirMatch = entryPath.match(BUILD_OUTPUT_DIRECTORY_PATTERN);
+    const relativeToBuildDir = buildDirMatch ? entryPath.slice(buildDirMatch[0].length) : undefined;
+    for (const sourceDir of COMMON_SOURCE_DIRECTORIES) {
+      const sourceIndexDir = resolve(rootDir, sourceDir);
+      if (!existsSync(sourceIndexDir)) continue;
+      if (relativeToBuildDir) {
+        const sourceFileMatch = findSourceFile(sourceIndexDir, relativeToBuildDir);
+        if (sourceFileMatch) return sourceFileMatch;
+      }
+      for (const sourceExtension of SOURCE_EXTENSIONS) {
+        const indexCandidate = join(sourceIndexDir, `index${sourceExtension}`);
+        if (existsSync(indexCandidate)) return indexCandidate;
+      }
+      const jsIndexCandidate = join(sourceIndexDir, "index.js");
+      if (existsSync(jsIndexCandidate)) return jsIndexCandidate;
+      const jsxIndexCandidate = join(sourceIndexDir, "index.jsx");
+      if (existsSync(jsxIndexCandidate)) return jsxIndexCandidate;
+    }
+  }
+
+  return absolutePath;
 };
 
 const extractPackageJsonEntries = async (packageJsonPath: string): Promise<string[]> => {
@@ -822,7 +850,7 @@ const collectExportPaths = (
 
   if (typeof exportValue !== "object" || exportValue === null) return;
 
-  for (const nestedValue of Object.values(exportValue)) {
+  for (const [, nestedValue] of Object.entries(exportValue as Record<string, unknown>)) {
     collectExportPaths(nestedValue, rootDir, entries);
   }
 };
@@ -852,6 +880,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*.bench.{ts,tsx,js,jsx}",
       "**/*.clienttest.{ts,tsx,js,jsx}",
       "**/*.servertest.{ts,tsx,js,jsx}",
+      "**/__mocks__/**/*.{ts,tsx,js,jsx,mjs,cjs}",
     ],
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
@@ -883,6 +912,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*-spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/*_spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
+      "**/__mocks__/**/*.{ts,tsx,js,jsx,mjs,cjs}",
     ],
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
@@ -1138,6 +1168,8 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     enablerPrefixes: ["@docusaurus/"],
     entryPatterns: [
       "src/pages/**/*.{ts,tsx,js,jsx,md,mdx}",
+      "src/theme/**/*.{ts,tsx,js,jsx}",
+      "plugins/**/*.{ts,js,mjs}",
     ],
     alwaysUsed: [
       "docusaurus.config.{ts,js,mjs}",
@@ -1147,6 +1179,8 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "docs-sidebar.{ts,js,mjs,cjs}",
     ],
     contentIgnorePatterns: [
+      "**/*.md",
+      "**/*.mdx",
       "docs/**",
       "blog/**",
       "i18n/**",
