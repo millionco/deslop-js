@@ -63,6 +63,7 @@ export const CONFIG_FILE_PREFIXES = [
   "remotion.config.",
   "metro.config.",
   "tsup.config.",
+  "tsdown.config.",
   "unbuild.config.",
   "esbuild.config.",
   "swc.config.",
