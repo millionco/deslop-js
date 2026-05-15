@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { FileId, DeslopConfig } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS } from "../constants.js";
+import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS } from "../constants.js";
 import { discoverWorkspacePackages, discoverFrameworkEntryPoints } from "./workspaces.js";
 import type { WorkspacePackage } from "./workspaces.js";
 import { join } from "node:path";
@@ -160,6 +160,14 @@ const extractScriptEntries = (directory: string): string[] => {
             entries.push(scriptFilePath);
           }
         }
+
+        const configMatch = scriptCommand.match(SCRIPT_CONFIG_FILE_PATTERN);
+        if (configMatch?.[1]) {
+          const configFilePath = resolve(directory, configMatch[1]);
+          if (existsSync(configFilePath)) {
+            entries.push(configFilePath);
+          }
+        }
       }
     }
   } catch {
@@ -307,6 +315,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     ],
     alwaysUsed: [
       "vitest.config.{ts,js,mts,mjs}",
+      "**/vitest.config.{ts,js,mts,mjs}",
       "vitest.setup.{ts,js}",
       "vitest.workspace.{ts,js}",
       "vitest.globalSetup.{ts,js}",
