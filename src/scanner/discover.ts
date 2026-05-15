@@ -93,6 +93,11 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
     webpackEntries.push(...extractWebpackEntryPoints(workspacePackage.directory));
   }
 
+  const viteEntries = extractViteEntryPoints(absoluteRoot);
+  for (const workspacePackage of workspacePackages) {
+    viteEntries.push(...extractViteEntryPoints(workspacePackage.directory));
+  }
+
   const htmlScriptEntries = extractHtmlScriptEntries(absoluteRoot);
   for (const workspacePackage of workspacePackages) {
     htmlScriptEntries.push(...extractHtmlScriptEntries(workspacePackage.directory));
@@ -101,7 +106,7 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
   const testEntryFiles = discoverTestRunnerEntryPoints(absoluteRoot, workspacePackages);
   const toolingEntryFiles = discoverToolingEntryPoints(absoluteRoot, workspacePackages);
 
-  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...htmlScriptEntries, ...testEntryFiles, ...toolingEntryFiles])];
+  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...testEntryFiles, ...toolingEntryFiles])];
 };
 
 const extractPackageJsonEntries = async (packageJsonPath: string): Promise<string[]> => {
@@ -196,15 +201,54 @@ const extractScriptEntries = (directory: string): string[] => {
   return entries;
 };
 
+const VITE_INPUT_BLOCK_PATTERN = /input\s*:\s*(?:\{[^}]*\}|\[[^\]]*\]|['"][^'"]+['"])/gs;
+const BUNDLER_ENTRY_FILE_PATTERN = /['"]([^'"]+\.(?:js|ts|tsx|jsx|mjs|mts|less|scss|css|sass|html))['"]/g;
+
+const extractViteEntryPoints = (directory: string): string[] => {
+  const entries: string[] = [];
+  const viteConfigPaths = fg.sync("vite.config.{js,ts,mjs,mts}", {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+  });
+
+  for (const configPath of viteConfigPaths) {
+    try {
+      const content = readFileSync(configPath, "utf-8");
+      let inputMatch: RegExpExecArray | null;
+      VITE_INPUT_BLOCK_PATTERN.lastIndex = 0;
+      while ((inputMatch = VITE_INPUT_BLOCK_PATTERN.exec(content)) !== null) {
+        const inputBlock = inputMatch[0];
+        let valueMatch: RegExpExecArray | null;
+        BUNDLER_ENTRY_FILE_PATTERN.lastIndex = 0;
+        while ((valueMatch = BUNDLER_ENTRY_FILE_PATTERN.exec(inputBlock)) !== null) {
+          const entryPath = valueMatch[1];
+          if (entryPath.startsWith("./") || entryPath.startsWith("../") || !entryPath.startsWith("/")) {
+            const absoluteEntryPath = resolve(directory, entryPath);
+            if (existsSync(absoluteEntryPath)) {
+              entries.push(absoluteEntryPath);
+            }
+          }
+        }
+      }
+    } catch {
+    }
+  }
+
+  return entries;
+};
+
 const WEBPACK_ENTRY_BLOCK_PATTERN = /entry\s*:\s*(?:\{[^}]*\}|\[[^\]]*\]|['"][^'"]+['"])/gs;
 const WEBPACK_ENTRY_FILE_PATTERN = /['"]([^'"]+\.(?:js|ts|tsx|jsx|mjs|mts|less|scss|css|sass))['"]/g;
 
 const extractWebpackEntryPoints = (directory: string): string[] => {
   const entries: string[] = [];
-  const webpackConfigPaths = fg.sync("webpack.config.{js,ts,mjs,cjs}", {
+  const webpackConfigPaths = fg.sync(["webpack.config.{js,ts,mjs,cjs}", "**/webpack*.config.{js,ts,mjs,cjs}"], {
     cwd: directory,
     absolute: true,
     onlyFiles: true,
+    ignore: ["**/node_modules/**"],
+    deep: 3,
   });
 
   for (const configPath of webpackConfigPaths) {

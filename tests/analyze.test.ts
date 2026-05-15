@@ -1270,3 +1270,29 @@ describe("vue-sfc", () => {
     );
   });
 });
+
+describe("vite-entry", () => {
+  it("should detect entry points from vite.config rollupOptions.input", async () => {
+    const result = await analyzeFixture("vite-entry");
+    const fixtureDir = resolve(FIXTURES_DIR, "vite-entry");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/main.tsx"),
+      `main.tsx should be used (vite entry), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/render.ts"),
+      `render.ts should be used (imported from vite entry), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan files as unused with vite entry", async () => {
+    const result = await analyzeFixture("vite-entry");
+    const fixtureDir = resolve(FIXTURES_DIR, "vite-entry");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
