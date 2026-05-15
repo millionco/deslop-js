@@ -1688,7 +1688,7 @@ it("should exclude config files from unused file detection", async () => {
   );
   assert.ok(
     !unusedFilePaths.includes("playwright.smoke.config.mjs"),
-    `playwright.smoke.config.mjs should be excluded as config file, got unused: ${unusedFilePaths}`,
+    `playwright.smoke.config.mjs should be excluded via script -c flag, got unused: ${unusedFilePaths}`,
   );
   assert.ok(
     unusedFilePaths.includes("src/orphan.ts"),
