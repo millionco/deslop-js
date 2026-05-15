@@ -108,12 +108,12 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
 
   const workspaceDiscovery = discoverWorkspacePackagesWithExclusions(absoluteRoot);
   const workspacePackages = workspaceDiscovery.packages;
-  const hasDeclaredWorkspaces = workspacePackages.some((workspacePackage) => workspacePackage.isDeclaredWorkspace);
-
   const isEntryEligible = (workspacePackage: WorkspacePackage): boolean => {
     if (workspaceDiscovery.hasRootLevelWorkspacePatterns) return true;
     return workspacePackage.depthFromRoot <= SHALLOW_WORKSPACE_MAX_DEPTH;
   };
+
+  const hasDeclaredWorkspaces = workspacePackages.some((workspacePackage) => workspacePackage.isDeclaredWorkspace);
 
   const workspaceEntries: string[] = [];
   for (const workspacePackage of workspacePackages) {
@@ -122,7 +122,7 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
       workspaceEntries.push(...workspacePackage.entryFiles);
     }
 
-    const shouldRunFrameworkDetection = hasDeclaredWorkspaces
+    const shouldRunFrameworkDetection = workspaceDiscovery.hasRootLevelWorkspacePatterns && hasDeclaredWorkspaces
       ? workspacePackage.isDeclaredWorkspace && isEligible
       : isEligible;
     if (shouldRunFrameworkDetection) {
@@ -900,7 +900,10 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*.spec.{ts,tsx,js,jsx}",
       "**/*.test.{ts,tsx,js,jsx}",
       "tests/**/*.{ts,tsx,js,jsx}",
+      "specs/**/*.{ts,tsx,js,jsx}",
       "e2e/**/*.{ts,tsx,js,jsx}",
+      "lib/**/*.{ts,tsx,js,jsx}",
+      "support/**/*.{ts,tsx,js,jsx}",
     ],
     fixturePatterns: [
       "**/fixtures/**/*.{ts,tsx,js,jsx,json}",
@@ -927,6 +930,10 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     configFileActivators: ["cypress.config.ts", "cypress.config.js"],
     entryPatterns: [
       "cypress/**/*.{ts,tsx,js,jsx}",
+      "tests/**/*.{ts,tsx,js,jsx}",
+      "support/**/*.{ts,tsx,js,jsx}",
+      "plugins/**/*.{ts,tsx,js,jsx}",
+      "**/*.cy.{ts,tsx,js,jsx}",
     ],
     fixturePatterns: [
       "**/fixtures/**/*.{ts,tsx,js,jsx,json}",

@@ -1244,13 +1244,13 @@ describe("i18n-project", () => {
 });
 
 describe("standalone-subproject-excluded", () => {
-  it("should exclude standalone sub-projects with their own lockfile from file scanning", async () => {
+  it("should still scan standalone sub-project files and report unused", async () => {
     const result = await analyzeFixture("standalone-subproject-excluded");
     const fixtureDir = resolve(FIXTURES_DIR, "standalone-subproject-excluded");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.some((filePath: string) => filePath.startsWith("docs/")),
-      `docs/ files should be excluded (standalone project with lockfile), got: ${unusedFilePaths}`,
+      unusedFilePaths.some((filePath: string) => filePath.startsWith("docs/")),
+      `docs/ files should still be scanned (matching fallow behavior), got: ${unusedFilePaths}`,
     );
   });
 

@@ -37,16 +37,7 @@ export const discoverWorkspacePackagesWithExclusions = (rootDir: string): Worksp
 
   const declaredDirectorySet = new Set(expandedDirectories);
   const excludedDirectories: string[] = [];
-  const filteredImplicitSubProjects = declaredDirectorySet.size > 0
-    ? implicitSubProjects.filter((directory) => {
-        if (declaredDirectorySet.has(directory)) return true;
-        if (isStandaloneProject(directory)) {
-          excludedDirectories.push(directory);
-          return false;
-        }
-        return true;
-      })
-    : implicitSubProjects;
+  const filteredImplicitSubProjects = implicitSubProjects;
   const allDirectories = [...new Set([...expandedDirectories, ...filteredImplicitSubProjects])];
 
   const workspacePackages: WorkspacePackage[] = [];
