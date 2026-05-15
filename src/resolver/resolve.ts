@@ -187,31 +187,53 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
     return undefined;
   };
 
+  const hasNextJsDependency = (() => {
+    try {
+      const rootPackageJson = JSON.parse(readFileSync(resolve(config.rootDir, "package.json"), "utf-8"));
+      const allDeps = { ...rootPackageJson.dependencies, ...rootPackageJson.devDependencies };
+      return "next" in allDeps;
+    } catch {
+      return false;
+    }
+  })();
+
   const getPathAliases = (tsconfigFile: string): Map<string, string[]> => {
     const cached = tsconfigPathAliasCache.get(tsconfigFile);
     if (cached) return cached;
 
     const aliasMap = new Map<string, string[]>();
+    const tsconfigDir = dirname(tsconfigFile);
     try {
-      const tsconfigContent = readFileSync(tsconfigFile, "utf-8");
-      const cleanedContent = stripJsonComments(tsconfigContent);
-      const tsconfigJson = JSON.parse(cleanedContent);
-      const paths = tsconfigJson.compilerOptions?.paths;
-      const baseUrl = tsconfigJson.compilerOptions?.baseUrl ?? ".";
-      const tsconfigDir = dirname(tsconfigFile);
+      const tsconfigContent = readFileSync(tsconfigFile, "utf-8").trim();
+      if (tsconfigContent.length > 0) {
+        const cleanedContent = stripJsonComments(tsconfigContent);
+        const tsconfigJson = JSON.parse(cleanedContent);
+        const paths = tsconfigJson.compilerOptions?.paths;
+        const baseUrl = tsconfigJson.compilerOptions?.baseUrl ?? ".";
 
-      if (paths && typeof paths === "object") {
-        for (const [pattern, targets] of Object.entries(paths)) {
-          if (Array.isArray(targets)) {
-            aliasMap.set(
-              pattern,
-              targets.map((target: string) => resolve(tsconfigDir, baseUrl, target)),
-            );
+        if (paths && typeof paths === "object") {
+          for (const [pattern, targets] of Object.entries(paths)) {
+            if (Array.isArray(targets)) {
+              aliasMap.set(
+                pattern,
+                targets.map((target: string) => resolve(tsconfigDir, baseUrl, target)),
+              );
+            }
           }
         }
       }
     } catch {
     }
+
+    if (aliasMap.size === 0 && hasNextJsDependency) {
+      const srcDirectory = resolve(tsconfigDir, "src");
+      if (existsSync(srcDirectory)) {
+        aliasMap.set("@/*", [resolve(tsconfigDir, "src/*")]);
+      } else {
+        aliasMap.set("@/*", [resolve(tsconfigDir, "*")]);
+      }
+    }
+
     tsconfigPathAliasCache.set(tsconfigFile, aliasMap);
     return aliasMap;
   };
