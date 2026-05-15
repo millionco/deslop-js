@@ -694,13 +694,13 @@ describe("fixture-patterns", () => {
     );
   });
 
-  it("should flag __mocks__ files as unused since they are only consumed at runtime", async () => {
+  it("should mark __mocks__ files as always-used when test framework is present", async () => {
     const result = await analyzeFixture("fixture-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/__mocks__/api-client.ts"),
-      `__mocks__/api-client.ts should be unused (not statically imported), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/__mocks__/api-client.ts"),
+      `__mocks__/api-client.ts should be used (vitest auto-mock), got: ${unusedFilePaths}`,
     );
   });
 
@@ -1107,6 +1107,32 @@ describe("i18n-project", () => {
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused (i18n-project), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("build-script-source-map", () => {
+  it("should resolve build/ script references to src/ source files", async () => {
+    const result = await analyzeFixture("build-script-source-map");
+    const fixtureDir = resolve(FIXTURES_DIR, "build-script-source-map");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/scripts/migrate.ts"),
+      `migrate.ts should be entry (build/ → src/ mapping), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/scripts/health-check.ts"),
+      `health-check.ts should be entry (build/ → src/ mapping), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan files as unused", async () => {
+    const result = await analyzeFixture("build-script-source-map");
+    const fixtureDir = resolve(FIXTURES_DIR, "build-script-source-map");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
     );
   });
 });
