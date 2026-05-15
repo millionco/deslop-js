@@ -109,6 +109,68 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
   return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...testEntryFiles, ...toolingEntryFiles])];
 };
 
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
+
+const COMMON_SOURCE_DIRECTORIES = ["src", "lib", "main", "app", "source"];
+
+const findSourceFile = (baseDir: string, relativePath: string): string | undefined => {
+  const pathWithoutExtension = join(baseDir, relativePath).replace(/\.[cm]?js$/, "");
+  for (const sourceExtension of SOURCE_EXTENSIONS) {
+    const candidatePath = pathWithoutExtension + sourceExtension;
+    if (existsSync(candidatePath)) return candidatePath;
+  }
+  const indexCandidate = join(pathWithoutExtension, "index.ts");
+  if (existsSync(indexCandidate)) return indexCandidate;
+  return undefined;
+};
+
+const resolveBuiltPathToSource = (builtAbsolutePath: string, rootDir: string): string | undefined => {
+  if (existsSync(builtAbsolutePath)) return undefined;
+
+  try {
+    const tsconfigPath = join(rootDir, "tsconfig.json");
+    if (!existsSync(tsconfigPath)) return undefined;
+    const tsconfigContent = readFileSync(tsconfigPath, "utf-8")
+      .replace(/\/\/.*$/gm, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    const tsconfig = JSON.parse(tsconfigContent);
+    const outDir = tsconfig?.compilerOptions?.outDir;
+    if (!outDir) return undefined;
+
+    const absoluteOutDir = resolve(rootDir, outDir);
+    const relativeToBuild = builtAbsolutePath.startsWith(absoluteOutDir)
+      ? builtAbsolutePath.slice(absoluteOutDir.length)
+      : undefined;
+    if (!relativeToBuild) return undefined;
+
+    const rootDirOption = tsconfig?.compilerOptions?.rootDir;
+    if (rootDirOption) {
+      const sourceRootDir = resolve(rootDir, rootDirOption);
+      return findSourceFile(sourceRootDir, relativeToBuild);
+    }
+
+    const fromProjectRoot = findSourceFile(rootDir, relativeToBuild);
+    if (fromProjectRoot) return fromProjectRoot;
+
+    for (const sourceDir of COMMON_SOURCE_DIRECTORIES) {
+      const candidateSourceDir = resolve(rootDir, sourceDir);
+      if (existsSync(candidateSourceDir)) {
+        const fromSourceDir = findSourceFile(candidateSourceDir, relativeToBuild);
+        if (fromSourceDir) return fromSourceDir;
+      }
+    }
+  } catch {
+  }
+  return undefined;
+};
+
+const resolveEntryPath = (entryPath: string, rootDir: string): string => {
+  const absolutePath = resolve(rootDir, entryPath);
+  if (existsSync(absolutePath)) return absolutePath;
+  const sourcePath = resolveBuiltPathToSource(absolutePath, rootDir);
+  return sourcePath ?? absolutePath;
+};
+
 const extractPackageJsonEntries = async (packageJsonPath: string): Promise<string[]> => {
   const entries: string[] = [];
 
@@ -120,7 +182,7 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
     const entryFields = ["main", "module", "browser", "types", "typings"];
     for (const field of entryFields) {
       if (typeof packageJson[field] === "string") {
-        entries.push(resolve(rootDir, packageJson[field]));
+        entries.push(resolveEntryPath(packageJson[field], rootDir));
       }
     }
 
@@ -130,11 +192,11 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
 
     if (packageJson.bin) {
       if (typeof packageJson.bin === "string") {
-        entries.push(resolve(rootDir, packageJson.bin));
+        entries.push(resolveEntryPath(packageJson.bin, rootDir));
       } else if (typeof packageJson.bin === "object") {
         for (const binPath of Object.values(packageJson.bin)) {
           if (typeof binPath === "string") {
-            entries.push(resolve(rootDir, binPath));
+            entries.push(resolveEntryPath(binPath, rootDir));
           }
         }
       }
@@ -1013,15 +1075,13 @@ const discoverTestRunnerEntryPoints = (
       }
     }
 
-    if (activatedPatterns.length === 0) {
-      const hasNodeTestScript = detectNodeTestRunner(directory);
-      if (hasNodeTestScript) {
-        activatedPatterns.push(
-          "**/*.test.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
-          "**/*.spec.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
-          "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
-        );
-      }
+    const hasNodeTestScript = detectNodeTestRunner(directory) || detectNodeTestRunner(rootDir);
+    if (hasNodeTestScript) {
+      activatedPatterns.push(
+        "**/*.test.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+        "**/*.spec.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+        "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+      );
     }
 
     if (activatedPatterns.length === 0) continue;

@@ -1296,3 +1296,29 @@ describe("vite-entry", () => {
     );
   });
 });
+
+describe("outdir-source-map", () => {
+  it("should resolve built paths back to source via tsconfig outDir", async () => {
+    const result = await analyzeFixture("outdir-source-map");
+    const fixtureDir = resolve(FIXTURES_DIR, "outdir-source-map");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("main/index.ts"),
+      `main/index.ts should be used (entry via outDir mapping), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("main/setup.ts"),
+      `main/setup.ts should be used (imported from entry), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan files even with outDir source mapping", async () => {
+    const result = await analyzeFixture("outdir-source-map");
+    const fixtureDir = resolve(FIXTURES_DIR, "outdir-source-map");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("main/orphan.ts"),
+      `main/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});

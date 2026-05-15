@@ -13,7 +13,6 @@ export const DEFAULT_EXTENSIONS = [
   ".gql",
   ".css",
   ".scss",
-  ".less",
   ".vue",
   ".svelte",
 ];
