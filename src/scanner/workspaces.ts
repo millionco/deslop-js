@@ -585,22 +585,12 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
     cwd: rootDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"], dot: true,
   }));
 
-  const configPatterns = [
-    "tailwind.config.*", "postcss.config.*",
-    "next.config.*", "vite.config.*",
-    "vitest.config.*", "vitest.workspace.*",
-    "astro.config.*", "nuxt.config.*", "svelte.config.*",
-    "webpack.config.*", "rollup.config.*",
-    "jest.config.*", "babel.config.*",
-    "playwright.config.*", "drizzle.config.*",
-    "knip.config.*", "contentlayer.config.*", "source.config.*",
-    "eslint.config.*", ".eslintrc.*",
-    "prettier.config.*", ".prettierrc.*",
+  const nonConfigEntryPatterns = [
     "env.{ts,js,mjs}", "src/env.{ts,js,mjs}",
     "src/routeTree.gen.{ts,tsx}", "src/router.{ts,tsx}",
   ];
 
-  entryPoints.push(...fg.sync(configPatterns, {
+  entryPoints.push(...fg.sync(nonConfigEntryPatterns, {
     cwd: rootDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"], dot: true,
   }));
 

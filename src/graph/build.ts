@@ -17,6 +17,7 @@ export interface GraphBuildInput {
   resolvedImports: Map<string, ResolvedImport>;
   isEntryPoint: boolean;
   isTestEntry: boolean;
+  isAlwaysUsed: boolean;
 }
 
 export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
@@ -36,7 +37,7 @@ export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
       input.fileId.path.endsWith(".d.ts") ||
       input.fileId.path.endsWith(".d.mts") ||
       input.fileId.path.endsWith(".d.cts"),
-    isConfigFile: isConfigFile(input.fileId.path),
+    isConfigFile: isConfigFile(input.fileId.path) || input.isAlwaysUsed,
   }));
 
   const edges: Edge[] = [];

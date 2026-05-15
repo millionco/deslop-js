@@ -103,6 +103,7 @@ export interface AnalysisResult {
 export interface DiscoveredEntryPoints {
   productionEntries: string[];
   testEntries: string[];
+  alwaysUsedFiles: string[];
 }
 
 export interface DeslopConfig {
