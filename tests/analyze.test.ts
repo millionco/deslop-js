@@ -1492,3 +1492,16 @@ test("should resolve CSS files imported via tsconfig path aliases", async () => 
     `orphan.ts should be unused (not imported), got unused: ${unusedFilePaths}`,
   );
 });
+
+test("should resolve @/ imports via Next.js default path alias when tsconfig is empty", async () => {
+  const result = await analyzeFixture("nextjs-empty-tsconfig");
+  const unusedFilePaths = result.unusedFiles.map((file) => file.path);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("src/env.ts")),
+    `env.ts should NOT be unused (imported via @/env), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
+    `orphan.ts should be unused (not imported), got unused: ${unusedFilePaths}`,
+  );
+});

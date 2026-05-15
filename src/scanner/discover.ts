@@ -896,8 +896,6 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     enablers: ["@docusaurus/core"],
     enablerPrefixes: ["@docusaurus/"],
     entryPatterns: [
-      "docs/**/*.{md,mdx}",
-      "blog/**/*.{md,mdx}",
       "src/pages/**/*.{ts,tsx,js,jsx,md,mdx}",
       "src/components/**/*.{ts,tsx,js,jsx}",
       "src/theme/**/*.{ts,tsx,js,jsx}",
