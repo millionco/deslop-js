@@ -57,6 +57,41 @@ export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => 
   }));
 };
 
+export const discoverFrameworkIgnorePatterns = (rootDir: string): string[] => {
+  const absoluteRoot = resolve(rootDir);
+  const workspacePackages = discoverWorkspacePackages(absoluteRoot);
+  const directoriesToCheck = [absoluteRoot, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
+  const ignorePatterns: string[] = [];
+
+  for (const directory of directoriesToCheck) {
+    const packageJsonPath = join(directory, "package.json");
+    if (!existsSync(packageJsonPath)) continue;
+
+    let allDependencies: Record<string, string> = {};
+    try {
+      const content = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(content);
+      allDependencies = {
+        ...packageJson.dependencies,
+        ...packageJson.devDependencies,
+      };
+    } catch {
+      continue;
+    }
+
+    for (const plugin of TOOLING_PLUGIN_DEFINITIONS) {
+      if (plugin.contentIgnorePatterns && isToolingPluginEnabled(plugin, allDependencies)) {
+        for (const pattern of plugin.contentIgnorePatterns) {
+          const absolutePattern = join(directory, pattern);
+          ignorePatterns.push(absolutePattern);
+        }
+      }
+    }
+  }
+
+  return ignorePatterns;
+};
+
 export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[]> => {
   const absoluteRoot = resolve(config.rootDir);
 
@@ -634,7 +669,9 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     ],
     alwaysUsed: [
       "vitest.config.{ts,js,mts,mjs}",
-      "**/vitest.config.{ts,js,mts,mjs,mts}",
+      "vitest.config.*.{ts,js,mts,mjs}",
+      "**/vitest.config.{ts,js,mts,mjs}",
+      "**/vitest.config.*.{ts,js,mts,mjs}",
       "vitest.web.config.{ts,js,mts,mjs}",
       "vitest.setup.{ts,js}",
       "vitest.workspace.{ts,js,mts,mjs}",
@@ -707,6 +744,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     ],
     alwaysUsed: [
       "cypress.config.{ts,js}",
+      "cypress.config.*.{ts,js}",
     ],
   },
   {
@@ -730,6 +768,7 @@ interface ToolingPluginDefinition {
   enablerPrefixes: string[];
   entryPatterns: string[];
   alwaysUsed: string[];
+  contentIgnorePatterns?: string[];
 }
 
 const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
@@ -897,8 +936,6 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     enablerPrefixes: ["@docusaurus/"],
     entryPatterns: [
       "src/pages/**/*.{ts,tsx,js,jsx,md,mdx}",
-      "src/components/**/*.{ts,tsx,js,jsx}",
-      "src/theme/**/*.{ts,tsx,js,jsx}",
     ],
     alwaysUsed: [
       "docusaurus.config.{ts,js,mjs}",
@@ -906,8 +943,13 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "*-sidebar.{ts,js,mjs,cjs}",
       "*-sidebars.{ts,js,mjs,cjs}",
       "docs-sidebar.{ts,js,mjs,cjs}",
-      "src/css/custom.css",
-      "src/css/custom.scss",
+    ],
+    contentIgnorePatterns: [
+      "docs/**",
+      "blog/**",
+      "i18n/**",
+      "versioned_docs/**",
+      "versioned_sidebars/**",
     ],
   },
   {
@@ -1341,15 +1383,29 @@ const discoverToolingEntryPoints = (
   const allEntries: string[] = [];
   const directoriesToCheck = [rootDir, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
 
+  let rootDependencies: Record<string, string> = {};
+  const rootPackageJsonPath = join(rootDir, "package.json");
+  if (existsSync(rootPackageJsonPath)) {
+    try {
+      const rootContent = readFileSync(rootPackageJsonPath, "utf-8");
+      const rootPackageJson = JSON.parse(rootContent);
+      rootDependencies = {
+        ...rootPackageJson.dependencies,
+        ...rootPackageJson.devDependencies,
+      };
+    } catch {
+    }
+  }
+
   for (const directory of directoriesToCheck) {
     const packageJsonPath = join(directory, "package.json");
     if (!existsSync(packageJsonPath)) continue;
 
-    let allDependencies: Record<string, string> = {};
+    let workspaceDependencies: Record<string, string> = {};
     try {
       const content = readFileSync(packageJsonPath, "utf-8");
       const packageJson = JSON.parse(content);
-      allDependencies = {
+      workspaceDependencies = {
         ...packageJson.dependencies,
         ...packageJson.devDependencies,
       };
@@ -1357,38 +1413,21 @@ const discoverToolingEntryPoints = (
       continue;
     }
 
+    const mergedDependencies = directory === rootDir
+      ? rootDependencies
+      : { ...rootDependencies, ...workspaceDependencies };
+
     const activatedPatterns: string[] = [];
     const activatedAlwaysUsed: string[] = [];
 
     for (const plugin of TOOLING_PLUGIN_DEFINITIONS) {
-      if (isToolingPluginEnabled(plugin, allDependencies)) {
+      if (isToolingPluginEnabled(plugin, mergedDependencies)) {
         activatedPatterns.push(...plugin.entryPatterns);
         activatedAlwaysUsed.push(...plugin.alwaysUsed);
       }
     }
 
-    if (activatedPatterns.length === 0 && directory !== rootDir) {
-      const rootPackageJsonPath = join(rootDir, "package.json");
-      if (existsSync(rootPackageJsonPath)) {
-        try {
-          const rootContent = readFileSync(rootPackageJsonPath, "utf-8");
-          const rootPackageJson = JSON.parse(rootContent);
-          const rootDeps = {
-            ...rootPackageJson.dependencies,
-            ...rootPackageJson.devDependencies,
-          };
-          for (const plugin of TOOLING_PLUGIN_DEFINITIONS) {
-            if (isToolingPluginEnabled(plugin, rootDeps)) {
-              activatedPatterns.push(...plugin.entryPatterns);
-              activatedAlwaysUsed.push(...plugin.alwaysUsed);
-            }
-          }
-        } catch {
-        }
-      }
-    }
-
-    if (activatedPatterns.length === 0) continue;
+    if (activatedPatterns.length === 0 && activatedAlwaysUsed.length === 0) continue;
 
     const uniquePatterns = [...new Set(activatedPatterns)];
     const toolingFiles = fg.sync(uniquePatterns, {
