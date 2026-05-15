@@ -1110,3 +1110,25 @@ describe("i18n-project", () => {
     );
   });
 });
+
+describe("tsconfig-path-alias-wildcard", () => {
+  it("should resolve wildcard * path alias that shadows Node.js built-in modules", async () => {
+    const result = await analyzeFixture("tsconfig-path-alias-wildcard");
+    const fixtureDir = resolve(FIXTURES_DIR, "tsconfig-path-alias-wildcard");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/constants/api.ts"),
+      `constants/api.ts should be resolved via wildcard path alias, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan files as unused", async () => {
+    const result = await analyzeFixture("tsconfig-path-alias-wildcard");
+    const fixtureDir = resolve(FIXTURES_DIR, "tsconfig-path-alias-wildcard");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused (wildcard alias), got: ${unusedFilePaths}`,
+    );
+  });
+});

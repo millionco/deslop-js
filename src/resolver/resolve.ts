@@ -466,10 +466,17 @@ const stripJsonComments = (content: string): string => {
   return result.replace(/,(\s*[}\]])/g, "$1");
 };
 
+const BUILTIN_SUBPATH_MODULES = new Set([
+  "fs", "dns", "stream", "readline", "timers", "util",
+]);
+
 const isBuiltinModule = (specifier: string): boolean => {
   if (specifier.startsWith("node:")) return true;
   const baseName = specifier.split("/")[0];
-  return BUILTIN_MODULES.has(baseName);
+  if (!BUILTIN_MODULES.has(baseName)) return false;
+  const hasSubpath = specifier.includes("/");
+  if (!hasSubpath) return true;
+  return BUILTIN_SUBPATH_MODULES.has(baseName);
 };
 
 const isBareSpecifier = (specifier: string): boolean =>
