@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it, test } from "node:test";
 import assert from "node:assert/strict";
 import { resolve, relative } from "node:path";
 import { analyze, createConfig } from "../src/index.js";
@@ -1321,4 +1321,30 @@ describe("outdir-source-map", () => {
       `main/orphan.ts should be unused, got: ${unusedFilePaths}`,
     );
   });
+});
+
+test("should resolve imports with query parameters (e.g. ?url, ?raw, ?worker)", async () => {
+  const result = await analyzeFixture("query-param-imports");
+  const unusedFilePaths = result.unusedFiles.map((file) => file.path);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("config.ts")),
+    `config.ts should NOT be unused (imported via ?raw), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("worker.ts")),
+    `worker.ts should NOT be unused (imported via ?worker), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("styles.css")),
+    `styles.css should NOT be unused (imported via ?url), got unused: ${unusedFilePaths}`,
+  );
+});
+
+test("should flag orphan files even with query-param imports present", async () => {
+  const result = await analyzeFixture("query-param-imports");
+  const unusedFilePaths = result.unusedFiles.map((file) => file.path);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
+    `orphan.ts should be unused, got unused: ${unusedFilePaths}`,
+  );
 });

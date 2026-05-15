@@ -357,7 +357,7 @@ const extractHtmlScriptEntries = (directory: string): string[] => {
       let scriptMatch: RegExpExecArray | null;
       HTML_SCRIPT_SRC_PATTERN.lastIndex = 0;
       while ((scriptMatch = HTML_SCRIPT_SRC_PATTERN.exec(content)) !== null) {
-        const scriptSrc = scriptMatch[1];
+        const scriptSrc = scriptMatch[1].replace(/^\//, "");
         const htmlDirectory = htmlPath.replace(/\/[^/]+$/, "");
         const absoluteScriptPath = resolve(htmlDirectory, scriptSrc);
         if (existsSync(absoluteScriptPath)) {

@@ -252,26 +252,28 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
   };
 
   const resolveModule = (specifier: string, fromFile: string): ResolvedImport => {
+    const queryIndex = specifier.indexOf("?");
+    const cleanedSpecifier = queryIndex !== -1 ? specifier.slice(0, queryIndex) : specifier;
     const fromDir = dirname(fromFile);
-    const cacheKey = `${fromDir}::${specifier}`;
+    const cacheKey = `${fromDir}::${cleanedSpecifier}`;
     const cached = resolveResultCache.get(cacheKey);
     if (cached) return cached;
 
-    if (isBuiltinModule(specifier)) {
+    if (isBuiltinModule(cleanedSpecifier)) {
       const resolvedResult: ResolvedImport = {
         resolvedPath: undefined,
         isExternal: true,
-        packageName: specifier.startsWith("node:")
-          ? specifier.slice(5)
-          : specifier,
+        packageName: cleanedSpecifier.startsWith("node:")
+          ? cleanedSpecifier.slice(5)
+          : cleanedSpecifier,
       };
       resolveResultCache.set(cacheKey, resolvedResult);
       return resolvedResult;
     }
 
     const isFromStyleFile = STYLE_FILE_EXTENSIONS.some((extension) => fromFile.endsWith(extension));
-    if (isFromStyleFile && isBareSpecifier(specifier)) {
-      const scssResolved = resolveScssPartial(specifier, fromDir);
+    if (isFromStyleFile && isBareSpecifier(cleanedSpecifier)) {
+      const scssResolved = resolveScssPartial(cleanedSpecifier, fromDir);
       if (scssResolved) {
         const resolvedResult: ResolvedImport = {
           resolvedPath: scssResolved,
@@ -283,11 +285,11 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
       }
     }
 
-    if (isBareSpecifier(specifier) && workspaceNameToDirectory.size > 0) {
-      const packageName = extractPackageNameFromSpecifier(specifier);
+    if (isBareSpecifier(cleanedSpecifier) && workspaceNameToDirectory.size > 0) {
+      const packageName = extractPackageNameFromSpecifier(cleanedSpecifier);
       const workspaceDirectory = workspaceNameToDirectory.get(packageName);
       if (workspaceDirectory) {
-        const subpath = specifier.slice(packageName.length + 1);
+        const subpath = cleanedSpecifier.slice(packageName.length + 1);
         const workspacePackageJsonPath = join(workspaceDirectory, "package.json");
         try {
           const workspacePackageContent = readFileSync(workspacePackageJsonPath, "utf-8");
@@ -368,14 +370,14 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
 
     const tryResolve = (activeResolver: ResolverFactory): ResolvedImport | undefined => {
       try {
-        const resolverResult = activeResolver.sync(fromDir, specifier);
+        const resolverResult = activeResolver.sync(fromDir, cleanedSpecifier);
         if (resolverResult.path) {
           const isInsideNodeModules = resolverResult.path.includes("/node_modules/");
           return {
             resolvedPath: isInsideNodeModules ? undefined : resolverResult.path,
             isExternal: isInsideNodeModules,
             packageName: isInsideNodeModules
-              ? extractPackageNameFromSpecifier(specifier)
+              ? extractPackageNameFromSpecifier(cleanedSpecifier)
               : undefined,
           };
         }
@@ -401,7 +403,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
       }
     }
 
-    const pathAliasResolved = tryResolveViaPathAlias(specifier, fromFile);
+    const pathAliasResolved = tryResolveViaPathAlias(cleanedSpecifier, fromFile);
     if (pathAliasResolved) {
       const resolvedResult: ResolvedImport = {
         resolvedPath: pathAliasResolved,
@@ -412,12 +414,12 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
       return resolvedResult;
     }
 
-    if (isBareSpecifier(specifier)) {
+    if (isBareSpecifier(cleanedSpecifier)) {
       const tsconfigFile = findTsconfigForFile(fromFile);
       if (tsconfigFile) {
         const baseUrlDirectory = getBaseUrlDirectory(tsconfigFile);
         if (baseUrlDirectory) {
-          const baseUrlCandidate = resolve(baseUrlDirectory, specifier);
+          const baseUrlCandidate = resolve(baseUrlDirectory, cleanedSpecifier);
           for (const candidateExtension of RESOLVER_EXTENSIONS) {
             const fullCandidate = baseUrlCandidate + candidateExtension;
             if (existsSync(fullCandidate)) {
@@ -445,7 +447,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
           }
         }
       }
-      const packageName = extractPackageNameFromSpecifier(specifier);
+      const packageName = extractPackageNameFromSpecifier(cleanedSpecifier);
       const resolvedResult: ResolvedImport = {
         resolvedPath: undefined,
         isExternal: true,
