@@ -9,6 +9,8 @@ export const DEFAULT_EXTENSIONS = [
   ".cjs",
   ".mdx",
   ".astro",
+  ".graphql",
+  ".gql",
 ];
 
 export const HIDDEN_DIRECTORY_ALLOWLIST = [
@@ -129,4 +131,6 @@ export const RESOLVER_EXTENSIONS = [
   ".svg",
   ".png",
   ".jpg",
+  ".graphql",
+  ".gql",
 ];

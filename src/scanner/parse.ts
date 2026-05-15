@@ -93,10 +93,17 @@ const parseCssImports = (filePath: string): ParsedModule => {
   return { imports, exports: [] };
 };
 
+const NON_JS_EXTENSIONS = [".graphql", ".gql"];
+
 export const parseModule = (filePath: string): ParsedModule => {
   const isCss = CSS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   if (isCss) {
     return parseCssImports(filePath);
+  }
+
+  const isNonJsFile = NON_JS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
+  if (isNonJsFile) {
+    return { imports: [], exports: [] };
   }
 
   const sourceText = readFileSync(filePath, "utf-8");

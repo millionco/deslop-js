@@ -804,3 +804,103 @@ describe("dash-spec-patterns", () => {
     );
   });
 });
+
+describe("workspace-explicit-entries", () => {
+  it("should NOT use default fallback entries when workspace has explicit main field", async () => {
+    const result = await analyzeFixture("workspace-explicit-entries");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-explicit-entries");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("packages/ui/src/index.ts"),
+      `packages/ui/src/index.ts should be unused because ui has explicit main=src/button.ts, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should use default fallback entries when workspace has no explicit entries", async () => {
+    const result = await analyzeFixture("workspace-explicit-entries");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-explicit-entries");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/utils/src/index.ts"),
+      `packages/utils/src/index.ts should be entry (fallback) since utils has no explicit main, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan files in packages without explicit entries", async () => {
+    const result = await analyzeFixture("workspace-explicit-entries");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-explicit-entries");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("packages/utils/src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("storybook-project", () => {
+  it("should treat .stories.ts files as entry points when @storybook/* is present", async () => {
+    const result = await analyzeFixture("storybook-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "storybook-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/components/Button.stories.ts"),
+      `Button.stories.ts should be entry point, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should treat .storybook config files as entry points", async () => {
+    const result = await analyzeFixture("storybook-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "storybook-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes(".storybook/main.ts"),
+      `.storybook/main.ts should be entry point, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes(".storybook/preview.ts"),
+      `.storybook/preview.ts should be entry point, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should mark components imported by stories as used", async () => {
+    const result = await analyzeFixture("storybook-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "storybook-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/components/Button.ts"),
+      `Button.ts should be reachable from stories, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should still flag orphan files in storybook projects", async () => {
+    const result = await analyzeFixture("storybook-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "storybook-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("graphql-files", () => {
+  it("should track imported graphql files as reachable", async () => {
+    const result = await analyzeFixture("graphql-files");
+    const fixtureDir = resolve(FIXTURES_DIR, "graphql-files");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/schema.graphql"),
+      `schema.graphql is imported and should be reachable, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag unused graphql files", async () => {
+    const result = await analyzeFixture("graphql-files");
+    const fixtureDir = resolve(FIXTURES_DIR, "graphql-files");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/unused.graphql"),
+      `unused.graphql should be flagged as unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
