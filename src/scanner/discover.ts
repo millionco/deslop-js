@@ -86,9 +86,14 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
     webpackEntries.push(...extractWebpackEntryPoints(workspacePackage.directory));
   }
 
+  const htmlScriptEntries = extractHtmlScriptEntries(absoluteRoot);
+  for (const workspacePackage of workspacePackages) {
+    htmlScriptEntries.push(...extractHtmlScriptEntries(workspacePackage.directory));
+  }
+
   const testEntryFiles = await discoverTestEntryPoints(absoluteRoot, workspacePackages.map((workspacePackage) => workspacePackage.directory));
 
-  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...testEntryFiles])];
+  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...htmlScriptEntries, ...testEntryFiles])];
 };
 
 const extractPackageJsonEntries = async (packageJsonPath: string): Promise<string[]> => {
@@ -185,6 +190,38 @@ const extractWebpackEntryPoints = (directory: string): string[] => {
               entries.push(absoluteEntryPath);
             }
           }
+        }
+      }
+    } catch {
+    }
+  }
+
+  return entries;
+};
+
+const HTML_SCRIPT_SRC_PATTERN = /<script[^>]+src=["']([^"']+\.(?:ts|tsx|js|jsx|mts|mjs))["'][^>]*>/gi;
+
+const extractHtmlScriptEntries = (directory: string): string[] => {
+  const entries: string[] = [];
+  const htmlFiles = fg.sync(["index.html", "**/index.html", "*.html"], {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
+    deep: 3,
+  });
+
+  for (const htmlPath of htmlFiles) {
+    try {
+      const content = readFileSync(htmlPath, "utf-8");
+      let scriptMatch: RegExpExecArray | null;
+      HTML_SCRIPT_SRC_PATTERN.lastIndex = 0;
+      while ((scriptMatch = HTML_SCRIPT_SRC_PATTERN.exec(content)) !== null) {
+        const scriptSrc = scriptMatch[1];
+        const htmlDirectory = htmlPath.replace(/\/[^/]+$/, "");
+        const absoluteScriptPath = resolve(htmlDirectory, scriptSrc);
+        if (existsSync(absoluteScriptPath)) {
+          entries.push(absoluteScriptPath);
         }
       }
     } catch {
