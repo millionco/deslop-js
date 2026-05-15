@@ -53,6 +53,7 @@ export const DEFAULT_ENTRY_PATTERNS = [
 
 export const CONFIG_FILE_PATTERNS: RegExp[] = [
   /\.config\.(?:[cm]?[jt]sx?|[cm]js)$/,
+  /\.conf\.(?:[cm]?[jt]sx?|[cm]js)$/,
   /\.eslintrc/,
   /\.prettierrc/,
   /\.babelrc/,

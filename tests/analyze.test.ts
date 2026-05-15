@@ -1411,3 +1411,20 @@ test("should resolve #hash subpath imports via tsconfig paths with .js extension
     `api/orphan.ts should be unused (not imported), got unused: ${unusedFilePaths}`,
   );
 });
+
+test("should detect vitest setupFiles as entry points", async () => {
+  const result = await analyzeFixture("vitest-setup-files");
+  const unusedFilePaths = result.unusedFiles.map((file) => file.path);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("test/setup.ts")),
+    `test/setup.ts should NOT be unused (referenced in vitest.config.ts setupFiles), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
+    `orphan.ts should be unused (not imported), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("vitest.config.ts")),
+    `vitest.config.ts should NOT be unused (config file), got unused: ${unusedFilePaths}`,
+  );
+});
