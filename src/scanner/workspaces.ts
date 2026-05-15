@@ -445,6 +445,32 @@ const readDependencies = (directory: string): Record<string, string> => {
 const hasAnyEnabler = (dependencies: Record<string, string>, enablers: string[]): boolean =>
   enablers.some((enabler) => enabler in dependencies);
 
+const extractReactRouterAppDirectory = (directory: string): string => {
+  const configCandidates = [
+    "react-router.config.ts",
+    "react-router.config.js",
+    "react-router.config.mjs",
+    "react-router.config.cjs",
+  ];
+
+  for (const configFile of configCandidates) {
+    const configPath = join(directory, configFile);
+    if (!existsSync(configPath)) continue;
+
+    try {
+      const content = readFileSync(configPath, "utf-8");
+      const appDirectoryMatch = content.match(/appDirectory\s*:\s*['"`]([^'"`]+)['"`]/);
+      if (appDirectoryMatch) {
+        return appDirectoryMatch[1].replace(/^\.\//, "");
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  return "app";
+};
+
 export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   const entryPoints: string[] = [];
   const dependencies = readDependencies(rootDir);
@@ -489,11 +515,13 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   }
 
   if (isReactRouter || isRemix) {
+    const reactRouterAppDirectory = extractReactRouterAppDirectory(rootDir);
     entryPoints.push(...fg.sync([
-      "app/routes/**/*.{ts,tsx,js,jsx}",
-      "app/root.{ts,tsx,js,jsx}",
-      "app/entry.client.{ts,tsx,js,jsx}",
-      "app/entry.server.{ts,tsx,js,jsx}",
+      `${reactRouterAppDirectory}/routes/**/*.{ts,tsx,js,jsx}`,
+      `${reactRouterAppDirectory}/root.{ts,tsx,js,jsx}`,
+      `${reactRouterAppDirectory}/entry.client.{ts,tsx,js,jsx}`,
+      `${reactRouterAppDirectory}/entry.server.{ts,tsx,js,jsx}`,
+      `${reactRouterAppDirectory}/routes.{ts,js,mts,mjs}`,
     ], { cwd: rootDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"] }));
   }
 

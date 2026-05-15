@@ -44,10 +44,18 @@ export interface ModuleNode {
   isConfigFile: boolean;
 }
 
+export interface ReExportMapping {
+  exportedName: string;
+  originalName: string;
+}
+
 export interface Edge {
   source: number;
   target: number;
   importedSymbols: ImportedSymbol[];
+  isReExportEdge: boolean;
+  reExportedNames: string[];
+  reExportMappings: ReExportMapping[];
 }
 
 export interface ImportedSymbol {
