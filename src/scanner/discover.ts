@@ -690,6 +690,34 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     entryPatterns: [],
     alwaysUsed: ["nodemon.json", ".nodemonrc", ".nodemonrc.{json,yml,yaml}"],
   },
+  {
+    enablers: ["nx"],
+    enablerPrefixes: ["@nx/"],
+    entryPatterns: [],
+    alwaysUsed: ["nx.json", "**/project.json"],
+  },
+  {
+    enablers: ["expo"],
+    enablerPrefixes: ["@expo/"],
+    entryPatterns: [
+      "App.{ts,tsx,js,jsx}",
+      "app/_layout.{ts,tsx,js,jsx}",
+      "app/index.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: ["app.json", "app.config.{ts,js}"],
+  },
+  {
+    enablers: ["electron"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      "src/main.{ts,js}",
+      "src/preload.{ts,js}",
+      "src/renderer.{ts,tsx,js,jsx}",
+      "electron/main.{ts,js}",
+      "electron/preload.{ts,js}",
+    ],
+    alwaysUsed: [],
+  },
 ];
 
 const detectNodeTestRunner = (directory: string): boolean => {
