@@ -61,7 +61,7 @@ export const DEFAULT_ENTRY_PATTERNS = [
 ];
 
 export const CONFIG_FILE_PATTERNS: RegExp[] = [
-  /\.config\.[jt]sx?$/,
+  /\.config\.(?:[cm]?[jt]sx?|[cm]js)$/,
   /\.eslintrc/,
   /\.prettierrc/,
   /\.babelrc/,

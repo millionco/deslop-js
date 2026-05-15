@@ -551,6 +551,33 @@ describe("unreachable-shared-child", () => {
   });
 });
 
+describe("config-files-cjs-mjs", () => {
+  it("should treat .cjs and .mjs config files as entry points", async () => {
+    const result = await analyzeFixture("config-files-cjs-mjs");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-files-cjs-mjs");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("lage.config.cjs"),
+      "lage.config.cjs should be treated as config entry point",
+    );
+    assert.ok(
+      !unusedFilePaths.includes("prettier.config.mjs"),
+      "prettier.config.mjs should be treated as config entry point",
+    );
+    assert.ok(
+      !unusedFilePaths.includes("vitest.config.mts"),
+      "vitest.config.mts should be treated as config entry point",
+    );
+  });
+
+  it("should still flag orphan files", async () => {
+    const result = await analyzeFixture("config-files-cjs-mjs");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-files-cjs-mjs");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
+  });
+});
+
 describe("path-aliases-mixed-exports", () => {
   it("should resolve @/ aliases and keep used files reachable", async () => {
     const result = await analyzeFixture("path-aliases-mixed-exports");
