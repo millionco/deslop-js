@@ -474,8 +474,6 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   entryPoints.push(...storyFiles);
 
   const configPatterns = [
-    "*.config.{ts,tsx,js,jsx,mjs,cjs}",
-    ".*.{ts,tsx,js,jsx,mjs,cjs}",
     "tailwind.config.*",
     "postcss.config.*",
     "next.config.*",

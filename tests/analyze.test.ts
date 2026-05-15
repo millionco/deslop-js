@@ -580,8 +580,8 @@ describe("config-files-cjs-mjs", () => {
     const fixtureDir = resolve(FIXTURES_DIR, "config-files-cjs-mjs");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("lage.config.cjs"),
-      "lage.config.cjs should be treated as config entry point",
+      unusedFilePaths.includes("lage.config.cjs"),
+      "lage.config.cjs should be unused (unknown tool, no blanket config entry)",
     );
     assert.ok(
       !unusedFilePaths.includes("prettier.config.mjs"),
@@ -1504,4 +1504,24 @@ test("should resolve @/ imports via Next.js default path alias when tsconfig is 
     unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
     `orphan.ts should be unused (not imported), got unused: ${unusedFilePaths}`,
   );
+});
+
+describe("docusaurus-content", () => {
+  it("should exclude docs/ and blog/ content directories from file discovery", async () => {
+    const result = await analyzeFixture("docusaurus-content");
+    const fixtureDir = resolve(FIXTURES_DIR, "docusaurus-content");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.some((filePath) => filePath.startsWith("docs/")),
+      `docs/ content files should not be discovered at all, got unused: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.some((filePath) => filePath.startsWith("blog/")),
+      `blog/ content files should not be discovered at all, got unused: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/components/orphan.tsx"),
+      `orphan.tsx should be unused, got: ${unusedFilePaths}`,
+    );
+  });
 });
