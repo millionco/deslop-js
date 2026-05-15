@@ -439,7 +439,7 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   });
   entryPoints.push(...configFiles);
 
-  const alwaysEntryDirs = ["e2e", "cypress", ".github", "migrations", "db/migrations", "db/seeds", "locales", "src/locales", "i18n", "src/i18n"];
+  const alwaysEntryDirs = ["e2e", "cypress", ".github", "migrations", "db/migrations", "db/seeds"];
   for (const entryDir of alwaysEntryDirs) {
     const dirPath = join(rootDir, entryDir);
     if (existsSync(dirPath) && statSync(dirPath).isDirectory()) {
