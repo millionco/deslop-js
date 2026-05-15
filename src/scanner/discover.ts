@@ -221,7 +221,9 @@ const resolveEntryPath = (entryPath: string, rootDir: string): string => {
   const absolutePath = resolve(rootDir, entryPath);
   if (existsSync(absolutePath)) return absolutePath;
   const sourcePath = resolveBuiltPathToSource(absolutePath, rootDir);
-  return sourcePath ?? absolutePath;
+  if (sourcePath) return sourcePath;
+  const directSourceMatch = findSourceFile(rootDir, entryPath.replace(/^\.\//, ""));
+  return directSourceMatch ?? absolutePath;
 };
 
 const extractPackageJsonEntries = async (packageJsonPath: string): Promise<string[]> => {
@@ -624,7 +626,7 @@ const collectExportPaths = (
         entries.push(resolve(rootDir, exportValue));
       }
     } else {
-      entries.push(resolve(rootDir, exportValue));
+      entries.push(resolveEntryPath(exportValue, rootDir));
     }
     return;
   }
@@ -950,6 +952,9 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "i18n/**",
       "versioned_docs/**",
       "versioned_sidebars/**",
+      "src/content/**",
+      "content/**",
+      "course/**",
     ],
   },
   {
