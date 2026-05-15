@@ -41,6 +41,10 @@ export const TEST_FILE_PATTERNS = [
   "**/__snapshots__/**",
   "**/fixtures/**",
   "**/__fixtures__/**",
+  "**/vitest.setup.*",
+  "**/jest.setup.*",
+  "**/setup-vitest.*",
+  "**/setupTests.*",
 ];
 
 export const SCRIPT_FILE_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|npx|bun)\s+(?:-[\w-]+\s+)*(?:[\w/-]+\s+)*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))/;
