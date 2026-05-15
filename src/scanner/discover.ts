@@ -3,8 +3,8 @@ import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { FileId, DeslopConfig } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS } from "../constants.js";
-import { discoverWorkspacePackages, discoverFrameworkEntryPoints } from "./workspaces.js";
+import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, SHALLOW_WORKSPACE_MAX_DEPTH } from "../constants.js";
+import { discoverWorkspacePackagesWithExclusions, discoverFrameworkEntryPoints } from "./workspaces.js";
 import type { WorkspacePackage } from "./workspaces.js";
 import { resolveSourcePath } from "../resolver/source-path.js";
 import { join } from "node:path";
@@ -59,7 +59,7 @@ export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => 
 
 export const discoverFrameworkIgnorePatterns = (rootDir: string): string[] => {
   const absoluteRoot = resolve(rootDir);
-  const workspacePackages = discoverWorkspacePackages(absoluteRoot);
+  const workspacePackages = discoverWorkspacePackagesWithExclusions(absoluteRoot).packages;
   const directoriesToCheck = [absoluteRoot, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
   const ignorePatterns: string[] = [];
 
@@ -106,13 +106,25 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
   const packageJsonPath = resolve(absoluteRoot, "package.json");
   const packageJsonEntries = await extractPackageJsonEntries(packageJsonPath);
 
-  const workspacePackages = discoverWorkspacePackages(absoluteRoot);
+  const workspaceDiscovery = discoverWorkspacePackagesWithExclusions(absoluteRoot);
+  const workspacePackages = workspaceDiscovery.packages;
   const hasDeclaredWorkspaces = workspacePackages.some((workspacePackage) => workspacePackage.isDeclaredWorkspace);
+
+  const isEntryEligible = (workspacePackage: WorkspacePackage): boolean => {
+    if (workspaceDiscovery.hasRootLevelWorkspacePatterns) return true;
+    return workspacePackage.depthFromRoot <= SHALLOW_WORKSPACE_MAX_DEPTH;
+  };
+
   const workspaceEntries: string[] = [];
   for (const workspacePackage of workspacePackages) {
-    workspaceEntries.push(...workspacePackage.entryFiles);
+    const isEligible = isEntryEligible(workspacePackage);
+    if (isEligible) {
+      workspaceEntries.push(...workspacePackage.entryFiles);
+    }
 
-    const shouldRunFrameworkDetection = hasDeclaredWorkspaces ? workspacePackage.isDeclaredWorkspace : true;
+    const shouldRunFrameworkDetection = hasDeclaredWorkspaces
+      ? workspacePackage.isDeclaredWorkspace && isEligible
+      : isEligible;
     if (shouldRunFrameworkDetection) {
       const workspaceFrameworkEntries = discoverFrameworkEntryPoints(workspacePackage.directory);
       workspaceEntries.push(...workspaceFrameworkEntries);
@@ -121,43 +133,45 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
 
   const frameworkEntries = discoverFrameworkEntryPoints(absoluteRoot);
 
+  const entryEligiblePackages = workspacePackages.filter(isEntryEligible);
+
   const scriptEntries = extractScriptEntries(absoluteRoot);
-  for (const workspacePackage of workspacePackages) {
+  for (const workspacePackage of entryEligiblePackages) {
     scriptEntries.push(...extractScriptEntries(workspacePackage.directory));
   }
 
   const webpackEntries = extractWebpackEntryPoints(absoluteRoot);
-  for (const workspacePackage of workspacePackages) {
+  for (const workspacePackage of entryEligiblePackages) {
     webpackEntries.push(...extractWebpackEntryPoints(workspacePackage.directory));
   }
 
   const viteEntries = extractViteEntryPoints(absoluteRoot);
-  for (const workspacePackage of workspacePackages) {
+  for (const workspacePackage of entryEligiblePackages) {
     viteEntries.push(...extractViteEntryPoints(workspacePackage.directory));
   }
 
   const htmlScriptEntries = extractHtmlScriptEntries(absoluteRoot);
-  for (const workspacePackage of workspacePackages) {
+  for (const workspacePackage of entryEligiblePackages) {
     htmlScriptEntries.push(...extractHtmlScriptEntries(workspacePackage.directory));
   }
 
   const angularEntries = extractAngularEntryPoints(absoluteRoot);
-  for (const workspacePackage of workspacePackages) {
+  for (const workspacePackage of entryEligiblePackages) {
     angularEntries.push(...extractAngularEntryPoints(workspacePackage.directory));
   }
 
   const testSetupEntries = extractTestSetupFiles(absoluteRoot);
-  for (const workspacePackage of workspacePackages) {
+  for (const workspacePackage of entryEligiblePackages) {
     testSetupEntries.push(...extractTestSetupFiles(workspacePackage.directory));
   }
 
   const pluginFileEntries = extractNextConfigPluginFiles(absoluteRoot);
-  for (const workspacePackage of workspacePackages) {
+  for (const workspacePackage of entryEligiblePackages) {
     pluginFileEntries.push(...extractNextConfigPluginFiles(workspacePackage.directory));
   }
 
-  const testEntryFiles = discoverTestRunnerEntryPoints(absoluteRoot, workspacePackages);
-  const toolingEntryFiles = discoverToolingEntryPoints(absoluteRoot, workspacePackages);
+  const testEntryFiles = discoverTestRunnerEntryPoints(absoluteRoot, entryEligiblePackages);
+  const toolingEntryFiles = discoverToolingEntryPoints(absoluteRoot, entryEligiblePackages);
   const ciEntries = extractCiWorkflowEntries(absoluteRoot);
 
   return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...testSetupEntries, ...pluginFileEntries, ...testEntryFiles, ...toolingEntryFiles, ...ciEntries])];

@@ -1959,3 +1959,35 @@ test("should treat app/routes as entry points when @react-router/dev is a depend
     `src/routes/home.tsx should NOT be unused (React Router route with appDirectory=src), got: ${unusedFilePaths}`,
   );
 });
+
+describe("sub-project-workspace", () => {
+  it("should not activate framework detection for sub-project children", async () => {
+    const result = await analyzeFixture("sub-project-workspace");
+    const fixtureDir = resolve(FIXTURES_DIR, "sub-project-workspace");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("app/packages/core/app/page.ts"),
+      `app/packages/core/app/page.ts should be unused (Next.js detection should not activate for sub-project children), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should not add sub-project child package entry files as global entries", async () => {
+    const result = await analyzeFixture("sub-project-workspace");
+    const fixtureDir = resolve(FIXTURES_DIR, "sub-project-workspace");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("app/packages/icons/src/index.ts"),
+      `app/packages/icons/src/index.ts should be unused (not an entry when root has no workspace patterns), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should still detect files under sub-project children as unused", async () => {
+    const result = await analyzeFixture("sub-project-workspace");
+    const fixtureDir = resolve(FIXTURES_DIR, "sub-project-workspace");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("app/packages/core/src/unused-util.ts"),
+      `app/packages/core/src/unused-util.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
