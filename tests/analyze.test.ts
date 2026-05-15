@@ -93,23 +93,23 @@ describe("barrel-exports", () => {
     assert.ok(allUnusedNames.includes("fooUnused"), `fooUnused should be unused, got: ${allUnusedNames}`);
   });
 
-  it("should flag module-b.ts as unused file (re-exported by barrel but bar never consumed)", async () => {
+  it("should not flag module-b.ts as unused file (file-level: re-exported by barrel makes it reachable)", async () => {
     const result = await analyzeFixture("barrel-exports");
     const fixtureDir = resolve(FIXTURES_DIR, "barrel-exports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.some((filePath) => filePath === "src/module-b.ts"),
-      `module-b.ts should be unused since bar is never consumed, got: ${unusedFilePaths}`,
+      !unusedFilePaths.some((filePath) => filePath === "src/module-b.ts"),
+      `module-b.ts should be reachable via barrel re-export (file-level), got: ${unusedFilePaths}`,
     );
   });
 
-  it("should flag module-c.ts as unused file (star re-exported by barrel but neither baz nor qux consumed)", async () => {
+  it("should not flag module-c.ts as unused file (file-level: star re-exported by barrel makes it reachable)", async () => {
     const result = await analyzeFixture("barrel-exports");
     const fixtureDir = resolve(FIXTURES_DIR, "barrel-exports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.some((filePath) => filePath === "src/module-c.ts"),
-      `module-c.ts should be unused since no exports from it are consumed, got: ${unusedFilePaths}`,
+      !unusedFilePaths.some((filePath) => filePath === "src/module-c.ts"),
+      `module-c.ts should be reachable via barrel star re-export (file-level), got: ${unusedFilePaths}`,
     );
   });
 });
@@ -297,13 +297,13 @@ describe("barrel-unused-reexports", () => {
     assert.ok(!allUnusedNames.includes("UsedComponent"), "UsedComponent is imported");
   });
 
-  it("should flag unused-source.ts as unused file (barrel re-exports it but nobody consumes UnusedComponent)", async () => {
+  it("should not flag unused-source.ts as unused file (file-level: barrel re-export makes it reachable)", async () => {
     const result = await analyzeFixture("barrel-unused-reexports");
     const fixtureDir = resolve(FIXTURES_DIR, "barrel-unused-reexports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.some((filePath) => filePath === "src/components/unused-source.ts"),
-      `unused-source.ts should be an unused file since UnusedComponent is never consumed, got: ${unusedFilePaths}`,
+      !unusedFilePaths.some((filePath) => filePath === "src/components/unused-source.ts"),
+      `unused-source.ts should be reachable via barrel re-export (file-level), got: ${unusedFilePaths}`,
     );
   });
 });
@@ -319,13 +319,13 @@ describe("deep-barrel-symbol-tracking", () => {
     );
   });
 
-  it("should flag unused-source.ts as unused file (unusedHelper never consumed at root)", async () => {
+  it("should not flag unused-source.ts as unused file (file-level: barrel re-export chain makes it reachable)", async () => {
     const result = await analyzeFixture("deep-barrel-symbol-tracking");
     const fixtureDir = resolve(FIXTURES_DIR, "deep-barrel-symbol-tracking");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/unused-source.ts"),
-      `unused-source.ts should be unused, got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/unused-source.ts"),
+      `unused-source.ts should be reachable via barrel re-export chain (file-level), got: ${unusedFilePaths}`,
     );
   });
 
@@ -826,13 +826,13 @@ describe("fixture-patterns", () => {
     );
   });
 
-  it("should report __mocks__ files as unused when not imported", async () => {
+  it("should treat __mocks__ files as entry points when test runner is present", async () => {
     const result = await analyzeFixture("fixture-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/__mocks__/api-client.ts"),
-      `__mocks__/api-client.ts should be unused (not an entry point), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/__mocks__/api-client.ts"),
+      `__mocks__/api-client.ts should be treated as entry point (fallow behavior), got: ${unusedFilePaths}`,
     );
   });
 
@@ -892,17 +892,17 @@ describe("source-path-fallback", () => {
     );
   });
 
-  it("should NOT resolve dist/cli.js to src/cli/index.ts via directory fallback", async () => {
+  it("should resolve dist/cli.js to src/cli/index.ts via directory fallback", async () => {
     const result = await analyzeFixture("source-path-fallback");
     const fixtureDir = resolve(FIXTURES_DIR, "source-path-fallback");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/cli/index.ts"),
-      `src/cli/index.ts should be unused (no direct src/cli.ts match), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/cli/index.ts"),
+      `src/cli/index.ts should be reachable via dist/cli.js bin entry, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("src/cli/runner.ts"),
-      `src/cli/runner.ts should be unused, got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/cli/runner.ts"),
+      `src/cli/runner.ts should be reachable via cli/index.ts, got: ${unusedFilePaths}`,
     );
   });
 
@@ -944,33 +944,49 @@ describe("dash-spec-patterns", () => {
 });
 
 describe("workspace-explicit-entries", () => {
-  it("should NOT use default fallback entries when workspace has explicit main field", async () => {
+  it("should treat workspace package main entry as reachable and keep non-imported files unused", async () => {
     const result = await analyzeFixture("workspace-explicit-entries");
     const fixtureDir = resolve(FIXTURES_DIR, "workspace-explicit-entries");
     const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/ui/src/button.ts"),
+      `packages/ui/src/button.ts should be reachable (workspace main entry), got: ${unusedFilePaths}`,
+    );
     assert.ok(
       unusedFilePaths.includes("packages/ui/src/index.ts"),
-      `packages/ui/src/index.ts should be unused because ui has explicit main=src/button.ts, got: ${unusedFilePaths}`,
+      `packages/ui/src/index.ts should be unused (not imported by main entry), got: ${unusedFilePaths}`,
     );
-  });
-
-  it("should use default fallback entries when workspace has no explicit entries", async () => {
-    const result = await analyzeFixture("workspace-explicit-entries");
-    const fixtureDir = resolve(FIXTURES_DIR, "workspace-explicit-entries");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("packages/utils/src/index.ts"),
-      `packages/utils/src/index.ts should be entry (fallback) since utils has no explicit main, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("packages/utils/src/index.ts"),
+      `packages/utils/src/index.ts should be unused (no imports), got: ${unusedFilePaths}`,
     );
-  });
-
-  it("should flag orphan files in packages without explicit entries", async () => {
-    const result = await analyzeFixture("workspace-explicit-entries");
-    const fixtureDir = resolve(FIXTURES_DIR, "workspace-explicit-entries");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("packages/utils/src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("workspace-wildcard-exports", () => {
+  it("should resolve wildcard exports and mark imported files as reachable", async () => {
+    const result = await analyzeFixture("workspace-wildcard-exports");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-wildcard-exports");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/ui/src/components/index.ts"),
+      `components/index.ts should be reachable via wildcard export, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("packages/ui/src/components/button.ts"),
+      `button.ts should be reachable via barrel re-export, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("packages/ui/src/orphan.ts"),
+      `orphan.ts should be reachable via wildcard export ./* -> ./src/*, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("packages/ui/internal/hidden.ts"),
+      `internal/hidden.ts should be unused (not covered by exports), got: ${unusedFilePaths}`,
     );
   });
 });
