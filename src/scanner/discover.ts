@@ -524,7 +524,145 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     ],
     alwaysUsed: ["docusaurus.config.{ts,js,mjs}"],
   },
+  {
+    enablers: ["eslint", "@eslint/js"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: [
+      "eslint.config.{js,mjs,cjs,ts,mts,cts}",
+      ".eslintrc.{js,cjs,mjs,json,yaml,yml}",
+    ],
+  },
+  {
+    enablers: ["prettier"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: [
+      ".prettierrc.{js,cjs,mjs,json,yaml,yml}",
+      "prettier.config.{js,mjs,cjs,ts}",
+    ],
+  },
+  {
+    enablers: ["tailwindcss", "@tailwindcss/postcss"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["tailwind.config.{ts,js,cjs,mjs}"],
+  },
+  {
+    enablers: ["postcss"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["postcss.config.{ts,js,cjs,mjs}"],
+  },
+  {
+    enablers: ["typescript"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["tsconfig.json", "tsconfig.*.json"],
+  },
+  {
+    enablers: ["lint-staged"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: [
+      ".lintstagedrc.{js,cjs,mjs,json}",
+      "lint-staged.config.{js,mjs,cjs}",
+    ],
+  },
+  {
+    enablers: ["husky"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: [".husky/**/*"],
+  },
+  {
+    enablers: ["@biomejs/biome"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["biome.json", "biome.jsonc"],
+  },
+  {
+    enablers: ["@commitlint/cli"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: [
+      "commitlint.config.{js,cjs,mjs,ts}",
+      ".commitlintrc.{js,cjs,mjs,json,yaml,yml}",
+    ],
+  },
+  {
+    enablers: ["semantic-release"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: [
+      ".releaserc.{js,cjs,mjs,json,yaml,yml}",
+      "release.config.{js,cjs,mjs,ts}",
+    ],
+  },
+  {
+    enablers: ["@changesets/cli"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: [".changeset/**/*"],
+  },
+  {
+    enablers: ["vite", "rolldown-vite"],
+    enablerPrefixes: ["@vitejs/"],
+    entryPatterns: [],
+    alwaysUsed: ["vite.config.{ts,js,mts,mjs}"],
+  },
+  {
+    enablers: ["webpack", "webpack-cli"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: [
+      "webpack.config.{ts,js,mjs,cjs}",
+      "webpack.*.config.{ts,js,mjs,cjs}",
+    ],
+  },
+  {
+    enablers: ["rollup"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["rollup.config.{ts,js,mjs,cjs}"],
+  },
+  {
+    enablers: ["tsup"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["tsup.config.{ts,js,cjs,mjs}"],
+  },
+  {
+    enablers: ["@swc/core"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: [".swcrc"],
+  },
+  {
+    enablers: ["@babel/core"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: [
+      "babel.config.{js,cjs,mjs,json}",
+      ".babelrc.{js,cjs,mjs,json}",
+    ],
+  },
 ];
+
+const detectNodeTestRunner = (directory: string): boolean => {
+  try {
+    const packageJsonPath = join(directory, "package.json");
+    if (!existsSync(packageJsonPath)) return false;
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    const scripts = packageJson.scripts ?? {};
+    return Object.values(scripts).some(
+      (scriptValue) => typeof scriptValue === "string" && /\bnode\b.*\s--test\b/.test(scriptValue)
+    );
+  } catch {
+    return false;
+  }
+};
 
 const detectBunTestRunner = (directory: string): boolean => {
   try {
@@ -604,6 +742,17 @@ const discoverTestRunnerEntryPoints = (
           }
         } catch {
         }
+      }
+    }
+
+    if (activatedPatterns.length === 0) {
+      const hasNodeTestScript = detectNodeTestRunner(directory);
+      if (hasNodeTestScript) {
+        activatedPatterns.push(
+          "**/*.test.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+          "**/*.spec.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+          "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+        );
       }
     }
 
