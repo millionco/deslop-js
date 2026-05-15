@@ -36,5 +36,17 @@ export const resolveSourcePath = (distPath: string, directory: string): string |
     }
   }
 
+  const withoutExtension = relativeToDist.replace(/\.[cm]?js$/, "");
+  if (withoutExtension !== relativeToDist) {
+    for (const sourceExtension of SOURCE_EXTENSIONS) {
+      const directSourceCandidate = resolve(directory, withoutExtension + sourceExtension);
+      if (existsSync(directSourceCandidate)) {
+        return directSourceCandidate;
+      }
+    }
+    const indexCandidate = resolve(directory, withoutExtension, "index.ts");
+    if (existsSync(indexCandidate)) return indexCandidate;
+  }
+
   return undefined;
 };

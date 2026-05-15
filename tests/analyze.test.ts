@@ -1525,3 +1525,25 @@ describe("docusaurus-content", () => {
     );
   });
 });
+
+it("should resolve package.json exports pointing to .js files that only exist as .ts", async () => {
+  const result = await analyzeFixture("exports-js-to-ts");
+  const fixtureDir = resolve(FIXTURES_DIR, "exports-js-to-ts");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("generators.ts"),
+    `generators.ts should be an entry (exported as ./generators.js), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("plugin.ts"),
+    `plugin.ts should be an entry (exported as ./plugin.js), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/utils/index.ts"),
+    `src/utils/index.ts should be an entry (exported as ./src/utils/index.js), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
