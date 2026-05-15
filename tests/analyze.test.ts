@@ -551,6 +551,29 @@ describe("unreachable-shared-child", () => {
   });
 });
 
+describe("css-tracking", () => {
+  it("should track imported CSS as reachable", async () => {
+    const result = await analyzeFixture("css-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "css-tracking");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(!unusedFilePaths.includes("src/styles.css"), "styles.css is imported and should be reachable");
+  });
+
+  it("should flag unused CSS as unused", async () => {
+    const result = await analyzeFixture("css-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "css-tracking");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(unusedFilePaths.includes("src/unused.css"), `unused.css should be unused, got: ${unusedFilePaths}`);
+  });
+
+  it("should flag orphan TS alongside unused CSS", async () => {
+    const result = await analyzeFixture("css-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "css-tracking");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
+  });
+});
+
 describe("config-files-cjs-mjs", () => {
   it("should treat .cjs and .mjs config files as entry points", async () => {
     const result = await analyzeFixture("config-files-cjs-mjs");
