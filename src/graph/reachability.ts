@@ -179,10 +179,10 @@ export const markReachable = (graph: ModuleGraph): void => {
         }
 
         const symbolDemand: Set<string> | "all" = isNamespaceOrSideEffect ? "all" : importSymbolNames;
-        markConsumedExports(targetIndex, symbolDemand);
 
         if (!visited[targetIndex]) {
           visited[targetIndex] = 1;
+          markConsumedExports(targetIndex, symbolDemand);
           queue.push({ moduleIndex: targetIndex, demandedSymbols: symbolDemand });
         } else {
           const existingConsumed = consumedExportsPerModule.get(targetIndex);
