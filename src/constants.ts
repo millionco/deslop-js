@@ -192,3 +192,5 @@ export const RESOLVER_EXTENSIONS = [
   ".graphql",
   ".gql",
 ];
+
+export const SHALLOW_WORKSPACE_MAX_DEPTH = 2;

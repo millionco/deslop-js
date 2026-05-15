@@ -7,16 +7,19 @@ export interface WorkspacePackage {
   directory: string;
   entryFiles: string[];
   isDeclaredWorkspace: boolean;
+  depthFromRoot: number;
 }
 
 export interface WorkspaceDiscoveryResult {
   packages: WorkspacePackage[];
   excludedDirectories: string[];
+  hasRootLevelWorkspacePatterns: boolean;
 }
 
 export const discoverWorkspacePackagesWithExclusions = (rootDir: string): WorkspaceDiscoveryResult => {
   const rootPatterns = collectWorkspacePatterns(rootDir);
-  let expandedDirectories = rootPatterns.length > 0
+  const hasRootLevelWorkspacePatterns = rootPatterns.length > 0;
+  let expandedDirectories = hasRootLevelWorkspacePatterns
     ? expandWorkspaceGlobs(rootPatterns, rootDir)
     : [];
 
@@ -58,17 +61,20 @@ export const discoverWorkspacePackagesWithExclusions = (rootDir: string): Worksp
       const packageName = packageJson.name || relative(rootDir, directory);
       const entryFiles = extractWorkspaceEntries(packageJson, directory);
 
+      const relativePath = relative(rootDir, directory);
+      const depthFromRoot = relativePath.split("/").filter(Boolean).length;
       workspacePackages.push({
         name: packageName,
         directory,
         entryFiles,
         isDeclaredWorkspace: declaredDirectorySet.has(directory),
+        depthFromRoot,
       });
     } catch {
     }
   }
 
-  return { packages: workspacePackages, excludedDirectories };
+  return { packages: workspacePackages, excludedDirectories, hasRootLevelWorkspacePatterns };
 };
 
 export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] =>
