@@ -281,6 +281,22 @@ const SCRIPT_MULTIPLEXERS = new Set([
   "wireit", "turbo", "lerna", "ultra",
 ]);
 
+const NON_ENTRY_BINARIES = new Set([
+  "prettier", "eslint", "tslint", "stylelint", "biome",
+  "tsc", "tsup", "esbuild", "rollup", "webpack",
+  "rimraf", "del-cli", "shx", "cpy-cli", "cpx",
+  "echo", "cat", "mkdir", "rm", "cp", "mv", "ls", "pwd",
+  "dotenv", "dotenv-flow", "cross-env", "env-cmd",
+  "husky", "lint-staged", "commitlint",
+  "changeset", "changesets",
+  "typedoc", "api-extractor",
+  "madge", "depcheck", "knip", "fallow",
+  "sort-package-json",
+  "pnpm", "npm", "yarn", "ni", "nr", "nun",
+  "next", "nuxt", "astro", "vite", "svelte-kit",
+  "prisma", "drizzle-kit",
+]);
+
 const looksLikeFilePath = (token: string): boolean => {
   if (token.startsWith("-") || token.includes("${{") || token.includes("://")) return false;
   if (token.includes("}}") && !token.includes("{{")) return false;
@@ -309,6 +325,12 @@ const extractScriptFileArguments = (scriptCommand: string, directory: string): s
 
     const binaryName = tokens[0].replace(/^.*\//, "");
     if (SCRIPT_MULTIPLEXERS.has(binaryName)) continue;
+    if (NON_ENTRY_BINARIES.has(binaryName)) continue;
+
+    const effectiveBinaryName = (binaryName === "npx" || binaryName === "pnpx" || binaryName === "bunx")
+      ? (tokens[1]?.replace(/^.*\//, "") ?? "")
+      : binaryName;
+    if (effectiveBinaryName && NON_ENTRY_BINARIES.has(effectiveBinaryName)) continue;
 
     for (let tokenIndex = 1; tokenIndex < tokens.length; tokenIndex++) {
       const token = tokens[tokenIndex];

@@ -1755,3 +1755,21 @@ test("should exclude .gen.ts files from test entry patterns", async () => {
     `index.test.ts should NOT be unused (real test file), got: ${unusedFilePaths}`,
   );
 });
+
+test("should not treat formatter/linter glob targets as entry points", async () => {
+  const result = await analyzeFixture("formatter-glob-scripts");
+  const fixtureDir = resolve(FIXTURES_DIR, "formatter-glob-scripts");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("src/orphan.ts")),
+    `orphan.ts should be unused (not imported by anyone), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("scripts/build.ts")),
+    `build.ts should NOT be unused (referenced in build script), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("src/helper.ts")),
+    `helper.ts should NOT be unused (imported by index.ts), got: ${unusedFilePaths}`,
+  );
+});
