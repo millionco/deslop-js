@@ -214,41 +214,44 @@ const OUTPUT_DIR_PREFIXES = [
 const SOURCE_INDEX_FALLBACK_STEMS = ["src/index", "src/main", "index", "main"];
 
 const resolveSourcePath = (distPath: string, directory: string): string[] => {
-  const candidates: string[] = [distPath];
-
   const relativeToDist = relative(directory, distPath);
-  const sourceVariants = OUTPUT_DIR_PREFIXES
-    .map((prefix) => relativeToDist.replace(new RegExp(`^${prefix.replace(".", "\\.")}`), "src/"))
-    .filter((variant) => variant !== relativeToDist);
+  const isOutputDirEntry = OUTPUT_DIR_PREFIXES.some((prefix) => relativeToDist.startsWith(prefix));
 
-  for (const variant of sourceVariants) {
-    const withoutExtension = variant.replace(/\.[^.]+$/, "");
-    for (const sourceExtension of SOURCE_EXTENSIONS) {
-      const sourceCandidate = resolve(directory, withoutExtension + sourceExtension);
-      if (existsSync(sourceCandidate)) {
-        candidates.push(sourceCandidate);
+  if (isOutputDirEntry) {
+    const sourceVariants = OUTPUT_DIR_PREFIXES
+      .map((prefix) => relativeToDist.replace(new RegExp(`^${prefix.replace(".", "\\.")}`), "src/"))
+      .filter((variant) => variant !== relativeToDist);
+
+    for (const variant of sourceVariants) {
+      const withoutExtension = variant.replace(/\.[^.]+$/, "");
+      for (const sourceExtension of SOURCE_EXTENSIONS) {
+        const sourceCandidate = resolve(directory, withoutExtension + sourceExtension);
+        if (existsSync(sourceCandidate)) {
+          return [sourceCandidate];
+        }
       }
     }
-  }
 
-  const isOutputDirEntry = OUTPUT_DIR_PREFIXES.some((prefix) => relativeToDist.startsWith(prefix));
-  if (isOutputDirEntry && candidates.length === 1) {
     for (const stem of SOURCE_INDEX_FALLBACK_STEMS) {
       for (const sourceExtension of SOURCE_EXTENSIONS) {
         const fallbackCandidate = resolve(directory, stem + sourceExtension);
         if (existsSync(fallbackCandidate)) {
-          candidates.push(fallbackCandidate);
-          return candidates;
+          return [fallbackCandidate];
         }
       }
     }
+
+    return [];
   }
+
+  const resolvedDistPath = resolve(directory, relativeToDist);
+  const candidates: string[] = [];
 
   const withoutJsExtension = relativeToDist.replace(/\.[cm]?js$/, "");
   if (withoutJsExtension !== relativeToDist) {
     for (const sourceExtension of SOURCE_EXTENSIONS) {
       const directSourceCandidate = resolve(directory, withoutJsExtension + sourceExtension);
-      if (existsSync(directSourceCandidate) && !candidates.includes(directSourceCandidate)) {
+      if (existsSync(directSourceCandidate)) {
         candidates.push(directSourceCandidate);
       }
     }
@@ -259,11 +262,15 @@ const resolveSourcePath = (distPath: string, directory: string): string[] => {
   }
 
   const withoutTsExtension = relativeToDist.replace(/\.ts$/, "");
-  if (withoutTsExtension !== relativeToDist && !existsSync(resolve(directory, relativeToDist))) {
+  if (withoutTsExtension !== relativeToDist && !existsSync(resolvedDistPath)) {
     const tsxCandidate = resolve(directory, withoutTsExtension + ".tsx");
     if (existsSync(tsxCandidate) && !candidates.includes(tsxCandidate)) {
       candidates.push(tsxCandidate);
     }
+  }
+
+  if (candidates.length === 0 && existsSync(resolvedDistPath)) {
+    candidates.push(resolvedDistPath);
   }
 
   return candidates;
@@ -277,9 +284,12 @@ const extractWorkspaceEntries = (
 
   const addWithSourceResolution = (filePath: string) => {
     const resolved = resolve(directory, filePath);
-    entries.push(resolved);
     const sourceVariants = resolveSourcePath(resolved, directory);
-    entries.push(...sourceVariants);
+    if (sourceVariants.length > 0) {
+      entries.push(...sourceVariants);
+    } else {
+      entries.push(resolved);
+    }
   };
 
   const entryFields = ["main", "module", "browser", "types", "typings", "source"];
@@ -294,9 +304,12 @@ const extractWorkspaceEntries = (
     const exportPaths: string[] = [];
     collectExportPaths(packageJson.exports, directory, exportPaths);
     for (const exportPath of exportPaths) {
-      entries.push(exportPath);
       const sourceVariants = resolveSourcePath(exportPath, directory);
-      entries.push(...sourceVariants);
+      if (sourceVariants.length > 0) {
+        entries.push(...sourceVariants);
+      } else {
+        entries.push(exportPath);
+      }
     }
   }
 
@@ -549,7 +562,7 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   });
   entryPoints.push(...configFiles);
 
-  const alwaysEntryDirs = ["e2e", "cypress", ".github"];
+  const alwaysEntryDirs = ["e2e", "cypress"];
   for (const entryDir of alwaysEntryDirs) {
     const dirPath = join(rootDir, entryDir);
     if (existsSync(dirPath) && statSync(dirPath).isDirectory()) {

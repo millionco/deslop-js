@@ -816,7 +816,6 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*.bench.{ts,tsx,js,jsx}",
       "**/*.clienttest.{ts,tsx,js,jsx}",
       "**/*.servertest.{ts,tsx,js,jsx}",
-      "**/__mocks__/**/*.{ts,tsx,js,jsx}",
     ],
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
@@ -848,7 +847,6 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*-spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/*_spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
-      "**/__mocks__/**/*.{ts,tsx,js,jsx}",
     ],
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
@@ -1520,7 +1518,7 @@ const discoverTestRunnerEntryPoints = (
       cwd: directory,
       absolute: true,
       onlyFiles: true,
-      ignore: ["**/node_modules/**"],
+      ignore: ["**/node_modules/**", "**/*.gen.{ts,tsx,js,jsx}"],
     });
     allEntries.push(...testFiles);
 

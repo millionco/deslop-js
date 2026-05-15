@@ -694,13 +694,13 @@ describe("fixture-patterns", () => {
     );
   });
 
-  it("should treat __mocks__ files as test entries when test framework is detected", async () => {
+  it("should report __mocks__ files as unused when not imported", async () => {
     const result = await analyzeFixture("fixture-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/__mocks__/api-client.ts"),
-      `__mocks__/api-client.ts should NOT be unused (test mock entry), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/__mocks__/api-client.ts"),
+      `__mocks__/api-client.ts should be unused (not an entry point), got: ${unusedFilePaths}`,
     );
   });
 
@@ -1707,5 +1707,51 @@ it("should detect vi.mock and jest.mock as import edges", async () => {
   assert.ok(
     unusedFilePaths.includes("src/orphan.ts"),
     `orphan.ts should still be flagged as unused, got: ${unusedFilePaths}`,
+  );
+});
+
+test("should not treat all .github files as entries, only CI-referenced scripts", async () => {
+  const result = await analyzeFixture("github-actions-scripts");
+  const fixtureDir = resolve(FIXTURES_DIR, "github-actions-scripts");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith(".github/actions/deploy/run.js")),
+    `run.js should NOT be unused (referenced in CI workflow), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith(".github/actions/deploy/unused-helper.js")),
+    `unused-helper.js should be unused (not referenced anywhere), got: ${unusedFilePaths}`,
+  );
+});
+
+test("should resolve workspace dist paths to source and not mark dist as entries", async () => {
+  const result = await analyzeFixture("workspace-dist-resolution");
+  const fixtureDir = resolve(FIXTURES_DIR, "workspace-dist-resolution");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.includes("dist/")),
+    `dist/ files should not appear in unused files (ignored), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("packages/utils/src/orphan.ts")),
+    `orphan.ts should be unused (not imported by anyone), got: ${unusedFilePaths}`,
+  );
+});
+
+test("should exclude .gen.ts files from test entry patterns", async () => {
+  const result = await analyzeFixture("generated-spec-files");
+  const fixtureDir = resolve(FIXTURES_DIR, "generated-spec-files");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("types.spec.gen.ts")),
+    `types.spec.gen.ts should be unused (generated file, not a test), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("schema.gen.ts")),
+    `schema.gen.ts should be unused (generated file, not imported), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("index.test.ts")),
+    `index.test.ts should NOT be unused (real test file), got: ${unusedFilePaths}`,
   );
 });
