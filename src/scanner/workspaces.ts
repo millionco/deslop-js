@@ -165,25 +165,21 @@ const expandWorkspaceGlobs = (
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".cts", ".cjs"];
 
+const OUTPUT_DIR_PREFIXES = [
+  "dist/", "build/", "lib/", "lib-dist/", "esm/", "cjs/", "out/",
+  "./dist/", "./lib-dist/",
+];
+const SOURCE_INDEX_FALLBACK_STEMS = ["src/index", "src/main", "index", "main"];
+
 const resolveSourcePath = (distPath: string, directory: string): string[] => {
   const candidates: string[] = [distPath];
 
   const relativeToDist = relative(directory, distPath);
-  const sourceVariants = [
-    relativeToDist.replace(/^dist\//, "src/"),
-    relativeToDist.replace(/^build\//, "src/"),
-    relativeToDist.replace(/^lib\//, "src/"),
-    relativeToDist.replace(/^lib-dist\//, "src/"),
-    relativeToDist.replace(/^esm\//, "src/"),
-    relativeToDist.replace(/^cjs\//, "src/"),
-    relativeToDist.replace(/^out\//, "src/"),
-    relativeToDist.replace(/^\.\/dist\//, "src/"),
-    relativeToDist.replace(/^\.\/lib-dist\//, "src/"),
-  ];
+  const sourceVariants = OUTPUT_DIR_PREFIXES
+    .map((prefix) => relativeToDist.replace(new RegExp(`^${prefix.replace(".", "\\.")}`), "src/"))
+    .filter((variant) => variant !== relativeToDist);
 
   for (const variant of sourceVariants) {
-    if (variant === relativeToDist) continue;
-
     const withoutExtension = variant.replace(/\.[^.]+$/, "");
     for (const sourceExtension of SOURCE_EXTENSIONS) {
       const sourceCandidate = resolve(directory, withoutExtension + sourceExtension);
@@ -191,12 +187,17 @@ const resolveSourcePath = (distPath: string, directory: string): string[] => {
         candidates.push(sourceCandidate);
       }
     }
+  }
 
-    const asDirectory = resolve(directory, withoutExtension);
-    for (const indexExtension of SOURCE_EXTENSIONS) {
-      const indexCandidate = join(asDirectory, `index${indexExtension}`);
-      if (existsSync(indexCandidate)) {
-        candidates.push(indexCandidate);
+  const isOutputDirEntry = OUTPUT_DIR_PREFIXES.some((prefix) => relativeToDist.startsWith(prefix));
+  if (isOutputDirEntry && candidates.length === 1) {
+    for (const stem of SOURCE_INDEX_FALLBACK_STEMS) {
+      for (const sourceExtension of SOURCE_EXTENSIONS) {
+        const fallbackCandidate = resolve(directory, stem + sourceExtension);
+        if (existsSync(fallbackCandidate)) {
+          candidates.push(fallbackCandidate);
+          return candidates;
+        }
       }
     }
   }
@@ -460,6 +461,9 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
     }
   }
 
+  const electronEntryPoints = discoverElectronEntryPoints(rootDir);
+  entryPoints.push(...electronEntryPoints);
+
   const docEntryPoints = discoverDocumentationEntryPoints(rootDir);
   entryPoints.push(...docEntryPoints);
 
@@ -467,6 +471,43 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   entryPoints.push(...mobileEntryPoints);
 
   return [...new Set(entryPoints)];
+};
+
+const ELECTRON_ENABLERS = ["electron", "electron-builder", "@electron-forge/cli", "electron-vite"];
+
+const ELECTRON_ENTRY_PATTERNS = [
+  "src/main/**/*.{ts,js}",
+  "src/preload/**/*.{ts,js}",
+  "electron/main.{ts,js}",
+  "electron.vite.config.{ts,js,mjs}",
+  "forge.config.{ts,js,cjs}",
+  "electron-builder.{yml,yaml,json,json5,toml}",
+];
+
+const discoverElectronEntryPoints = (rootDir: string): string[] => {
+  const packageJsonPath = join(rootDir, "package.json");
+  if (!existsSync(packageJsonPath)) return [];
+
+  try {
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    const allDependencies = {
+      ...packageJson.dependencies,
+      ...packageJson.devDependencies,
+    };
+
+    const isElectronProject = ELECTRON_ENABLERS.some((enabler) => enabler in allDependencies);
+    if (!isElectronProject) return [];
+
+    return fg.sync(ELECTRON_ENTRY_PATTERNS, {
+      cwd: rootDir,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**"],
+    });
+  } catch {
+    return [];
+  }
 };
 
 const DOCUSAURUS_ENABLERS = ["@docusaurus/core", "@docusaurus/preset-classic"];

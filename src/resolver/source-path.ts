@@ -1,25 +1,20 @@
-import { resolve, relative, join } from "node:path";
+import { resolve, relative } from "node:path";
 import { existsSync } from "node:fs";
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs"];
+
+const OUTPUT_DIR_PREFIXES = ["dist/", "build/", "lib/", "lib-dist/", "esm/", "cjs/", "out/"];
+const SOURCE_INDEX_FALLBACK_STEMS = ["src/index", "src/main", "index", "main"];
 
 export const resolveSourcePath = (distPath: string, directory: string): string | undefined => {
   if (existsSync(distPath)) return distPath;
 
   const relativeToDist = relative(directory, distPath);
-  const sourceVariants = [
-    relativeToDist.replace(/^dist\//, "src/"),
-    relativeToDist.replace(/^build\//, "src/"),
-    relativeToDist.replace(/^lib\//, "src/"),
-    relativeToDist.replace(/^lib-dist\//, "src/"),
-    relativeToDist.replace(/^esm\//, "src/"),
-    relativeToDist.replace(/^cjs\//, "src/"),
-    relativeToDist.replace(/^out\//, "src/"),
-  ];
+  const sourceVariants = OUTPUT_DIR_PREFIXES
+    .map((prefix) => relativeToDist.replace(new RegExp(`^${prefix}`), "src/"))
+    .filter((variant) => variant !== relativeToDist);
 
   for (const variant of sourceVariants) {
-    if (variant === relativeToDist) continue;
-
     const withoutExtension = variant.replace(/\.[^.]+$/, "");
     for (const sourceExtension of SOURCE_EXTENSIONS) {
       const sourceCandidate = resolve(directory, withoutExtension + sourceExtension);
@@ -27,12 +22,16 @@ export const resolveSourcePath = (distPath: string, directory: string): string |
         return sourceCandidate;
       }
     }
+  }
 
-    const asDirectory = resolve(directory, withoutExtension);
-    for (const indexExtension of SOURCE_EXTENSIONS) {
-      const indexCandidate = join(asDirectory, `index${indexExtension}`);
-      if (existsSync(indexCandidate)) {
-        return indexCandidate;
+  const isOutputDirEntry = OUTPUT_DIR_PREFIXES.some((prefix) => relativeToDist.startsWith(prefix));
+  if (isOutputDirEntry) {
+    for (const stem of SOURCE_INDEX_FALLBACK_STEMS) {
+      for (const sourceExtension of SOURCE_EXTENSIONS) {
+        const fallbackCandidate = resolve(directory, stem + sourceExtension);
+        if (existsSync(fallbackCandidate)) {
+          return fallbackCandidate;
+        }
       }
     }
   }
