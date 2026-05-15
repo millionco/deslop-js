@@ -108,10 +108,15 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
     angularEntries.push(...extractAngularEntryPoints(workspacePackage.directory));
   }
 
+  const testSetupEntries = extractTestSetupFiles(absoluteRoot);
+  for (const workspacePackage of workspacePackages) {
+    testSetupEntries.push(...extractTestSetupFiles(workspacePackage.directory));
+  }
+
   const testEntryFiles = discoverTestRunnerEntryPoints(absoluteRoot, workspacePackages);
   const toolingEntryFiles = discoverToolingEntryPoints(absoluteRoot, workspacePackages);
 
-  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...testEntryFiles, ...toolingEntryFiles])];
+  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...testSetupEntries, ...testEntryFiles, ...toolingEntryFiles])];
 };
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
@@ -418,6 +423,60 @@ const extractAngularEntryPoints = (directory: string): string[] => {
                   }
                 }
               }
+            }
+          }
+        }
+      }
+    } catch {
+    }
+  }
+
+  return entries;
+};
+
+const SETUP_FILES_PATTERN = /(?:setupFiles|setupFilesAfterFramework|globalSetup)\s*:\s*(?:\[([^\]]*)\]|['"]([^'"]+)['"])/gs;
+const SETUP_FILE_PATH_PATTERN = /['"]([^'"]+)['"]/g;
+
+const extractTestSetupFiles = (directory: string): string[] => {
+  const entries: string[] = [];
+  const configPaths = fg.sync([
+    "vitest.config.{ts,js,mts,mjs}",
+    "vitest.web.config.{ts,js,mts,mjs}",
+    "vite.config.{ts,js,mts,mjs}",
+    "jest.config.{ts,js,mjs,cjs}",
+    "**/vitest.config.{ts,js,mts,mjs}",
+  ], {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**"],
+    deep: 3,
+  });
+
+  for (const configPath of configPaths) {
+    try {
+      const content = readFileSync(configPath, "utf-8");
+      const configDirectory = configPath.replace(/\/[^/]+$/, "");
+      let setupMatch: RegExpExecArray | null;
+      SETUP_FILES_PATTERN.lastIndex = 0;
+      while ((setupMatch = SETUP_FILES_PATTERN.exec(content)) !== null) {
+        const arrayContent = setupMatch[1];
+        const singleValue = setupMatch[2];
+
+        if (singleValue) {
+          const absolutePath = resolve(configDirectory, singleValue);
+          if (existsSync(absolutePath)) {
+            entries.push(absolutePath);
+          }
+        }
+
+        if (arrayContent) {
+          let pathMatch: RegExpExecArray | null;
+          SETUP_FILE_PATH_PATTERN.lastIndex = 0;
+          while ((pathMatch = SETUP_FILE_PATH_PATTERN.exec(arrayContent)) !== null) {
+            const absolutePath = resolve(configDirectory, pathMatch[1]);
+            if (existsSync(absolutePath)) {
+              entries.push(absolutePath);
             }
           }
         }
