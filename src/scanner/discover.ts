@@ -187,24 +187,21 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
   return { productionEntries, testEntries, alwaysUsedFiles };
 };
 
-const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
+const ENTRY_SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
 
-const COMMON_SOURCE_DIRECTORIES = ["src", "lib", "main", "app", "source"];
-
-const findSourceFile = (baseDir: string, relativePath: string): string | undefined => {
-  const pathWithoutExtension = join(baseDir, relativePath).replace(/\.[cm]?js$/, "");
-  for (const sourceExtension of SOURCE_EXTENSIONS) {
-    const candidatePath = pathWithoutExtension + sourceExtension;
-    if (existsSync(candidatePath)) return candidatePath;
+const resolveEntryPathViaExtensionSwap = (absolutePath: string): string | undefined => {
+  const extensionSwapped = absolutePath.replace(/\.[cm]?js(x?)$/, "");
+  if (extensionSwapped === absolutePath) return undefined;
+  for (const sourceExtension of ENTRY_SOURCE_EXTENSIONS) {
+    const candidate = extensionSwapped + sourceExtension;
+    if (existsSync(candidate)) return candidate;
   }
-  const indexCandidate = join(pathWithoutExtension, "index.ts");
+  const indexCandidate = join(extensionSwapped, "index.ts");
   if (existsSync(indexCandidate)) return indexCandidate;
   return undefined;
 };
 
-const resolveBuiltPathToSource = (builtAbsolutePath: string, rootDir: string): string | undefined => {
-  if (existsSync(builtAbsolutePath)) return undefined;
-
+const resolveEntryPathViaTsconfigOutDir = (absolutePath: string, rootDir: string): string | undefined => {
   try {
     const tsconfigPath = join(rootDir, "tsconfig.json");
     if (!existsSync(tsconfigPath)) return undefined;
@@ -215,65 +212,32 @@ const resolveBuiltPathToSource = (builtAbsolutePath: string, rootDir: string): s
     const outDir = tsconfig?.compilerOptions?.outDir;
     if (!outDir) return undefined;
 
-    const absoluteOutDir = resolve(rootDir, outDir);
-    const relativeToBuild = builtAbsolutePath.startsWith(absoluteOutDir)
-      ? builtAbsolutePath.slice(absoluteOutDir.length)
-      : undefined;
-    if (!relativeToBuild) return undefined;
+    const absoluteOutDir = resolve(rootDir, outDir) + "/";
+    if (!absolutePath.startsWith(absoluteOutDir)) return undefined;
+    const relativeToBuild = absolutePath.slice(absoluteOutDir.length);
 
     const rootDirOption = tsconfig?.compilerOptions?.rootDir;
-    if (rootDirOption) {
-      const sourceRootDir = resolve(rootDir, rootDirOption);
-      return findSourceFile(sourceRootDir, relativeToBuild);
+    const sourceRoot = rootDirOption ? resolve(rootDir, rootDirOption) : rootDir;
+    const withoutExtension = join(sourceRoot, relativeToBuild).replace(/\.[cm]?js$/, "");
+    for (const sourceExtension of ENTRY_SOURCE_EXTENSIONS) {
+      const candidate = withoutExtension + sourceExtension;
+      if (existsSync(candidate)) return candidate;
     }
-
-    const fromProjectRoot = findSourceFile(rootDir, relativeToBuild);
-    if (fromProjectRoot) return fromProjectRoot;
-
-    for (const sourceDir of COMMON_SOURCE_DIRECTORIES) {
-      const candidateSourceDir = resolve(rootDir, sourceDir);
-      if (existsSync(candidateSourceDir)) {
-        const fromSourceDir = findSourceFile(candidateSourceDir, relativeToBuild);
-        if (fromSourceDir) return fromSourceDir;
-      }
-    }
+    const indexCandidate = join(withoutExtension, "index.ts");
+    if (existsSync(indexCandidate)) return indexCandidate;
   } catch {
   }
   return undefined;
 };
 
-const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist|build|lib|lib-dist|out|output|cjs|esm|es|umd|module)\//;
-
-const resolveEntryPath = (entryPath: string, rootDir: string): string => {
+const resolveEntryPath = (entryPath: string, rootDir: string): string | undefined => {
   const absolutePath = resolve(rootDir, entryPath);
   if (existsSync(absolutePath)) return absolutePath;
-  const sourcePath = resolveBuiltPathToSource(absolutePath, rootDir);
-  if (sourcePath) return sourcePath;
-  const directSourceMatch = findSourceFile(rootDir, entryPath.replace(/^\.\//, ""));
-  if (directSourceMatch) return directSourceMatch;
-
-  if (BUILD_OUTPUT_DIRECTORY_PATTERN.test(entryPath)) {
-    const buildDirMatch = entryPath.match(BUILD_OUTPUT_DIRECTORY_PATTERN);
-    const relativeToBuildDir = buildDirMatch ? entryPath.slice(buildDirMatch[0].length) : undefined;
-    for (const sourceDir of COMMON_SOURCE_DIRECTORIES) {
-      const sourceIndexDir = resolve(rootDir, sourceDir);
-      if (!existsSync(sourceIndexDir)) continue;
-      if (relativeToBuildDir) {
-        const sourceFileMatch = findSourceFile(sourceIndexDir, relativeToBuildDir);
-        if (sourceFileMatch) return sourceFileMatch;
-      }
-      for (const sourceExtension of SOURCE_EXTENSIONS) {
-        const indexCandidate = join(sourceIndexDir, `index${sourceExtension}`);
-        if (existsSync(indexCandidate)) return indexCandidate;
-      }
-      const jsIndexCandidate = join(sourceIndexDir, "index.js");
-      if (existsSync(jsIndexCandidate)) return jsIndexCandidate;
-      const jsxIndexCandidate = join(sourceIndexDir, "index.jsx");
-      if (existsSync(jsxIndexCandidate)) return jsxIndexCandidate;
-    }
-  }
-
-  return absolutePath;
+  const extensionSwapResult = resolveEntryPathViaExtensionSwap(absolutePath);
+  if (extensionSwapResult) return extensionSwapResult;
+  const tsconfigResult = resolveEntryPathViaTsconfigOutDir(absolutePath, rootDir);
+  if (tsconfigResult) return tsconfigResult;
+  return undefined;
 };
 
 const extractPackageJsonEntries = async (packageJsonPath: string): Promise<string[]> => {
@@ -287,7 +251,8 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
     const entryFields = ["main", "module", "browser", "types", "typings"];
     for (const field of entryFields) {
       if (typeof packageJson[field] === "string") {
-        entries.push(resolveEntryPath(packageJson[field], rootDir));
+        const resolvedPath = resolveEntryPath(packageJson[field], rootDir);
+        if (resolvedPath) entries.push(resolvedPath);
       }
     }
 
@@ -307,11 +272,13 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
 
     if (packageJson.bin) {
       if (typeof packageJson.bin === "string") {
-        entries.push(resolveEntryPath(packageJson.bin, rootDir));
+        const resolvedBinPath = resolveEntryPath(packageJson.bin, rootDir);
+        if (resolvedBinPath) entries.push(resolvedBinPath);
       } else if (typeof packageJson.bin === "object") {
         for (const binPath of Object.values(packageJson.bin)) {
           if (typeof binPath === "string") {
-            entries.push(resolveEntryPath(binPath, rootDir));
+            const resolvedBinPath = resolveEntryPath(binPath, rootDir);
+            if (resolvedBinPath) entries.push(resolvedBinPath);
           }
         }
       }
@@ -913,7 +880,12 @@ const collectExportPaths = (
         entries.push(resolve(rootDir, exportValue));
       }
     } else {
-      entries.push(resolveEntryPath(exportValue, rootDir));
+      const resolvedExportPath = resolveEntryPath(exportValue, rootDir);
+      if (resolvedExportPath) {
+        entries.push(resolvedExportPath);
+      } else {
+        entries.push(resolve(rootDir, exportValue));
+      }
     }
     return;
   }

@@ -892,17 +892,17 @@ describe("source-path-fallback", () => {
     );
   });
 
-  it("should resolve dist/cli.js to src/cli/index.ts via directory fallback", async () => {
+  it("should not resolve dist/cli.js to src/cli/index.ts when dist does not exist", async () => {
     const result = await analyzeFixture("source-path-fallback");
     const fixtureDir = resolve(FIXTURES_DIR, "source-path-fallback");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/cli/index.ts"),
-      `src/cli/index.ts should be reachable via dist/cli.js bin entry, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/cli/index.ts"),
+      `src/cli/index.ts should be unused (dist/cli.js does not exist), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("src/cli/runner.ts"),
-      `src/cli/runner.ts should be reachable via cli/index.ts, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/cli/runner.ts"),
+      `src/cli/runner.ts should be unused (only imported by cli/index.ts), got: ${unusedFilePaths}`,
     );
   });
 
