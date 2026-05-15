@@ -75,6 +75,7 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
   const discoveredEntries = await discoverEntryPoints(configWithExclusions);
   const productionEntrySet = new Set(discoveredEntries.productionEntries);
   const testEntrySet = new Set(discoveredEntries.testEntries);
+  const alwaysUsedFileSet = new Set(discoveredEntries.alwaysUsedFiles);
   const hasReactNative = detectReactNative(config.rootDir, workspacePackages);
   const moduleResolver = createModuleResolver(config, workspacePackages.map((workspacePackage) => ({
     name: workspacePackage.name,
@@ -131,12 +132,14 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
       }
     }
 
+    const isAlwaysUsed = alwaysUsedFileSet.has(file.path);
     graphInputs.push({
       fileId: file,
       parsed: parsedModule,
       resolvedImports: resolvedImportMap,
-      isEntryPoint: productionEntrySet.has(file.path) || testEntrySet.has(file.path),
+      isEntryPoint: !isAlwaysUsed && (productionEntrySet.has(file.path) || testEntrySet.has(file.path)),
       isTestEntry: testEntrySet.has(file.path),
+      isAlwaysUsed,
     });
   }
 
@@ -178,6 +181,7 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
       resolvedImports: resolvedStyleImportMap,
       isEntryPoint: false,
       isTestEntry: false,
+      isAlwaysUsed: false,
     });
     discoveredFilePaths.add(styleFilePath);
     nextFileIndex++;

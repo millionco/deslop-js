@@ -1,5 +1,5 @@
 import fg from "fast-glob";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { FileId, DeslopConfig, DiscoveredEntryPoints } from "../types.js";
@@ -173,17 +173,18 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
     pluginFileEntries.push(...extractNextConfigPluginFiles(workspacePackage.directory));
   }
 
-  const testEntryFiles = discoverTestRunnerEntryPoints(absoluteRoot, entryEligiblePackages);
-  const toolingEntryFiles = discoverToolingEntryPoints(absoluteRoot, entryEligiblePackages);
+  const testRunnerDiscovery = discoverTestRunnerEntryPoints(absoluteRoot, entryEligiblePackages);
+  const toolingDiscovery = discoverToolingEntryPoints(absoluteRoot, entryEligiblePackages);
   const ciEntries = extractCiWorkflowEntries(absoluteRoot);
 
-  const testEntries = [...new Set([...testEntryFiles, ...testSetupEntries])];
+  const testEntries = [...new Set([...testRunnerDiscovery.entryFiles, ...testSetupEntries])];
   const testEntryPathSet = new Set(testEntries);
-  const productionEntries = [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...pluginFileEntries, ...toolingEntryFiles, ...ciEntries])].filter(
+  const productionEntries = [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...pluginFileEntries, ...toolingDiscovery.entryFiles, ...ciEntries])].filter(
     (entryPath) => !testEntryPathSet.has(entryPath),
   );
+  const alwaysUsedFiles = [...new Set([...toolingDiscovery.alwaysUsedFiles, ...testRunnerDiscovery.alwaysUsedFiles])];
 
-  return { productionEntries, testEntries };
+  return { productionEntries, testEntries, alwaysUsedFiles };
 };
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
@@ -578,12 +579,32 @@ const extractViteEntryPoints = (directory: string): string[] => {
   return entries;
 };
 
-const WEBPACK_ENTRY_BLOCK_PATTERN = /entry\s*:\s*(?:\{[^}]*\}|\[[^\]]*\]|['"][^'"]+['"])/gs;
-const WEBPACK_ENTRY_FILE_PATTERN = /['"]([^'"]+\.(?:js|ts|tsx|jsx|mjs|mts|less|scss|css|sass))['"]/g;
+const WEBPACK_ENTRY_BLOCK_PATTERN = /entry\s*:\s*(?:\{[^}]*\}|\[[^\]]*\]|['"][^'"]+['"]|path\.(?:join|resolve)\([^)]*\))/gs;
+const WEBPACK_ENTRY_FILE_PATTERN = /['"]([^'"]+)['"]/g;
+const WEBPACK_PATH_JOIN_PATTERN = /path\.(?:join|resolve)\(\s*__dirname\s*,\s*((?:['"][^'"]*['"]\s*,?\s*)+)\)/g;
+const RESOLVABLE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts"];
+
+const resolveEntryWithExtensions = (basePath: string): string | undefined => {
+  if (existsSync(basePath)) return basePath;
+  for (const extension of RESOLVABLE_EXTENSIONS) {
+    const withExtension = basePath + extension;
+    if (existsSync(withExtension)) return withExtension;
+  }
+  const indexCandidates = RESOLVABLE_EXTENSIONS.map((extension) => resolve(basePath, `index${extension}`));
+  for (const candidate of indexCandidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return undefined;
+};
 
 const extractWebpackEntryPoints = (directory: string): string[] => {
   const entries: string[] = [];
-  const webpackConfigPaths = fg.sync(["webpack.config.{js,ts,mjs,cjs}", "**/webpack*.config.{js,ts,mjs,cjs}"], {
+  const webpackConfigPaths = fg.sync([
+    "webpack.config.{js,ts,mjs,cjs}",
+    "**/webpack*.config.{js,ts,mjs,cjs}",
+    "**/webpack.config*.{js,ts,mjs,cjs}",
+    "**/webpack*.config*.babel.{js,ts}",
+  ], {
     cwd: directory,
     absolute: true,
     onlyFiles: true,
@@ -594,18 +615,36 @@ const extractWebpackEntryPoints = (directory: string): string[] => {
   for (const configPath of webpackConfigPaths) {
     try {
       const content = readFileSync(configPath, "utf-8");
+      const configDirectory = dirname(configPath);
+
+      let pathJoinMatch: RegExpExecArray | null;
+      WEBPACK_PATH_JOIN_PATTERN.lastIndex = 0;
+      while ((pathJoinMatch = WEBPACK_PATH_JOIN_PATTERN.exec(content)) !== null) {
+        const segmentsRaw = pathJoinMatch[1];
+        const segments = [...segmentsRaw.matchAll(/['"]([^'"]*)['"]/g)].map((match) => match[1]);
+        if (segments.length > 0) {
+          const joinedPath = resolve(configDirectory, ...segments);
+          const resolvedEntry = resolveEntryWithExtensions(joinedPath);
+          if (resolvedEntry) {
+            entries.push(resolvedEntry);
+          }
+        }
+      }
+
       let entryMatch: RegExpExecArray | null;
       WEBPACK_ENTRY_BLOCK_PATTERN.lastIndex = 0;
       while ((entryMatch = WEBPACK_ENTRY_BLOCK_PATTERN.exec(content)) !== null) {
         const entryBlock = entryMatch[0];
+        if (entryBlock.includes("path.join") || entryBlock.includes("path.resolve")) continue;
         let valueMatch: RegExpExecArray | null;
         WEBPACK_ENTRY_FILE_PATTERN.lastIndex = 0;
         while ((valueMatch = WEBPACK_ENTRY_FILE_PATTERN.exec(entryBlock)) !== null) {
           const entryPath = valueMatch[1];
           if (entryPath.startsWith("./") || entryPath.startsWith("../") || !entryPath.startsWith("/")) {
             const absoluteEntryPath = resolve(directory, entryPath);
-            if (existsSync(absoluteEntryPath)) {
-              entries.push(absoluteEntryPath);
+            const resolvedEntry = resolveEntryWithExtensions(absoluteEntryPath);
+            if (resolvedEntry) {
+              entries.push(resolvedEntry);
             }
           }
         }
@@ -1567,11 +1606,17 @@ const detectBunTestRunner = (directory: string): boolean => {
   }
 };
 
+interface TestRunnerDiscoveryResult {
+  entryFiles: string[];
+  alwaysUsedFiles: string[];
+}
+
 const discoverTestRunnerEntryPoints = (
   rootDir: string,
   workspacePackages: WorkspacePackage[],
-): string[] => {
+): TestRunnerDiscoveryResult => {
   const allEntries: string[] = [];
+  const allAlwaysUsed: string[] = [];
   const directoriesToCheck = [rootDir, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
 
   for (const directory of directoriesToCheck) {
@@ -1673,11 +1718,11 @@ const discoverTestRunnerEntryPoints = (
         ignore: ["**/node_modules/**"],
         dot: true,
       });
-      allEntries.push(...alwaysUsedFiles);
+      allAlwaysUsed.push(...alwaysUsedFiles);
     }
   }
 
-  return allEntries;
+  return { entryFiles: allEntries, alwaysUsedFiles: allAlwaysUsed };
 };
 
 const isToolingPluginEnabled = (
@@ -1694,11 +1739,17 @@ const isToolingPluginEnabled = (
   return false;
 };
 
+interface ToolingDiscoveryResult {
+  entryFiles: string[];
+  alwaysUsedFiles: string[];
+}
+
 const discoverToolingEntryPoints = (
   rootDir: string,
   workspacePackages: WorkspacePackage[],
-): string[] => {
+): ToolingDiscoveryResult => {
   const allEntries: string[] = [];
+  const allAlwaysUsed: string[] = [];
   const directoriesToCheck = [rootDir, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
 
   let rootDependencies: Record<string, string> = {};
@@ -1766,7 +1817,7 @@ const discoverToolingEntryPoints = (
         ignore: ["**/node_modules/**"],
         dot: true,
       });
-      allEntries.push(...alwaysUsedFiles);
+      allAlwaysUsed.push(...alwaysUsedFiles);
     }
   }
 
@@ -1789,8 +1840,8 @@ const discoverToolingEntryPoints = (
       ignore: ["**/node_modules/**"],
       dot: true,
     });
-    allEntries.push(...globalAlwaysUsedFiles);
+    allAlwaysUsed.push(...globalAlwaysUsedFiles);
   }
 
-  return allEntries;
+  return { entryFiles: allEntries, alwaysUsedFiles: allAlwaysUsed };
 };

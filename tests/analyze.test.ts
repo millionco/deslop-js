@@ -2047,3 +2047,51 @@ describe("wrangler-worker", () => {
     );
   });
 });
+
+describe("config-always-used", () => {
+  it("should exclude config files from unused reporting but not seed BFS from them", async () => {
+    const result = await analyzeFixture("config-always-used");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-always-used");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("vite.config.ts"),
+      `vite.config.ts should be excluded from unused (always-used config), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/vite-plugin.ts"),
+      `src/vite-plugin.ts should be unused (only imported by config, which does not seed BFS), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/index.ts"),
+      `src/index.ts should be reachable as main entry, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/helper.ts"),
+      `src/helper.ts should be reachable via index.ts, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("webpack-path-join", () => {
+  it("should resolve path.join(__dirname, .., app/index) webpack entries", async () => {
+    const result = await analyzeFixture("webpack-path-join");
+    const fixtureDir = resolve(FIXTURES_DIR, "webpack-path-join");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("app/index.js"),
+      `app/index.js should be reachable via webpack path.join entry, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("app/renderer.js"),
+      `app/renderer.js should be reachable via app/index.js, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("app/orphan.js"),
+      `app/orphan.js should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
