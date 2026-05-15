@@ -1034,3 +1034,25 @@ describe("nestjs-project", () => {
     );
   });
 });
+
+describe("node-test-runner", () => {
+  it("should detect node --test scripts as test entry points", async () => {
+    const result = await analyzeFixture("node-test-runner");
+    const fixtureDir = resolve(FIXTURES_DIR, "node-test-runner");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/__tests__/main.test.ts"),
+      `main.test.ts should be an entry point (node --test runner), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag non-test orphan files as unused", async () => {
+    const result = await analyzeFixture("node-test-runner");
+    const fixtureDir = resolve(FIXTURES_DIR, "node-test-runner");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
