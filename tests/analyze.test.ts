@@ -1428,3 +1428,20 @@ test("should detect vitest setupFiles as entry points", async () => {
     `vitest.config.ts should NOT be unused (config file), got unused: ${unusedFilePaths}`,
   );
 });
+
+test("should resolve CSS files imported via tsconfig path aliases", async () => {
+  const result = await analyzeFixture("css-path-alias");
+  const unusedFilePaths = result.unusedFiles.map((file) => file.path);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("globals.css")),
+    `globals.css should NOT be unused (imported via @/styles/globals.css), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("lib/utils.ts")),
+    `lib/utils.ts should NOT be unused (imported via @/lib/utils), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
+    `orphan.ts should be unused (not imported), got unused: ${unusedFilePaths}`,
+  );
+});

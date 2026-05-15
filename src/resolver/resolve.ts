@@ -1,9 +1,17 @@
 import { ResolverFactory } from "oxc-resolver";
 import { dirname, resolve, join } from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import type { DeslopConfig } from "../types.js";
 import { BUILTIN_MODULES, RESOLVER_EXTENSIONS } from "../constants.js";
 import { resolveSourcePath } from "./source-path.js";
+
+const existsAsFile = (filePath: string): boolean => {
+  try {
+    return existsSync(filePath) && statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
+};
 
 export interface ResolvedImport {
   resolvedPath: string | undefined;
@@ -219,6 +227,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
         if (specifier === pattern) {
           for (const targetPattern of targetPatterns) {
             const candidate = targetPattern.replace("*", "");
+            if (existsAsFile(candidate)) return candidate;
             for (const ext of RESOLVER_EXTENSIONS) {
               if (existsSync(candidate + ext)) return candidate + ext;
             }
@@ -238,6 +247,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
       const matchedWildcard = specifier.slice(prefix.length, specifier.length - suffix.length);
       for (const targetPattern of targetPatterns) {
         const resolvedTarget = targetPattern.replace("*", matchedWildcard);
+        if (existsAsFile(resolvedTarget)) return resolvedTarget;
         for (const ext of RESOLVER_EXTENSIONS) {
           if (existsSync(resolvedTarget + ext)) return resolvedTarget + ext;
         }

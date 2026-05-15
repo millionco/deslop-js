@@ -113,10 +113,15 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
     testSetupEntries.push(...extractTestSetupFiles(workspacePackage.directory));
   }
 
+  const pluginFileEntries = extractNextConfigPluginFiles(absoluteRoot);
+  for (const workspacePackage of workspacePackages) {
+    pluginFileEntries.push(...extractNextConfigPluginFiles(workspacePackage.directory));
+  }
+
   const testEntryFiles = discoverTestRunnerEntryPoints(absoluteRoot, workspacePackages);
   const toolingEntryFiles = discoverToolingEntryPoints(absoluteRoot, workspacePackages);
 
-  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...testSetupEntries, ...testEntryFiles, ...toolingEntryFiles])];
+  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...testSetupEntries, ...pluginFileEntries, ...testEntryFiles, ...toolingEntryFiles])];
 };
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
@@ -424,6 +429,62 @@ const extractAngularEntryPoints = (directory: string): string[] => {
                 }
               }
             }
+          }
+        }
+      }
+    } catch {
+    }
+  }
+
+  return entries;
+};
+
+const PLUGIN_FILE_ARGUMENT_PATTERN = /(?:createNextIntlPlugin|createMDX|withContentlayer|withPlaiceholder)\s*\(\s*['"]([^'"]+)['"]/g;
+const NEXT_INTL_IMPORT_PATTERN = /createNextIntlPlugin/;
+const NEXT_INTL_DEFAULT_PATHS = [
+  "src/i18n/request.ts",
+  "src/i18n/request.tsx",
+  "src/i18n/request.js",
+  "i18n/request.ts",
+  "i18n/request.tsx",
+  "i18n/request.js",
+  "i18n.ts",
+  "i18n.tsx",
+];
+
+const extractNextConfigPluginFiles = (directory: string): string[] => {
+  const entries: string[] = [];
+  const nextConfigPaths = fg.sync(["next.config.{ts,js,mjs,mts}"], {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**"],
+  });
+
+  for (const configPath of nextConfigPaths) {
+    try {
+      const content = readFileSync(configPath, "utf-8");
+      const configDirectory = configPath.replace(/\/[^/]+$/, "");
+      let pluginMatch: RegExpExecArray | null;
+      PLUGIN_FILE_ARGUMENT_PATTERN.lastIndex = 0;
+      let didMatchNextIntlWithPath = false;
+      while ((pluginMatch = PLUGIN_FILE_ARGUMENT_PATTERN.exec(content)) !== null) {
+        const filePath = pluginMatch[1];
+        const absolutePath = resolve(configDirectory, filePath);
+        if (existsSync(absolutePath)) {
+          entries.push(absolutePath);
+        }
+        if (pluginMatch[0].includes("createNextIntlPlugin")) {
+          didMatchNextIntlWithPath = true;
+        }
+      }
+
+      if (!didMatchNextIntlWithPath && NEXT_INTL_IMPORT_PATTERN.test(content)) {
+        for (const defaultPath of NEXT_INTL_DEFAULT_PATHS) {
+          const absolutePath = resolve(configDirectory, defaultPath);
+          if (existsSync(absolutePath)) {
+            entries.push(absolutePath);
+            break;
           }
         }
       }
