@@ -121,14 +121,7 @@ export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
     }
 
     for (const [targetIndex, { names: reExportedNames, mappings: reExportMappings }] of reExportsByTarget) {
-      const hasDirectImportEdge = edges.some(
-        (existingEdge) =>
-          existingEdge.source === sourceIndex && existingEdge.target === targetIndex && !existingEdge.isReExportEdge,
-      );
-
-      if (!hasDirectImportEdge) {
-        addEdge(sourceIndex, targetIndex, [], true, reExportedNames, reExportMappings);
-      }
+      addEdge(sourceIndex, targetIndex, [], true, reExportedNames, reExportMappings);
     }
   }
 
