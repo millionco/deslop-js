@@ -241,6 +241,12 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
         for (const ext of RESOLVER_EXTENSIONS) {
           if (existsSync(resolvedTarget + ext)) return resolvedTarget + ext;
         }
+        const strippedTarget = resolvedTarget.replace(/\.[cm]?js$/, "");
+        if (strippedTarget !== resolvedTarget) {
+          for (const ext of RESOLVER_EXTENSIONS) {
+            if (existsSync(strippedTarget + ext)) return strippedTarget + ext;
+          }
+        }
         const indexCandidate = join(resolvedTarget, "index");
         for (const ext of RESOLVER_EXTENSIONS) {
           if (existsSync(indexCandidate + ext)) return indexCandidate + ext;
