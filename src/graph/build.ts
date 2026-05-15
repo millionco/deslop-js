@@ -5,6 +5,7 @@ import type {
   Edge,
   ImportedSymbol,
   ImportInfo,
+  ReExportMapping,
 } from "../types.js";
 import type { ParsedModule } from "../scanner/parse.js";
 import type { ResolvedImport } from "../resolver/resolve.js";
@@ -39,8 +40,15 @@ export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
   const edges: Edge[] = [];
   const reverseEdges = new Map<number, number[]>();
 
-  const addEdge = (sourceIndex: number, targetIndex: number, symbols: ImportedSymbol[]): void => {
-    edges.push({ source: sourceIndex, target: targetIndex, importedSymbols: symbols });
+  const addEdge = (
+    sourceIndex: number,
+    targetIndex: number,
+    symbols: ImportedSymbol[],
+    isReExportEdge: boolean = false,
+    reExportedNames: string[] = [],
+    reExportMappings: ReExportMapping[] = [],
+  ): void => {
+    edges.push({ source: sourceIndex, target: targetIndex, importedSymbols: symbols, isReExportEdge, reExportedNames, reExportMappings });
 
     const existingReverseEdges = reverseEdges.get(targetIndex);
     if (existingReverseEdges) {
@@ -85,6 +93,7 @@ export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
       addEdge(sourceIndex, targetIndex, importedSymbols);
     }
 
+    const reExportsByTarget = new Map<number, { names: string[]; mappings: ReExportMapping[] }>();
     for (const exportInfo of input.parsed.exports) {
       if (!exportInfo.isReExport || !exportInfo.reExportSource) continue;
 
@@ -94,13 +103,31 @@ export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
       const targetIndex = fileIdMap.get(resolved.resolvedPath);
       if (targetIndex === undefined) continue;
 
-      const edgeAlreadyExists = edges.some(
+      const exportedName = exportInfo.isNamespaceReExport ? "*" : exportInfo.name;
+      const originalName = exportInfo.isNamespaceReExport
+        ? "*"
+        : (exportInfo.reExportOriginalName ?? exportInfo.name);
+
+      const existing = reExportsByTarget.get(targetIndex);
+      if (existing) {
+        existing.names.push(exportedName);
+        existing.mappings.push({ exportedName, originalName });
+      } else {
+        reExportsByTarget.set(targetIndex, {
+          names: [exportedName],
+          mappings: [{ exportedName, originalName }],
+        });
+      }
+    }
+
+    for (const [targetIndex, { names: reExportedNames, mappings: reExportMappings }] of reExportsByTarget) {
+      const hasDirectImportEdge = edges.some(
         (existingEdge) =>
-          existingEdge.source === sourceIndex && existingEdge.target === targetIndex,
+          existingEdge.source === sourceIndex && existingEdge.target === targetIndex && !existingEdge.isReExportEdge,
       );
 
-      if (!edgeAlreadyExists) {
-        addEdge(sourceIndex, targetIndex, []);
+      if (!hasDirectImportEdge) {
+        addEdge(sourceIndex, targetIndex, [], true, reExportedNames, reExportMappings);
       }
     }
   }

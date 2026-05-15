@@ -93,10 +93,24 @@ describe("barrel-exports", () => {
     assert.ok(allUnusedNames.includes("fooUnused"), `fooUnused should be unused, got: ${allUnusedNames}`);
   });
 
-  it("should flag bar as unused (re-exported but never imported)", async () => {
+  it("should flag module-b.ts as unused file (re-exported by barrel but bar never consumed)", async () => {
     const result = await analyzeFixture("barrel-exports");
-    const allUnusedNames = unusedExportNames(result);
-    assert.ok(allUnusedNames.includes("bar"), `bar should be unused, got: ${allUnusedNames}`);
+    const fixtureDir = resolve(FIXTURES_DIR, "barrel-exports");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.some((filePath) => filePath === "src/module-b.ts"),
+      `module-b.ts should be unused since bar is never consumed, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag module-c.ts as unused file (star re-exported by barrel but neither baz nor qux consumed)", async () => {
+    const result = await analyzeFixture("barrel-exports");
+    const fixtureDir = resolve(FIXTURES_DIR, "barrel-exports");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.some((filePath) => filePath === "src/module-c.ts"),
+      `module-c.ts should be unused since no exports from it are consumed, got: ${unusedFilePaths}`,
+    );
   });
 });
 
@@ -283,10 +297,55 @@ describe("barrel-unused-reexports", () => {
     assert.ok(!allUnusedNames.includes("UsedComponent"), "UsedComponent is imported");
   });
 
-  it("should flag UnusedComponent", async () => {
+  it("should flag unused-source.ts as unused file (barrel re-exports it but nobody consumes UnusedComponent)", async () => {
     const result = await analyzeFixture("barrel-unused-reexports");
+    const fixtureDir = resolve(FIXTURES_DIR, "barrel-unused-reexports");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.some((filePath) => filePath === "src/components/unused-source.ts"),
+      `unused-source.ts should be an unused file since UnusedComponent is never consumed, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("deep-barrel-symbol-tracking", () => {
+  it("should keep used-source.ts reachable (usedHelper consumed through two barrel layers)", async () => {
+    const result = await analyzeFixture("deep-barrel-symbol-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "deep-barrel-symbol-tracking");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/used-source.ts"),
+      "used-source.ts should be reachable via barrel-mid → barrel-top → index",
+    );
+  });
+
+  it("should flag unused-source.ts as unused file (unusedHelper never consumed at root)", async () => {
+    const result = await analyzeFixture("deep-barrel-symbol-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "deep-barrel-symbol-tracking");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/unused-source.ts"),
+      `unused-source.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan.ts as unused file", async () => {
+    const result = await analyzeFixture("deep-barrel-symbol-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "deep-barrel-symbol-tracking");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag usedHelperSibling as unused export", async () => {
+    const result = await analyzeFixture("deep-barrel-symbol-tracking");
     const allUnusedNames = unusedExportNames(result);
-    assert.ok(allUnusedNames.includes("UnusedComponent"), `UnusedComponent should be unused, got: ${allUnusedNames}`);
+    assert.ok(
+      allUnusedNames.includes("usedHelperSibling"),
+      `usedHelperSibling should be unused, got: ${allUnusedNames}`,
+    );
   });
 });
 
@@ -1810,7 +1869,7 @@ test("should treat pages/app as entry points when next is a dependency", async (
   );
 });
 
-test("should treat app/routes as entry points when @react-router/dev is a dependency", async () => {
+test("should treat app/routes as entry points when @react-router/dev is a dependency and read appDirectory from config", async () => {
   const result = await analyzeFixture("framework-gating/with-react-router");
   const fixtureDir = resolve(FIXTURES_DIR, "framework-gating/with-react-router");
   const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -1819,11 +1878,11 @@ test("should treat app/routes as entry points when @react-router/dev is a depend
     `unused.tsx should be unused, got: ${unusedFilePaths}`,
   );
   assert.ok(
-    !unusedFilePaths.some((filePath) => filePath === "app/root.tsx"),
-    `app/root.tsx should NOT be unused (React Router entry), got: ${unusedFilePaths}`,
+    !unusedFilePaths.some((filePath) => filePath === "src/root.tsx"),
+    `src/root.tsx should NOT be unused (React Router entry with appDirectory=src), got: ${unusedFilePaths}`,
   );
   assert.ok(
-    !unusedFilePaths.some((filePath) => filePath === "app/routes/home.tsx"),
-    `app/routes/home.tsx should NOT be unused (React Router route), got: ${unusedFilePaths}`,
+    !unusedFilePaths.some((filePath) => filePath === "src/routes/home.tsx"),
+    `src/routes/home.tsx should NOT be unused (React Router route with appDirectory=src), got: ${unusedFilePaths}`,
   );
 });
