@@ -118,9 +118,13 @@ export const parseModule = (filePath: string): ParsedModule => {
 
   let result = parseSync(parseFileName, textToParse);
 
+  const isPlainJsFile = parseFileName.endsWith(".js") || parseFileName.endsWith(".mjs") || parseFileName.endsWith(".cjs");
   const hasJsxError = result.errors.length > 0
-    && result.errors.some((parseError) => String(parseError.message ?? "").includes("JSX"))
-    && (parseFileName.endsWith(".js") || parseFileName.endsWith(".mjs") || parseFileName.endsWith(".cjs"));
+    && isPlainJsFile
+    && result.errors.some((parseError) => {
+      const errorMessage = String(parseError.message ?? "");
+      return errorMessage.includes("JSX") || errorMessage.includes("Unexpected token");
+    });
 
   if (hasJsxError) {
     const jsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".jsx");
