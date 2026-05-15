@@ -46,7 +46,6 @@ export const TEST_FILE_PATTERNS = [
 export const SCRIPT_FILE_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|npx|bun)\s+(?:-[\w-]+\s+)*(?:[\w/-]+\s+)*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))/;
 
 export const SCRIPT_ENTRY_PATTERNS = [
-  "**/scripts/**/*.{ts,tsx,js,jsx,mts,mjs}",
   "**/bin/**/*.{ts,tsx,js,jsx,mts,mjs}",
 ];
 
