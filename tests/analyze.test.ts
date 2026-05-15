@@ -1544,6 +1544,24 @@ it("should resolve React Native platform extensions (.web.ts, .native.ts) when r
   );
 });
 
+it("should mark config files in non-workspace directories as always used via global patterns", async () => {
+  const result = await analyzeFixture("global-config-patterns");
+  const fixtureDir = resolve(FIXTURES_DIR, "global-config-patterns");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("templates/next-app/postcss.config.mjs"),
+    `postcss.config.mjs should be always used via global pattern, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("templates/next-app/eslint.config.js"),
+    `eslint.config.js should be always used via global pattern, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("templates/next-app/orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
 it("should resolve package.json exports pointing to .js files that only exist as .ts", async () => {
   const result = await analyzeFixture("exports-js-to-ts");
   const fixtureDir = resolve(FIXTURES_DIR, "exports-js-to-ts");
