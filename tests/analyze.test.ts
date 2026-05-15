@@ -1056,3 +1056,57 @@ describe("node-test-runner", () => {
     );
   });
 });
+
+describe("config-flag-scripts", () => {
+  it("should detect --config flag files as entry points", async () => {
+    const result = await analyzeFixture("config-flag-scripts");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-flag-scripts");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("db/drizzle.config.ts"),
+      `drizzle.config.ts should be entry point (--config flag), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should detect tsx script files as entry points", async () => {
+    const result = await analyzeFixture("config-flag-scripts");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-flag-scripts");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("scripts/seed.ts"),
+      `seed.ts should be entry point (tsx script), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan files as unused", async () => {
+    const result = await analyzeFixture("config-flag-scripts");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-flag-scripts");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused (config-flag-scripts), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("i18n-project", () => {
+  it("should mark locale JSON files as always-used when i18next is a dependency", async () => {
+    const result = await analyzeFixture("i18n-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "i18n-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("public/locales/en.json"),
+      `en.json should be always-used (i18next locale), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan files as unused", async () => {
+    const result = await analyzeFixture("i18n-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "i18n-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused (i18n-project), got: ${unusedFilePaths}`,
+    );
+  });
+});
