@@ -197,7 +197,7 @@ const extractScriptEntries = (directory: string): string[] => {
 };
 
 const WEBPACK_ENTRY_BLOCK_PATTERN = /entry\s*:\s*(?:\{[^}]*\}|\[[^\]]*\]|['"][^'"]+['"])/gs;
-const WEBPACK_ENTRY_FILE_PATTERN = /['"]([^'"]+\.(?:js|ts|tsx|jsx|mjs|mts))['"]/g;
+const WEBPACK_ENTRY_FILE_PATTERN = /['"]([^'"]+\.(?:js|ts|tsx|jsx|mjs|mts|less|scss|css|sass))['"]/g;
 
 const extractWebpackEntryPoints = (directory: string): string[] => {
   const entries: string[] = [];
@@ -692,6 +692,42 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     enablerPrefixes: ["@vitejs/"],
     entryPatterns: [],
     alwaysUsed: ["vite.config.{ts,js,mts,mjs}"],
+  },
+  {
+    enablers: ["vue", "@vue/cli-service"],
+    enablerPrefixes: ["@vue/"],
+    entryPatterns: [
+      "src/main.{ts,js}",
+      "src/App.vue",
+    ],
+    alwaysUsed: ["vue.config.{ts,js,mjs,cjs}"],
+  },
+  {
+    enablers: ["nuxt", "nuxt3"],
+    enablerPrefixes: ["@nuxt/"],
+    entryPatterns: [
+      "pages/**/*.vue",
+      "layouts/**/*.vue",
+      "components/**/*.vue",
+      "composables/**/*.{ts,js}",
+      "plugins/**/*.{ts,js}",
+      "middleware/**/*.{ts,js}",
+      "server/**/*.{ts,js}",
+      "app.vue",
+    ],
+    alwaysUsed: ["nuxt.config.{ts,js,mjs}"],
+  },
+  {
+    enablers: ["svelte", "@sveltejs/kit"],
+    enablerPrefixes: ["@sveltejs/"],
+    entryPatterns: [
+      "src/routes/**/*.svelte",
+      "src/lib/**/*.svelte",
+      "src/routes/**/+page.{ts,js,svelte}",
+      "src/routes/**/+layout.{ts,js,svelte}",
+      "src/routes/**/+server.{ts,js}",
+    ],
+    alwaysUsed: ["svelte.config.{ts,js,mjs}"],
   },
   {
     enablers: ["webpack", "webpack-cli"],

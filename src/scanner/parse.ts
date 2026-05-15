@@ -59,6 +59,34 @@ const extractAstroFrontmatter = (sourceText: string): string => {
   return frontmatterMatch[1];
 };
 
+const VUE_SCRIPT_PATTERN = /<script[^>]*(?:lang=["'](?:ts|tsx)["'][^>]*)?>([\s\S]*?)<\/script>/gi;
+
+const extractVueScriptContent = (sourceText: string): string => {
+  const scriptBlocks: string[] = [];
+  let scriptMatch: RegExpExecArray | null;
+  VUE_SCRIPT_PATTERN.lastIndex = 0;
+  while ((scriptMatch = VUE_SCRIPT_PATTERN.exec(sourceText)) !== null) {
+    if (scriptMatch[1]) {
+      scriptBlocks.push(scriptMatch[1]);
+    }
+  }
+  return scriptBlocks.join("\n");
+};
+
+const SVELTE_SCRIPT_PATTERN = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+
+const extractSvelteScriptContent = (sourceText: string): string => {
+  const scriptBlocks: string[] = [];
+  let scriptMatch: RegExpExecArray | null;
+  SVELTE_SCRIPT_PATTERN.lastIndex = 0;
+  while ((scriptMatch = SVELTE_SCRIPT_PATTERN.exec(sourceText)) !== null) {
+    if (scriptMatch[1]) {
+      scriptBlocks.push(scriptMatch[1]);
+    }
+  }
+  return scriptBlocks.join("\n");
+};
+
 const getModuleExportNameValue = (exportName: ModuleExportName): string => {
   if (exportName.type === "Identifier") return exportName.name;
   if (exportName.type === "Literal") return exportName.value;
@@ -116,16 +144,20 @@ export const parseModule = (filePath: string): ParsedModule => {
 
   const isMdx = filePath.endsWith(".mdx");
   const isAstro = filePath.endsWith(".astro");
+  const isVue = filePath.endsWith(".vue");
+  const isSvelte = filePath.endsWith(".svelte");
   const textToParse = isMdx
     ? extractMdxImportsExports(sourceText)
     : isAstro
       ? extractAstroFrontmatter(sourceText)
-      : sourceText;
-  const parseFileName = isMdx
-    ? filePath.replace(/\.mdx$/, ".tsx")
-    : isAstro
-      ? filePath.replace(/\.astro$/, ".tsx")
-      : filePath;
+      : isVue
+        ? extractVueScriptContent(sourceText)
+        : isSvelte
+          ? extractSvelteScriptContent(sourceText)
+          : sourceText;
+  const parseFileName = (isMdx || isAstro || isVue || isSvelte)
+    ? filePath.replace(/\.(mdx|astro|vue|svelte)$/, ".tsx")
+    : filePath;
 
   let result = parseSync(parseFileName, textToParse);
 

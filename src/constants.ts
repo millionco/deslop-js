@@ -14,6 +14,8 @@ export const DEFAULT_EXTENSIONS = [
   ".css",
   ".scss",
   ".less",
+  ".vue",
+  ".svelte",
 ];
 
 export const HIDDEN_DIRECTORY_ALLOWLIST = [
