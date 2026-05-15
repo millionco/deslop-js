@@ -93,8 +93,8 @@ export const markReachable = (graph: ModuleGraph): void => {
           if (allConsumed || demandedSymbols === "all") {
             if (!visited[targetIndex]) {
               visited[targetIndex] = 1;
-              queue.push({ moduleIndex: targetIndex, demandedSymbols: "all" });
               markConsumedExports(targetIndex, "all");
+              queue.push({ moduleIndex: targetIndex, demandedSymbols: "all" });
             } else {
               const targetConsumed = consumedExportsPerModule.get(targetIndex);
               if (!targetConsumed || !targetConsumed.has("*")) {
@@ -116,9 +116,23 @@ export const markReachable = (graph: ModuleGraph): void => {
             if (matchingSymbols.size > 0) {
               if (!visited[targetIndex]) {
                 visited[targetIndex] = 1;
+                markConsumedExports(targetIndex, matchingSymbols);
+                queue.push({ moduleIndex: targetIndex, demandedSymbols: matchingSymbols });
+              } else {
+                const targetConsumed = consumedExportsPerModule.get(targetIndex);
+                if (targetConsumed && targetConsumed.has("*")) continue;
+                let hasNewSymbols = false;
+                for (const symbol of matchingSymbols) {
+                  if (!targetConsumed || !targetConsumed.has(symbol)) {
+                    hasNewSymbols = true;
+                    break;
+                  }
+                }
+                if (hasNewSymbols) {
+                  markConsumedExports(targetIndex, matchingSymbols);
+                  queue.push({ moduleIndex: targetIndex, demandedSymbols: matchingSymbols });
+                }
               }
-              markConsumedExports(targetIndex, matchingSymbols);
-              queue.push({ moduleIndex: targetIndex, demandedSymbols: matchingSymbols });
             }
           }
         } else {
@@ -143,6 +157,20 @@ export const markReachable = (graph: ModuleGraph): void => {
               visited[targetIndex] = 1;
               markConsumedExports(targetIndex, originalNames);
               queue.push({ moduleIndex: targetIndex, demandedSymbols: originalNames });
+            } else {
+              const targetConsumed = consumedExportsPerModule.get(targetIndex);
+              if (targetConsumed && targetConsumed.has("*")) continue;
+              let hasNewSymbols = false;
+              for (const symbol of originalNames) {
+                if (!targetConsumed || !targetConsumed.has(symbol)) {
+                  hasNewSymbols = true;
+                  break;
+                }
+              }
+              if (hasNewSymbols) {
+                markConsumedExports(targetIndex, originalNames);
+                queue.push({ moduleIndex: targetIndex, demandedSymbols: originalNames });
+              }
             }
           } else if (consumedForCurrent) {
             const matchingExportedNames = new Set<string>();
@@ -157,9 +185,23 @@ export const markReachable = (graph: ModuleGraph): void => {
               const originalNames = translateToOriginalNames(matchingExportedNames);
               if (!visited[targetIndex]) {
                 visited[targetIndex] = 1;
+                markConsumedExports(targetIndex, originalNames);
+                queue.push({ moduleIndex: targetIndex, demandedSymbols: originalNames });
+              } else {
+                const targetConsumed = consumedExportsPerModule.get(targetIndex);
+                if (targetConsumed && targetConsumed.has("*")) continue;
+                let hasNewSymbols = false;
+                for (const symbol of originalNames) {
+                  if (!targetConsumed || !targetConsumed.has(symbol)) {
+                    hasNewSymbols = true;
+                    break;
+                  }
+                }
+                if (hasNewSymbols) {
+                  markConsumedExports(targetIndex, originalNames);
+                  queue.push({ moduleIndex: targetIndex, demandedSymbols: originalNames });
+                }
               }
-              markConsumedExports(targetIndex, originalNames);
-              queue.push({ moduleIndex: targetIndex, demandedSymbols: originalNames });
             }
           }
         }

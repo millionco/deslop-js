@@ -390,6 +390,38 @@ describe("late-consumed-wildcard-reexport", () => {
   });
 });
 
+describe("import-and-reexport-same-target", () => {
+  it("should create both direct import and re-export edges when a file imports from and re-exports the same module", async () => {
+    const result = await analyzeFixture("import-and-reexport-same-target");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-and-reexport-same-target");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/components/widget.ts"),
+      `widget.ts should be reachable via re-export through components barrel (export * from), got unused: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should keep helper.ts reachable via both direct import and re-export", async () => {
+    const result = await analyzeFixture("import-and-reexport-same-target");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-and-reexport-same-target");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/components/helper.ts"),
+      `helper.ts should be reachable, got unused: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan.ts as unused (not imported or re-exported by anyone)", async () => {
+    const result = await analyzeFixture("import-and-reexport-same-target");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-and-reexport-same-target");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("re-export-alias-chain", () => {
   it("should not flag original and renamed (used via aliased re-export chain)", async () => {
     const result = await analyzeFixture("re-export-alias-chain");
