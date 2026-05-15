@@ -682,3 +682,125 @@ describe("path-aliases-mixed-exports", () => {
     assert.ok(allUnusedNames.includes("unusedHelper"), `unusedHelper should be unused, got: ${allUnusedNames}`);
   });
 });
+
+describe("fixture-patterns", () => {
+  it("should treat __fixtures__ and __mocks__ files as entry points when vitest is present", async () => {
+    const result = await analyzeFixture("fixture-patterns");
+    const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/__fixtures__/user-data.ts"),
+      `__fixtures__/user-data.ts should be treated as entry point, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/__mocks__/api-client.ts"),
+      `__mocks__/api-client.ts should be treated as entry point, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should still flag orphan files", async () => {
+    const result = await analyzeFixture("fixture-patterns");
+    const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("electron-project", () => {
+  it("should treat src/main and src/preload as entry points in Electron projects", async () => {
+    const result = await analyzeFixture("electron-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "electron-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/main/index.ts"),
+      `src/main/index.ts should be entry point, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/main/window.ts"),
+      `src/main/window.ts should be reachable from main, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/preload/preload.ts"),
+      `src/preload/preload.ts should be entry point, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should still flag orphan files in Electron projects", async () => {
+    const result = await analyzeFixture("electron-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "electron-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("source-path-fallback", () => {
+  it("should resolve dist/ exports to src/index.ts fallback when exact match not found", async () => {
+    const result = await analyzeFixture("source-path-fallback");
+    const fixtureDir = resolve(FIXTURES_DIR, "source-path-fallback");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/index.ts"),
+      `src/index.ts should be resolved from dist/index.js export, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/helper.ts"),
+      `src/helper.ts should be reachable from index.ts, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should NOT resolve dist/cli.js to src/cli/index.ts via directory fallback", async () => {
+    const result = await analyzeFixture("source-path-fallback");
+    const fixtureDir = resolve(FIXTURES_DIR, "source-path-fallback");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/cli/index.ts"),
+      `src/cli/index.ts should be unused (no direct src/cli.ts match), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/cli/runner.ts"),
+      `src/cli/runner.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should still flag orphan files", async () => {
+    const result = await analyzeFixture("source-path-fallback");
+    const fixtureDir = resolve(FIXTURES_DIR, "source-path-fallback");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("dash-spec-patterns", () => {
+  it("should treat *-spec.ts and *_spec.ts as test entry points with vitest", async () => {
+    const result = await analyzeFixture("dash-spec-patterns");
+    const fixtureDir = resolve(FIXTURES_DIR, "dash-spec-patterns");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("spec/utils-spec.ts"),
+      `utils-spec.ts should be test entry point, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("spec/engine_spec.ts"),
+      `engine_spec.ts should be test entry point, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should still flag orphan files", async () => {
+    const result = await analyzeFixture("dash-spec-patterns");
+    const fixtureDir = resolve(FIXTURES_DIR, "dash-spec-patterns");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});

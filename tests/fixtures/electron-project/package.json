@@ -1,0 +1,9 @@
+{
+  "name": "electron-project",
+  "version": "1.0.0",
+  "main": "src/renderer/index.ts",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}
