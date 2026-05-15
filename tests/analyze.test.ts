@@ -1348,3 +1348,24 @@ test("should flag orphan files even with query-param imports present", async () 
     `orphan.ts should be unused, got unused: ${unusedFilePaths}`,
   );
 });
+
+test("should detect script entry points with --key value flag pairs", async () => {
+  const result = await analyzeFixture("script-flag-args");
+  const unusedFilePaths = result.unusedFiles.map((file) => file.path);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("scripts/build.ts")),
+    `scripts/build.ts should NOT be unused (referenced via tsx --tsconfig X scripts/build.ts), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("scripts/generate.mts")),
+    `scripts/generate.mts should NOT be unused (referenced via bun run), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("tests/run.ts")),
+    `tests/run.ts should NOT be unused (referenced via node --import tsx --test), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
+    `orphan.ts should be unused, got unused: ${unusedFilePaths}`,
+  );
+});
