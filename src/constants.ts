@@ -130,6 +130,8 @@ export const BUILTIN_MODULES = new Set([
   "zlib",
 ]);
 
+export const PLATFORM_SUFFIXES = [".web", ".native", ".ios", ".android", ".desktop", ".windows", ".macos"];
+
 export const RESOLVER_EXTENSIONS = [
   ...DEFAULT_EXTENSIONS,
   ".json",

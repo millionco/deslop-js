@@ -515,6 +515,9 @@ const REACT_NATIVE_ENABLERS = ["react-native"];
 
 const REACT_NATIVE_ENTRY_PATTERNS = [
   "index.{ts,tsx,js,jsx}",
+  "index.android.{ts,tsx,js,jsx}",
+  "index.ios.{ts,tsx,js,jsx}",
+  "index.native.{ts,tsx,js,jsx}",
   "App.{ts,tsx,js,jsx}",
   "src/App.{ts,tsx,js,jsx}",
   "metro.config.{ts,js}",
