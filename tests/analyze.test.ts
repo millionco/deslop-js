@@ -1773,3 +1773,57 @@ test("should not treat formatter/linter glob targets as entry points", async () 
     `helper.ts should NOT be unused (imported by index.ts), got: ${unusedFilePaths}`,
   );
 });
+
+test("should not treat pages/app directories as entry points without framework dependency", async () => {
+  const result = await analyzeFixture("framework-gating/no-framework");
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-gating/no-framework");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath === "app/dashboard/page.tsx"),
+    `app/dashboard/page.tsx should be unused without next dependency, got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath === "src/routes/index.tsx"),
+    `src/routes/index.tsx should be unused without router dependency, got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath === "pages/index.tsx"),
+    `pages/index.tsx should NOT be unused (imported by index.ts), got: ${unusedFilePaths}`,
+  );
+});
+
+test("should treat pages/app as entry points when next is a dependency", async () => {
+  const result = await analyzeFixture("framework-gating/with-nextjs");
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-gating/with-nextjs");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath === "unused.tsx"),
+    `unused.tsx should be unused, got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath === "pages/index.tsx"),
+    `pages/index.tsx should NOT be unused (Next.js pages entry), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath === "app/dashboard/page.tsx"),
+    `app/dashboard/page.tsx should NOT be unused (Next.js app entry), got: ${unusedFilePaths}`,
+  );
+});
+
+test("should treat app/routes as entry points when @react-router/dev is a dependency", async () => {
+  const result = await analyzeFixture("framework-gating/with-react-router");
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-gating/with-react-router");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath === "unused.tsx"),
+    `unused.tsx should be unused, got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath === "app/root.tsx"),
+    `app/root.tsx should NOT be unused (React Router entry), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath === "app/routes/home.tsx"),
+    `app/routes/home.tsx should NOT be unused (React Router route), got: ${unusedFilePaths}`,
+  );
+});

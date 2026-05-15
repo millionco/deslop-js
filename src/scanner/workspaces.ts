@@ -412,84 +412,141 @@ const NEXTJS_APP_ROUTER_CONVENTIONS = [
   "apple-icon", "actions",
 ];
 
-const FRAMEWORK_FILE_GLOB = "**/*.{ts,tsx,js,jsx,mjs,cjs,astro}";
+const FRAMEWORK_FILE_GLOB = "**/*.{ts,tsx,js,jsx,mjs,cjs}";
 
-const FRAMEWORK_FILE_GLOB_WITH_MDX = "**/*.{ts,tsx,js,jsx,mdx,md,mjs,cjs,astro}";
+const FRAMEWORK_FILE_GLOB_WITH_MDX = "**/*.{ts,tsx,js,jsx,mdx,md,mjs,cjs}";
 
-const detectIsAstroProject = (rootDir: string): boolean => {
-  const packageJsonPath = join(rootDir, "package.json");
-  if (!existsSync(packageJsonPath)) return false;
+const NEXTJS_ENABLERS = ["next"];
+const REACT_ROUTER_ENABLERS = ["@react-router/dev"];
+const REMIX_ENABLERS = [
+  "@remix-run/node", "@remix-run/react", "@remix-run/cloudflare",
+  "@remix-run/cloudflare-pages", "@remix-run/deno",
+];
+const NUXT_ENABLERS = ["nuxt"];
+const SVELTEKIT_ENABLERS = ["@sveltejs/kit"];
+const ASTRO_ENABLERS = ["astro"];
+const GATSBY_ENABLERS = ["gatsby"];
+
+const readDependencies = (directory: string): Record<string, string> => {
+  const packageJsonPath = join(directory, "package.json");
+  if (!existsSync(packageJsonPath)) return {};
   try {
     const content = readFileSync(packageJsonPath, "utf-8");
     const packageJson = JSON.parse(content);
-    const allDependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
-    return "astro" in allDependencies;
+    return {
+      ...packageJson.dependencies,
+      ...packageJson.devDependencies,
+    };
   } catch {
-    return false;
+    return {};
   }
 };
 
+const hasAnyEnabler = (dependencies: Record<string, string>, enablers: string[]): boolean =>
+  enablers.some((enabler) => enabler in dependencies);
+
 export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   const entryPoints: string[] = [];
-  const isAstro = detectIsAstroProject(rootDir);
-  const pagesGlob = isAstro ? FRAMEWORK_FILE_GLOB_WITH_MDX : FRAMEWORK_FILE_GLOB;
+  const dependencies = readDependencies(rootDir);
 
-  const allFileDirs = [
-    join(rootDir, "pages"),
-    join(rootDir, "src", "pages"),
-    join(rootDir, "src", "routes"),
-    join(rootDir, "routes"),
-    join(rootDir, "src", "layouts"),
-    join(rootDir, "layouts"),
-  ];
+  const isNextjs = hasAnyEnabler(dependencies, NEXTJS_ENABLERS);
+  const isReactRouter = hasAnyEnabler(dependencies, REACT_ROUTER_ENABLERS);
+  const isRemix = hasAnyEnabler(dependencies, REMIX_ENABLERS);
+  const isNuxt = hasAnyEnabler(dependencies, NUXT_ENABLERS);
+  const isSvelteKit = hasAnyEnabler(dependencies, SVELTEKIT_ENABLERS);
+  const isAstro = hasAnyEnabler(dependencies, ASTRO_ENABLERS);
+  const isGatsby = hasAnyEnabler(dependencies, GATSBY_ENABLERS);
 
-  for (const frameworkDir of allFileDirs) {
-    if (existsSync(frameworkDir) && statSync(frameworkDir).isDirectory()) {
-      const frameworkFiles = fg.sync(pagesGlob, {
-        cwd: frameworkDir,
-        absolute: true,
-        onlyFiles: true,
-        ignore: ["**/node_modules/**"],
-      });
-      entryPoints.push(...frameworkFiles);
+  if (isNextjs) {
+    const appRouterConventionGlob = NEXTJS_APP_ROUTER_CONVENTIONS
+      .map((convention) => `**/${convention}.{ts,tsx,js,jsx,mdx}`)
+      .join(",");
+
+    const appDirs = [join(rootDir, "app"), join(rootDir, "src", "app")];
+    for (const appDir of appDirs) {
+      if (existsSync(appDir) && statSync(appDir).isDirectory()) {
+        entryPoints.push(...fg.sync(`{${appRouterConventionGlob}}`, {
+          cwd: appDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"],
+        }));
+      }
     }
+
+    const pagesDirs = [join(rootDir, "pages"), join(rootDir, "src", "pages")];
+    for (const pagesDir of pagesDirs) {
+      if (existsSync(pagesDir) && statSync(pagesDir).isDirectory()) {
+        entryPoints.push(...fg.sync(FRAMEWORK_FILE_GLOB, {
+          cwd: pagesDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"],
+        }));
+      }
+    }
+
+    entryPoints.push(...fg.sync([
+      "middleware.{ts,js}", "src/middleware.{ts,js}",
+      "instrumentation.{ts,js}", "instrumentation-client.{ts,js}",
+      "src/instrumentation.{ts,js}", "src/instrumentation-client.{ts,js}",
+      "mdx-components.{ts,tsx,js,jsx}", "src/mdx-components.{ts,tsx,js,jsx}",
+    ], { cwd: rootDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"] }));
   }
 
-  if (isAstro) {
-    const astroContentDirs = [
-      join(rootDir, "src", "content"),
-    ];
-    for (const contentDir of astroContentDirs) {
-      if (existsSync(contentDir) && statSync(contentDir).isDirectory()) {
-        const contentFiles = fg.sync(FRAMEWORK_FILE_GLOB_WITH_MDX, {
-          cwd: contentDir,
-          absolute: true,
-          onlyFiles: true,
-          ignore: ["**/node_modules/**"],
-        });
-        entryPoints.push(...contentFiles);
+  if (isReactRouter || isRemix) {
+    entryPoints.push(...fg.sync([
+      "app/routes/**/*.{ts,tsx,js,jsx}",
+      "app/root.{ts,tsx,js,jsx}",
+      "app/entry.client.{ts,tsx,js,jsx}",
+      "app/entry.server.{ts,tsx,js,jsx}",
+    ], { cwd: rootDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"] }));
+  }
+
+  if (isNuxt) {
+    const nuxtDirs = ["pages", "layouts", "middleware", "server", "composables", "plugins"];
+    for (const nuxtDir of nuxtDirs) {
+      const dirPath = join(rootDir, nuxtDir);
+      if (existsSync(dirPath) && statSync(dirPath).isDirectory()) {
+        entryPoints.push(...fg.sync("**/*.{ts,tsx,js,jsx,vue}", {
+          cwd: dirPath, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"],
+        }));
       }
     }
   }
 
-  const appRouterConventionGlob = NEXTJS_APP_ROUTER_CONVENTIONS
-    .map((convention) => `**/${convention}.{ts,tsx,js,jsx,mdx}`)
-    .join(",");
+  if (isSvelteKit) {
+    const svelteDirs = [
+      join(rootDir, "src", "routes"),
+      join(rootDir, "src", "lib"),
+      join(rootDir, "src", "params"),
+    ];
+    for (const svelteDir of svelteDirs) {
+      if (existsSync(svelteDir) && statSync(svelteDir).isDirectory()) {
+        entryPoints.push(...fg.sync("**/*.{ts,tsx,js,jsx,svelte}", {
+          cwd: svelteDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"],
+        }));
+      }
+    }
+  }
 
-  const appDirs = [
-    join(rootDir, "app"),
-    join(rootDir, "src", "app"),
-  ];
+  if (isAstro) {
+    const astroDirs = [
+      join(rootDir, "src", "pages"),
+      join(rootDir, "src", "layouts"),
+      join(rootDir, "src", "content"),
+    ];
+    for (const astroDir of astroDirs) {
+      if (existsSync(astroDir) && statSync(astroDir).isDirectory()) {
+        entryPoints.push(...fg.sync(FRAMEWORK_FILE_GLOB_WITH_MDX, {
+          cwd: astroDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"],
+        }));
+      }
+    }
+  }
 
-  for (const appDir of appDirs) {
-    if (existsSync(appDir) && statSync(appDir).isDirectory()) {
-      const conventionFiles = fg.sync(`{${appRouterConventionGlob}}`, {
-        cwd: appDir,
-        absolute: true,
-        onlyFiles: true,
-        ignore: ["**/node_modules/**"],
-      });
-      entryPoints.push(...conventionFiles);
+  if (isGatsby) {
+    const gatsbyDirs = [join(rootDir, "src", "pages"), join(rootDir, "src", "templates")];
+    for (const gatsbyDir of gatsbyDirs) {
+      if (existsSync(gatsbyDir) && statSync(gatsbyDir).isDirectory()) {
+        entryPoints.push(...fg.sync(FRAMEWORK_FILE_GLOB, {
+          cwd: gatsbyDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"],
+        }));
+      }
     }
   }
 
@@ -499,88 +556,41 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
     ".storybook/**/*.{ts,tsx,js,jsx,mts,mjs}",
   ];
 
-  const storyFiles = fg.sync(storyPatterns, {
-    cwd: rootDir,
-    absolute: true,
-    onlyFiles: true,
-    ignore: ["**/node_modules/**"],
-    dot: true,
-  });
-  entryPoints.push(...storyFiles);
+  entryPoints.push(...fg.sync(storyPatterns, {
+    cwd: rootDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"], dot: true,
+  }));
 
   const configPatterns = [
-    "tailwind.config.*",
-    "postcss.config.*",
-    "next.config.*",
-    "vite.config.*",
-    "vitest.config.*",
-    "vitest.workspace.*",
-    "astro.config.*",
-    "nuxt.config.*",
-    "svelte.config.*",
-    "webpack.config.*",
-    "rollup.config.*",
-    "jest.config.*",
-    "babel.config.*",
-    "playwright.config.*",
-    "drizzle.config.*",
-    "knip.config.*",
-    "contentlayer.config.*",
-    "source.config.*",
-    "eslint.config.*",
-    ".eslintrc.*",
-    "prettier.config.*",
-    ".prettierrc.*",
-    "middleware.{ts,tsx,js,jsx}",
-    "src/middleware.{ts,tsx,js,jsx}",
-    "instrumentation.{ts,tsx,js,jsx}",
-    "instrumentation-client.{ts,tsx,js,jsx}",
-    "src/instrumentation.{ts,tsx,js,jsx}",
-    "src/instrumentation-client.{ts,tsx,js,jsx}",
-    "env.{ts,js,mjs}",
-    "src/env.{ts,js,mjs}",
-    "src/routeTree.gen.{ts,tsx}",
-    "src/router.{ts,tsx}",
-    "src/entry-client.{ts,tsx,js,jsx}",
-    "src/entry-server.{ts,tsx,js,jsx}",
-    "src/entry.client.{ts,tsx,js,jsx}",
-    "src/entry.server.{ts,tsx,js,jsx}",
-    "src/root.{ts,tsx,js,jsx}",
-    "app/entry.client.{ts,tsx,js,jsx}",
-    "app/entry.server.{ts,tsx,js,jsx}",
-    "app/root.{ts,tsx,js,jsx}",
-    "mdx-components.{ts,tsx,js,jsx}",
-    "src/mdx-components.{ts,tsx,js,jsx}",
+    "tailwind.config.*", "postcss.config.*",
+    "next.config.*", "vite.config.*",
+    "vitest.config.*", "vitest.workspace.*",
+    "astro.config.*", "nuxt.config.*", "svelte.config.*",
+    "webpack.config.*", "rollup.config.*",
+    "jest.config.*", "babel.config.*",
+    "playwright.config.*", "drizzle.config.*",
+    "knip.config.*", "contentlayer.config.*", "source.config.*",
+    "eslint.config.*", ".eslintrc.*",
+    "prettier.config.*", ".prettierrc.*",
+    "env.{ts,js,mjs}", "src/env.{ts,js,mjs}",
+    "src/routeTree.gen.{ts,tsx}", "src/router.{ts,tsx}",
   ];
 
-  const configFiles = fg.sync(configPatterns, {
-    cwd: rootDir,
-    absolute: true,
-    onlyFiles: true,
-    ignore: ["**/node_modules/**"],
-    dot: true,
-  });
-  entryPoints.push(...configFiles);
+  entryPoints.push(...fg.sync(configPatterns, {
+    cwd: rootDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"], dot: true,
+  }));
 
   const alwaysEntryDirs = ["e2e", "cypress"];
   for (const entryDir of alwaysEntryDirs) {
     const dirPath = join(rootDir, entryDir);
     if (existsSync(dirPath) && statSync(dirPath).isDirectory()) {
-      const dirFiles = fg.sync(FRAMEWORK_FILE_GLOB, {
-        cwd: dirPath,
-        absolute: true,
-        onlyFiles: true,
-        dot: entryDir.startsWith("."),
-      });
-      entryPoints.push(...dirFiles);
+      entryPoints.push(...fg.sync(FRAMEWORK_FILE_GLOB, {
+        cwd: dirPath, absolute: true, onlyFiles: true, dot: entryDir.startsWith("."),
+      }));
     }
   }
 
-  const electronEntryPoints = discoverElectronEntryPoints(rootDir);
-  entryPoints.push(...electronEntryPoints);
-
-  const mobileEntryPoints = discoverMobileEntryPoints(rootDir);
-  entryPoints.push(...mobileEntryPoints);
+  entryPoints.push(...discoverElectronEntryPoints(rootDir));
+  entryPoints.push(...discoverMobileEntryPoints(rootDir));
 
   return [...new Set(entryPoints)];
 };
