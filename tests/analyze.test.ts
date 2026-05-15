@@ -349,6 +349,47 @@ describe("deep-barrel-symbol-tracking", () => {
   });
 });
 
+describe("late-consumed-wildcard-reexport", () => {
+  it("should keep color-picker reachable when consumed via plugin that imports from sibling component barrel", async () => {
+    const result = await analyzeFixture("late-consumed-wildcard-reexport");
+    const fixtureDir = resolve(FIXTURES_DIR, "late-consumed-wildcard-reexport");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/components/color-picker/color-picker.ts"),
+      `color-picker.ts should be reachable via plugin → components barrel → color-picker barrel, got unused: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should keep color-picker/index.ts reachable as intermediate barrel", async () => {
+    const result = await analyzeFixture("late-consumed-wildcard-reexport");
+    const fixtureDir = resolve(FIXTURES_DIR, "late-consumed-wildcard-reexport");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/components/color-picker/index.ts"),
+      `color-picker/index.ts should be reachable, got unused: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag unused-widget.ts as unused file (never imported by any plugin)", async () => {
+    const result = await analyzeFixture("late-consumed-wildcard-reexport");
+    const fixtureDir = resolve(FIXTURES_DIR, "late-consumed-wildcard-reexport");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/components/unused-widget.ts"),
+      `unused-widget.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag ColorUtils as unused export (only ColorPicker consumed from color-picker.ts)", async () => {
+    const result = await analyzeFixture("late-consumed-wildcard-reexport");
+    const allUnusedNames = unusedExportNames(result);
+    assert.ok(
+      allUnusedNames.includes("ColorUtils"),
+      `ColorUtils should be unused export, got: ${allUnusedNames}`,
+    );
+  });
+});
+
 describe("re-export-alias-chain", () => {
   it("should not flag original and renamed (used via aliased re-export chain)", async () => {
     const result = await analyzeFixture("re-export-alias-chain");
