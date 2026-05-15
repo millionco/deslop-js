@@ -469,8 +469,13 @@ const DOCUSAURUS_CONTENT_PATTERNS = [
   "blog/**/*.{md,mdx}",
   "versioned_docs/**/*.{md,mdx}",
   "src/pages/**/*.{ts,tsx,js,jsx,md,mdx}",
-  "sidebars.{js,ts}",
+  "src/content/**/*.{ts,tsx,js,jsx,md,mdx}",
+  "src/components/**/*.{ts,tsx,js,jsx}",
   "src/theme/**/*.{ts,tsx,js,jsx}",
+  "src/hooks/**/*.{ts,tsx,js,jsx}",
+  "src/plugins/**/*.{ts,tsx,js,jsx}",
+  "src/lib/**/*.{ts,tsx,js,jsx}",
+  "sidebars.{js,ts}",
   "i18n/**/*.{md,mdx}",
 ];
 
