@@ -1398,3 +1398,16 @@ test("should detect Angular workspace entry points from angular.json", async () 
     `orphan.ts should be unused, got unused: ${unusedFilePaths}`,
   );
 });
+
+test("should resolve #hash subpath imports via tsconfig paths with .js extension", async () => {
+  const result = await analyzeFixture("subpath-imports");
+  const unusedFilePaths = result.unusedFiles.map((file) => file.path);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("api/user.ts")),
+    `api/user.ts should NOT be unused (imported via #src/api/user.js), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("api/orphan.ts")),
+    `api/orphan.ts should be unused (not imported), got unused: ${unusedFilePaths}`,
+  );
+});
