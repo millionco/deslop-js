@@ -1526,6 +1526,24 @@ describe("docusaurus-content", () => {
   });
 });
 
+it("should resolve React Native platform extensions (.web.ts, .native.ts) when react-native detected", async () => {
+  const result = await analyzeFixture("react-native-platform");
+  const fixtureDir = resolve(FIXTURES_DIR, "react-native-platform");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/handler.web.ts"),
+    `handler.web.ts should be reachable via platform extension, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/handler.native.ts"),
+    `handler.native.ts should be reachable via platform extension, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
 it("should resolve package.json exports pointing to .js files that only exist as .ts", async () => {
   const result = await analyzeFixture("exports-js-to-ts");
   const fixtureDir = resolve(FIXTURES_DIR, "exports-js-to-ts");

@@ -1,5 +1,5 @@
 import { resolve, dirname } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import fg from "fast-glob";
 import type { DeslopConfig, AnalysisResult } from "./types.js";
 import { DEFAULT_ENTRY_PATTERNS, DEFAULT_EXTENSIONS } from "./constants.js";
@@ -14,6 +14,25 @@ import { propagateReExports } from "./graph/re-exports.js";
 import { analyzeGraph } from "./analyzer/analyze.js";
 
 const STYLE_EXTENSIONS = [".css", ".scss"];
+
+const REACT_NATIVE_ENABLERS = ["react-native", "expo"];
+
+const detectReactNative = (rootDir: string, workspacePackages: Array<{ directory: string }>): boolean => {
+  const directoriesToCheck = [rootDir, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
+  for (const directory of directoriesToCheck) {
+    const packageJsonPath = resolve(directory, "package.json");
+    if (!existsSync(packageJsonPath)) continue;
+    try {
+      const content = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(content);
+      const allDependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+      if (REACT_NATIVE_ENABLERS.some((enabler) => enabler in allDependencies)) return true;
+    } catch {
+      continue;
+    }
+  }
+  return false;
+};
 
 export type { AnalysisResult, DeslopConfig, UnusedFile, UnusedExport, UnusedDependency } from "./types.js";
 
@@ -55,10 +74,11 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
   const files = await discoverFiles(configWithExclusions);
   const entryPoints = await discoverEntryPoints(configWithExclusions);
   const entryPointSet = new Set(entryPoints);
+  const hasReactNative = detectReactNative(config.rootDir, workspacePackages);
   const moduleResolver = createModuleResolver(config, workspacePackages.map((workspacePackage) => ({
     name: workspacePackage.name,
     directory: workspacePackage.directory,
-  })));
+  })), { hasReactNative });
   const graphInputs: GraphBuildInput[] = [];
 
   for (const file of files) {
