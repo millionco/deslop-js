@@ -694,13 +694,13 @@ describe("fixture-patterns", () => {
     );
   });
 
-  it("should mark __mocks__ files as always-used when test framework is present", async () => {
+  it("should flag __mocks__ files as unused (matching fallow behavior)", async () => {
     const result = await analyzeFixture("fixture-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/__mocks__/api-client.ts"),
-      `__mocks__/api-client.ts should be used (vitest auto-mock), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/__mocks__/api-client.ts"),
+      `__mocks__/api-client.ts should be unused (fallow parity), got: ${unusedFilePaths}`,
     );
   });
 

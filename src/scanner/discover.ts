@@ -340,7 +340,6 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/setupTests.{ts,tsx,js,jsx}",
       "**/src/setupTests.{ts,tsx,js,jsx}",
       "**/src/test-setup.{ts,tsx,js,jsx}",
-      "**/__mocks__/**/*.{ts,tsx,js,jsx,mts,mjs,cjs}",
     ],
   },
   {
@@ -360,7 +359,6 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     alwaysUsed: [
       "jest.config.{ts,js,mjs,cjs}",
       "jest.setup.{ts,js,tsx,jsx}",
-      "**/__mocks__/**/*.{ts,tsx,js,jsx,mts,mjs,cjs}",
     ],
   },
   {
@@ -541,6 +539,33 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "gatsby-node.{ts,js,mjs}",
       "gatsby-browser.{ts,tsx,js,jsx}",
       "gatsby-ssr.{ts,tsx,js,jsx}",
+    ],
+  },
+  {
+    enablers: ["@angular/core"],
+    enablerPrefixes: ["@angular/"],
+    entryPatterns: [
+      "src/main.ts",
+      "src/app/**/*.ts",
+      "src/environments/**/*.ts",
+      "src/polyfills.ts",
+      "src/test.ts",
+    ],
+    alwaysUsed: [
+      "angular.json",
+      "karma.conf.js",
+    ],
+  },
+  {
+    enablers: ["react-scripts", "react-app-rewired"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      "src/index.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: [
+      "src/setupTests.{ts,tsx,js,jsx}",
+      "src/reportWebVitals.{ts,tsx,js,jsx}",
+      "src/react-app-env.d.ts",
     ],
   },
   {
