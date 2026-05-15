@@ -1008,3 +1008,29 @@ describe("css-imports", () => {
     );
   });
 });
+
+describe("nestjs-project", () => {
+  it("should detect NestJS convention files as entry points", async () => {
+    const result = await analyzeFixture("nestjs-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "nestjs-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/app.module.ts"),
+      `app.module.ts should be entry point (NestJS module), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/users.controller.ts"),
+      `users.controller.ts should be entry point (NestJS controller), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag non-NestJS files as unused", async () => {
+    const result = await analyzeFixture("nestjs-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "nestjs-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
