@@ -1,5 +1,9 @@
 import type { ModuleGraph, UnusedFile, ModuleNode } from "../types.js";
 
+const isHtmlFile = (filePath: string): boolean => {
+  return filePath.endsWith(".html");
+};
+
 export const findUnusedFiles = (graph: ModuleGraph): UnusedFile[] => {
   const unusedFiles: UnusedFile[] = [];
 
@@ -7,6 +11,8 @@ export const findUnusedFiles = (graph: ModuleGraph): UnusedFile[] => {
     if (module.isReachable) continue;
     if (module.isEntryPoint) continue;
     if (module.isDeclarationFile) continue;
+    if (module.isConfigFile) continue;
+    if (isHtmlFile(module.fileId.path)) continue;
     if (isBarrelWithReachableSources(module, graph)) continue;
     if (hasReachableImporter(module.fileId.index, graph)) continue;
 

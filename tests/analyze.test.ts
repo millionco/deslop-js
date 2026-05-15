@@ -580,8 +580,8 @@ describe("config-files-cjs-mjs", () => {
     const fixtureDir = resolve(FIXTURES_DIR, "config-files-cjs-mjs");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("lage.config.cjs"),
-      "lage.config.cjs should be unused (unknown tool, no blanket config entry)",
+      !unusedFilePaths.includes("lage.config.cjs"),
+      "lage.config.cjs should be excluded as config file (matches *.config.* pattern)",
     );
     assert.ok(
       !unusedFilePaths.includes("prettier.config.mjs"),
@@ -1649,5 +1649,49 @@ it("should detect next.config files in non-workspace directories via global alwa
   assert.ok(
     unusedFilePaths.includes("src/orphan.ts"),
     `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should mark files matched by glob patterns in package.json scripts as entry points", async () => {
+  const result = await analyzeFixture("script-glob-entries");
+  const fixtureDir = resolve(FIXTURES_DIR, "script-glob-entries");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("styles/themes/dark.css"),
+    `dark.css should be marked as entry via script glob (postcss styles/themes/*.css), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("styles/themes/light.css"),
+    `light.css should be marked as entry via script glob, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
+    `orphan.ts should still be flagged as unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should exclude config files from unused file detection", async () => {
+  const result = await analyzeFixture("config-file-exclusion");
+  const fixtureDir = resolve(FIXTURES_DIR, "config-file-exclusion");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("vitest.config.ts"),
+    `vitest.config.ts should be excluded as config file, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("sanity.config.ts"),
+    `sanity.config.ts should be excluded as config file, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("sanity.cli.ts"),
+    `sanity.cli.ts should be excluded as config file, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("playwright.smoke.config.mjs"),
+    `playwright.smoke.config.mjs should be excluded as config file, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
+    `orphan.ts should still be flagged as unused, got: ${unusedFilePaths}`,
   );
 });

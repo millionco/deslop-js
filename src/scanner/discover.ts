@@ -274,6 +274,99 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
   return entries;
 };
 
+const SHELL_OPERATORS_PATTERN = /\s*(?:&&|\|\||[;&|])\s*/;
+
+const SCRIPT_MULTIPLEXERS = new Set([
+  "concurrently", "run-s", "run-p", "npm-run-all", "npm-run-all2",
+  "wireit", "turbo", "lerna", "ultra",
+]);
+
+const looksLikeFilePath = (token: string): boolean => {
+  if (token.startsWith("-") || token.includes("${{") || token.includes("://")) return false;
+  if (token.includes("}}") && !token.includes("{{")) return false;
+  const hasKnownExtension = /\.(?:[cm]?[jt]sx?|css|scss|json|yaml|yml|toml|html|mjs|cjs|mts|cts|graphql|gql|mdx|astro|vue|svelte)$/.test(token);
+  if (hasKnownExtension) return true;
+  const hasGlobWithExtension = /\.\{[^}]+\}$/.test(token);
+  if (hasGlobWithExtension) return true;
+  if (token.startsWith("./") || token.startsWith("../")) return true;
+  return token.includes("/") && !token.startsWith("@");
+};
+
+const isGlobPattern = (token: string): boolean => {
+  return token.includes("*") || token.includes("{") || token.includes("?");
+};
+
+const extractScriptFileArguments = (scriptCommand: string, directory: string): string[] => {
+  const entries: string[] = [];
+  const segments = scriptCommand.split(SHELL_OPERATORS_PATTERN);
+
+  for (const segment of segments) {
+    const trimmedSegment = segment.trim();
+    if (!trimmedSegment) continue;
+
+    const tokens = trimmedSegment.split(/\s+/);
+    if (tokens.length === 0) continue;
+
+    const binaryName = tokens[0].replace(/^.*\//, "");
+    if (SCRIPT_MULTIPLEXERS.has(binaryName)) continue;
+
+    for (let tokenIndex = 1; tokenIndex < tokens.length; tokenIndex++) {
+      const token = tokens[tokenIndex];
+
+      if (token === "--config" || token === "-c") {
+        if (tokenIndex + 1 < tokens.length && !tokens[tokenIndex + 1].startsWith("-")) {
+          const configPath = tokens[tokenIndex + 1];
+          if (looksLikeFilePath(configPath)) {
+            const absoluteConfigPath = resolve(directory, configPath);
+            if (existsSync(absoluteConfigPath)) {
+              entries.push(absoluteConfigPath);
+            }
+          }
+          tokenIndex++;
+        }
+        continue;
+      }
+
+      if (token.startsWith("--config=") || token.startsWith("-c=")) {
+        const configValue = token.split("=")[1];
+        if (configValue && looksLikeFilePath(configValue)) {
+          const absoluteConfigPath = resolve(directory, configValue);
+          if (existsSync(absoluteConfigPath)) {
+            entries.push(absoluteConfigPath);
+          }
+        }
+        continue;
+      }
+
+      if (token.startsWith("-")) continue;
+
+      if (!looksLikeFilePath(token)) continue;
+
+      if (isGlobPattern(token)) {
+        const expandedFiles = fg.sync(token, {
+          cwd: directory,
+          absolute: true,
+          onlyFiles: true,
+          ignore: ["**/node_modules/**"],
+        });
+        entries.push(...expandedFiles);
+      } else {
+        const absoluteFilePath = resolve(directory, token);
+        if (existsSync(absoluteFilePath)) {
+          entries.push(absoluteFilePath);
+        } else {
+          const sourcePath = resolveSourcePath(absoluteFilePath, directory);
+          if (sourcePath) {
+            entries.push(sourcePath);
+          }
+        }
+      }
+    }
+  }
+
+  return entries;
+};
+
 const extractScriptEntries = (directory: string): string[] => {
   const packageJsonPath = resolve(directory, "package.json");
   if (!existsSync(packageJsonPath)) return [];
@@ -312,6 +405,8 @@ const extractScriptEntries = (directory: string): string[] => {
             }
           }
         }
+
+        entries.push(...extractScriptFileArguments(scriptCommand, directory));
       }
     }
   } catch {
@@ -346,29 +441,25 @@ const extractCiWorkflowEntries = (rootDir: string): string[] => {
   for (const workflowFile of workflowFiles) {
     try {
       const content = readFileSync(workflowFile, "utf-8");
-      const runBlockPattern = /^\s*run:\s*[|>]?\s*\n?([\s\S]*?)(?=\n\s*(?:\w+:|$))/gm;
-      let blockMatch: RegExpExecArray | null;
-      while ((blockMatch = runBlockPattern.exec(content)) !== null) {
-        const runBlock = blockMatch[1];
-        const lines = runBlock.split("\n");
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          const scriptMatch = trimmedLine.match(SCRIPT_FILE_PATTERN);
-          if (scriptMatch?.[1]) {
-            const scriptFilePath = resolve(rootDir, scriptMatch[1]);
-            if (existsSync(scriptFilePath)) {
-              entries.push(scriptFilePath);
-            }
+      const contentLines = content.split("\n");
+      for (const line of contentLines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith("#")) continue;
+        const scriptMatch = trimmedLine.match(SCRIPT_FILE_PATTERN);
+        if (scriptMatch?.[1]) {
+          const scriptFilePath = resolve(rootDir, scriptMatch[1]);
+          if (existsSync(scriptFilePath)) {
+            entries.push(scriptFilePath);
           }
-          CI_INLINE_FILE_PATTERN.lastIndex = 0;
-          let inlineMatch: RegExpExecArray | null;
-          while ((inlineMatch = CI_INLINE_FILE_PATTERN.exec(trimmedLine)) !== null) {
-            const candidatePath = inlineMatch[1];
-            if (candidatePath.startsWith("./") || candidatePath.includes("/")) {
-              const absoluteCandidatePath = resolve(rootDir, candidatePath);
-              if (existsSync(absoluteCandidatePath)) {
-                entries.push(absoluteCandidatePath);
-              }
+        }
+        CI_INLINE_FILE_PATTERN.lastIndex = 0;
+        let inlineMatch: RegExpExecArray | null;
+        while ((inlineMatch = CI_INLINE_FILE_PATTERN.exec(trimmedLine)) !== null) {
+          const candidatePath = inlineMatch[1];
+          if (candidatePath.startsWith("./") || candidatePath.includes("/")) {
+            const absoluteCandidatePath = resolve(rootDir, candidatePath);
+            if (existsSync(absoluteCandidatePath)) {
+              entries.push(absoluteCandidatePath);
             }
           }
         }
