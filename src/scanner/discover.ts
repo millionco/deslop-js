@@ -103,10 +103,15 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
     htmlScriptEntries.push(...extractHtmlScriptEntries(workspacePackage.directory));
   }
 
+  const angularEntries = extractAngularEntryPoints(absoluteRoot);
+  for (const workspacePackage of workspacePackages) {
+    angularEntries.push(...extractAngularEntryPoints(workspacePackage.directory));
+  }
+
   const testEntryFiles = discoverTestRunnerEntryPoints(absoluteRoot, workspacePackages);
   const toolingEntryFiles = discoverToolingEntryPoints(absoluteRoot, workspacePackages);
 
-  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...testEntryFiles, ...toolingEntryFiles])];
+  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...testEntryFiles, ...toolingEntryFiles])];
 };
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
@@ -362,6 +367,59 @@ const extractHtmlScriptEntries = (directory: string): string[] => {
         const absoluteScriptPath = resolve(htmlDirectory, scriptSrc);
         if (existsSync(absoluteScriptPath)) {
           entries.push(absoluteScriptPath);
+        }
+      }
+    } catch {
+    }
+  }
+
+  return entries;
+};
+
+const ANGULAR_ENTRY_KEYS = ["main", "polyfills", "styles"] as const;
+
+const extractAngularEntryPoints = (directory: string): string[] => {
+  const entries: string[] = [];
+  const angularJsonPaths = fg.sync(["angular.json", ".angular-cli.json"], {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+  });
+
+  for (const angularJsonPath of angularJsonPaths) {
+    try {
+      const content = readFileSync(angularJsonPath, "utf-8");
+      const angularConfig = JSON.parse(content);
+      const projects = angularConfig.projects ?? {};
+      const angularDir = angularJsonPath.replace(/\/[^/]+$/, "");
+
+      for (const projectConfig of Object.values(projects)) {
+        const architect = (projectConfig as Record<string, unknown>).architect as Record<string, Record<string, unknown>> | undefined;
+        if (!architect) continue;
+
+        for (const targetConfig of Object.values(architect)) {
+          const options = targetConfig.options as Record<string, unknown> | undefined;
+          if (!options) continue;
+
+          for (const entryKey of ANGULAR_ENTRY_KEYS) {
+            const entryValue = options[entryKey];
+            if (typeof entryValue === "string") {
+              const absolutePath = resolve(angularDir, entryValue);
+              if (existsSync(absolutePath)) {
+                entries.push(absolutePath);
+              }
+            }
+            if (Array.isArray(entryValue)) {
+              for (const entryItem of entryValue) {
+                if (typeof entryItem === "string") {
+                  const absolutePath = resolve(angularDir, entryItem);
+                  if (existsSync(absolutePath)) {
+                    entries.push(absolutePath);
+                  }
+                }
+              }
+            }
+          }
         }
       }
     } catch {
@@ -659,7 +717,7 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     ],
     alwaysUsed: [
       "angular.json",
-      "karma.conf.js",
+      "**/karma.conf.js",
     ],
   },
   {
