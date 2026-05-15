@@ -552,21 +552,21 @@ describe("unreachable-shared-child", () => {
 });
 
 describe("css-tracking", () => {
-  it("should track imported CSS as reachable", async () => {
+  it("should track imported CSS as reachable via import graph", async () => {
     const result = await analyzeFixture("css-tracking");
     const fixtureDir = resolve(FIXTURES_DIR, "css-tracking");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(!unusedFilePaths.includes("src/styles.css"), "styles.css is imported and should be reachable");
   });
 
-  it("should flag unused CSS as unused", async () => {
+  it("should not discover CSS files that are not imported", async () => {
     const result = await analyzeFixture("css-tracking");
     const fixtureDir = resolve(FIXTURES_DIR, "css-tracking");
     const unusedFilePaths = relativePaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/unused.css"), `unused.css should be unused, got: ${unusedFilePaths}`);
+    assert.ok(!unusedFilePaths.includes("src/unused.css"), "unused.css is not imported so not discovered");
   });
 
-  it("should flag orphan TS alongside unused CSS", async () => {
+  it("should flag orphan TS files", async () => {
     const result = await analyzeFixture("css-tracking");
     const fixtureDir = resolve(FIXTURES_DIR, "css-tracking");
     const unusedFilePaths = relativePaths(result, fixtureDir);

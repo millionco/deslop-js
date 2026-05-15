@@ -9,10 +9,6 @@ export const DEFAULT_EXTENSIONS = [
   ".cjs",
   ".mdx",
   ".astro",
-  ".css",
-  ".scss",
-  ".less",
-  ".sass",
 ];
 
 export const HIDDEN_DIRECTORY_ALLOWLIST = [

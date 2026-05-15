@@ -1,4 +1,5 @@
 import { resolve, dirname } from "node:path";
+import { existsSync } from "node:fs";
 import fg from "fast-glob";
 import type { DeslopConfig, AnalysisResult } from "./types.js";
 import { DEFAULT_ENTRY_PATTERNS, DEFAULT_EXTENSIONS } from "./constants.js";
@@ -11,6 +12,8 @@ import type { GraphBuildInput } from "./graph/build.js";
 import { markReachable } from "./graph/reachability.js";
 import { propagateReExports } from "./graph/re-exports.js";
 import { analyzeGraph } from "./analyzer/analyze.js";
+
+const STYLE_EXTENSIONS = [".css", ".scss", ".less", ".sass"];
 
 export type { AnalysisResult, DeslopConfig, UnusedFile, UnusedExport, UnusedDependency } from "./types.js";
 
@@ -95,6 +98,48 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
       resolvedImports: resolvedImportMap,
       isEntryPoint: entryPointSet.has(file.path),
     });
+  }
+
+  const discoveredFilePaths = new Set(files.map((file) => file.path));
+  const styleFilesToAdd = new Set<string>();
+
+  for (const input of graphInputs) {
+    for (const [, resolvedImport] of input.resolvedImports) {
+      if (!resolvedImport.resolvedPath || resolvedImport.isExternal) continue;
+      if (discoveredFilePaths.has(resolvedImport.resolvedPath)) continue;
+      const isStyleFile = STYLE_EXTENSIONS.some((ext) => resolvedImport.resolvedPath!.endsWith(ext));
+      if (isStyleFile && existsSync(resolvedImport.resolvedPath)) {
+        styleFilesToAdd.add(resolvedImport.resolvedPath);
+      }
+    }
+  }
+
+  const sortedStyleFiles = [...styleFilesToAdd].sort();
+  let nextFileIndex = files.length;
+  for (const styleFilePath of sortedStyleFiles) {
+    const styleFileId = { index: nextFileIndex, path: styleFilePath };
+    const parsedStyleModule = parseModule(styleFilePath);
+    const resolvedStyleImportMap = new Map<string, ReturnType<typeof moduleResolver.resolveModule>>();
+
+    for (const importInfo of parsedStyleModule.imports) {
+      const resolvedImport = moduleResolver.resolveModule(importInfo.specifier, styleFilePath);
+      resolvedStyleImportMap.set(importInfo.specifier, resolvedImport);
+      if (resolvedImport.resolvedPath && !discoveredFilePaths.has(resolvedImport.resolvedPath)) {
+        const isNestedStyle = STYLE_EXTENSIONS.some((ext) => resolvedImport.resolvedPath!.endsWith(ext));
+        if (isNestedStyle && existsSync(resolvedImport.resolvedPath)) {
+          styleFilesToAdd.add(resolvedImport.resolvedPath);
+        }
+      }
+    }
+
+    graphInputs.push({
+      fileId: styleFileId,
+      parsed: parsedStyleModule,
+      resolvedImports: resolvedStyleImportMap,
+      isEntryPoint: false,
+    });
+    discoveredFilePaths.add(styleFilePath);
+    nextFileIndex++;
   }
 
   const moduleGraph = buildModuleGraph(graphInputs);
