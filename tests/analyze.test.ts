@@ -601,6 +601,64 @@ describe("config-files-cjs-mjs", () => {
   });
 });
 
+describe("test-runner-detection", () => {
+  it("should treat .test.ts files as entry points when vitest is a dependency", async () => {
+    const result = await analyzeFixture("test-runner-detection");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detection");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/helper.test.ts"),
+      "helper.test.ts should be a test entry point",
+    );
+  });
+
+  it("should treat __tests__ files as entry points when vitest is a dependency", async () => {
+    const result = await analyzeFixture("test-runner-detection");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detection");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/__tests__/utils.test.ts"),
+      "__tests__/utils.test.ts should be a test entry point",
+    );
+  });
+
+  it("should keep files imported by test files as reachable", async () => {
+    const result = await analyzeFixture("test-runner-detection");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detection");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/helper.ts"),
+      "helper.ts is imported by test file and should be reachable",
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/test-only-used.ts"),
+      "test-only-used.ts is imported by __tests__ file and should be reachable",
+    );
+  });
+
+  it("should still flag orphan files", async () => {
+    const result = await analyzeFixture("test-runner-detection");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detection");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("no-test-runner", () => {
+  it("should NOT treat .test.ts as entry point without a test runner dependency", async () => {
+    const result = await analyzeFixture("no-test-runner");
+    const fixtureDir = resolve(FIXTURES_DIR, "no-test-runner");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/helper.test.ts"),
+      `helper.test.ts should be unused without test runner, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("path-aliases-mixed-exports", () => {
   it("should resolve @/ aliases and keep used files reachable", async () => {
     const result = await analyzeFixture("path-aliases-mixed-exports");
