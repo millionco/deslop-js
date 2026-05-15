@@ -842,7 +842,13 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "prisma/**/*.{ts,js}",
       "prisma/seed.{ts,js}",
     ],
-    alwaysUsed: [],
+    alwaysUsed: [
+      "prisma/schema.prisma",
+      "schema.prisma",
+      "prisma/schema/*.prisma",
+      "prisma.config.{ts,mts,cts,js,mjs,cjs}",
+      ".config/prisma.{ts,mts,cts,js,mjs,cjs}",
+    ],
   },
   {
     enablers: ["@nestjs/core"],
@@ -1115,6 +1121,25 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "babel.config.{js,cjs,mjs,json}",
       ".babelrc.{js,cjs,mjs,json}",
     ],
+  },
+  {
+    enablers: ["sanity", "@sanity/cli"],
+    enablerPrefixes: ["@sanity/"],
+    entryPatterns: [],
+    alwaysUsed: [
+      "sanity.config.{ts,js}",
+      "sanity.cli.{ts,js}",
+    ],
+  },
+  {
+    enablers: ["astro"],
+    enablerPrefixes: ["@astrojs/"],
+    entryPatterns: [
+      "src/pages/**/*.{astro,ts,tsx,js,jsx,md,mdx}",
+      "src/content/**/*.{ts,js,md,mdx}",
+      "src/layouts/**/*.astro",
+    ],
+    alwaysUsed: ["astro.config.{ts,js,mjs,cjs}"],
   },
   {
     enablers: ["i18next", "react-i18next", "vue-i18n", "next-i18next"],
@@ -1455,6 +1480,28 @@ const discoverToolingEntryPoints = (
       });
       allEntries.push(...alwaysUsedFiles);
     }
+  }
+
+  const rootActivatedGlobalPatterns: string[] = [];
+  for (const plugin of TOOLING_PLUGIN_DEFINITIONS) {
+    if (isToolingPluginEnabled(plugin, rootDependencies)) {
+      for (const pattern of plugin.alwaysUsed) {
+        if (!pattern.startsWith("**/")) {
+          rootActivatedGlobalPatterns.push(`**/${pattern}`);
+        }
+      }
+    }
+  }
+
+  if (rootActivatedGlobalPatterns.length > 0) {
+    const globalAlwaysUsedFiles = fg.sync([...new Set(rootActivatedGlobalPatterns)], {
+      cwd: rootDir,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**"],
+      dot: true,
+    });
+    allEntries.push(...globalAlwaysUsedFiles);
   }
 
   return allEntries;
