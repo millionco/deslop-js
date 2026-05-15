@@ -1111,6 +1111,28 @@ describe("i18n-project", () => {
   });
 });
 
+describe("standalone-subproject-excluded", () => {
+  it("should exclude standalone sub-projects with their own lockfile from file scanning", async () => {
+    const result = await analyzeFixture("standalone-subproject-excluded");
+    const fixtureDir = resolve(FIXTURES_DIR, "standalone-subproject-excluded");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.some((filePath: string) => filePath.startsWith("docs/")),
+      `docs/ files should be excluded (standalone project with lockfile), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should still detect unused files in the main app", async () => {
+    const result = await analyzeFixture("standalone-subproject-excluded");
+    const fixtureDir = resolve(FIXTURES_DIR, "standalone-subproject-excluded");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("app/src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("build-script-source-map", () => {
   it("should resolve build/ script references to src/ source files", async () => {
     const result = await analyzeFixture("build-script-source-map");

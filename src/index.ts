@@ -4,7 +4,7 @@ import fg from "fast-glob";
 import type { DeslopConfig, AnalysisResult } from "./types.js";
 import { DEFAULT_ENTRY_PATTERNS, DEFAULT_EXTENSIONS } from "./constants.js";
 import { discoverFiles, discoverEntryPoints } from "./scanner/discover.js";
-import { discoverWorkspacePackages } from "./scanner/workspaces.js";
+import { discoverWorkspacePackagesWithExclusions } from "./scanner/workspaces.js";
 import { parseModule } from "./scanner/parse.js";
 import { createModuleResolver } from "./resolver/resolve.js";
 import { buildModuleGraph } from "./graph/build.js";
@@ -32,11 +32,22 @@ export const createConfig = (
 export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => {
   const pipelineStartTime = performance.now();
 
-  const files = await discoverFiles(config);
-  const entryPoints = await discoverEntryPoints(config);
-  const entryPointSet = new Set(entryPoints);
+  const workspaceDiscovery = discoverWorkspacePackagesWithExclusions(resolve(config.rootDir));
+  const workspacePackages = workspaceDiscovery.packages;
 
-  const workspacePackages = discoverWorkspacePackages(resolve(config.rootDir));
+  const configWithExclusions = workspaceDiscovery.excludedDirectories.length > 0
+    ? {
+        ...config,
+        ignorePatterns: [
+          ...config.ignorePatterns,
+          ...workspaceDiscovery.excludedDirectories.map((directory) => `${directory}/**`),
+        ],
+      }
+    : config;
+
+  const files = await discoverFiles(configWithExclusions);
+  const entryPoints = await discoverEntryPoints(configWithExclusions);
+  const entryPointSet = new Set(entryPoints);
   const moduleResolver = createModuleResolver(config, workspacePackages.map((workspacePackage) => ({
     name: workspacePackage.name,
     directory: workspacePackage.directory,

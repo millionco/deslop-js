@@ -9,15 +9,42 @@ export interface WorkspacePackage {
   isDeclaredWorkspace: boolean;
 }
 
-export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] => {
-  const patterns = collectWorkspacePatterns(rootDir);
-  const expandedDirectories = patterns.length > 0
-    ? expandWorkspaceGlobs(patterns, rootDir)
+export interface WorkspaceDiscoveryResult {
+  packages: WorkspacePackage[];
+  excludedDirectories: string[];
+}
+
+export const discoverWorkspacePackagesWithExclusions = (rootDir: string): WorkspaceDiscoveryResult => {
+  const rootPatterns = collectWorkspacePatterns(rootDir);
+  let expandedDirectories = rootPatterns.length > 0
+    ? expandWorkspaceGlobs(rootPatterns, rootDir)
     : [];
 
-  const declaredDirectorySet = new Set(expandedDirectories);
   const implicitSubProjects = discoverImplicitSubProjects(rootDir, expandedDirectories);
-  const allDirectories = [...new Set([...expandedDirectories, ...implicitSubProjects])];
+
+  if (expandedDirectories.length === 0 && implicitSubProjects.length > 0) {
+    for (const subProjectDirectory of implicitSubProjects) {
+      const subPatterns = collectWorkspacePatterns(subProjectDirectory);
+      if (subPatterns.length > 0) {
+        const subExpanded = expandWorkspaceGlobs(subPatterns, subProjectDirectory);
+        expandedDirectories.push(subProjectDirectory, ...subExpanded);
+      }
+    }
+  }
+
+  const declaredDirectorySet = new Set(expandedDirectories);
+  const excludedDirectories: string[] = [];
+  const filteredImplicitSubProjects = declaredDirectorySet.size > 0
+    ? implicitSubProjects.filter((directory) => {
+        if (declaredDirectorySet.has(directory)) return true;
+        if (isStandaloneProject(directory)) {
+          excludedDirectories.push(directory);
+          return false;
+        }
+        return true;
+      })
+    : implicitSubProjects;
+  const allDirectories = [...new Set([...expandedDirectories, ...filteredImplicitSubProjects])];
 
   const workspacePackages: WorkspacePackage[] = [];
 
@@ -41,16 +68,30 @@ export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] =
     }
   }
 
-  return workspacePackages;
+  return { packages: workspacePackages, excludedDirectories };
 };
 
+export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] =>
+  discoverWorkspacePackagesWithExclusions(rootDir).packages;
+
 const IMPLICIT_SUB_PROJECT_SEARCH_DEPTH = 3;
+
+const STANDALONE_PROJECT_LOCKFILES = [
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+  "bun.lockb",
+];
+
+const isStandaloneProject = (directory: string): boolean =>
+  STANDALONE_PROJECT_LOCKFILES.some((lockfile) => existsSync(join(directory, lockfile)));
 
 const discoverImplicitSubProjects = (
   rootDir: string,
   alreadyDiscoveredDirectories: string[],
 ): string[] => {
   const knownDirectories = new Set(alreadyDiscoveredDirectories);
+  const hasDeclaredWorkspaces = alreadyDiscoveredDirectories.length > 0;
   const subProjectDirectories: string[] = [];
 
   const subPackageJsonPaths = fg.sync("**/package.json", {
@@ -65,6 +106,7 @@ const discoverImplicitSubProjects = (
     const directory = packageJsonPath.replace(/\/package\.json$/, "");
     if (directory === rootDir) continue;
     if (knownDirectories.has(directory)) continue;
+    if (hasDeclaredWorkspaces && isStandaloneProject(directory)) continue;
 
     subProjectDirectories.push(directory);
   }
