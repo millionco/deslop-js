@@ -1562,6 +1562,42 @@ it("should mark config files in non-workspace directories as always used via glo
   );
 });
 
+it("should resolve dynamic imports with template literals as glob patterns", async () => {
+  const result = await analyzeFixture("dynamic-import-template");
+  const fixtureDir = resolve(FIXTURES_DIR, "dynamic-import-template");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/locales/en/core.js"),
+    `en/core.js should be reachable via template literal glob, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/locales/fr/core.js"),
+    `fr/core.js should be reachable via template literal glob, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/locales/de/core.js"),
+    `de/core.js should be reachable via template literal glob, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should resolve package.json exports pointing to .ts files that only exist as .tsx", async () => {
+  const result = await analyzeFixture("exports-ts-to-tsx");
+  const fixtureDir = resolve(FIXTURES_DIR, "exports-ts-to-tsx");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/components/Button.tsx"),
+    `Button.tsx should be an entry (exported as Button.ts -> .tsx fallback), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
 it("should resolve package.json exports pointing to .js files that only exist as .ts", async () => {
   const result = await analyzeFixture("exports-js-to-ts");
   const fixtureDir = resolve(FIXTURES_DIR, "exports-js-to-ts");
@@ -1580,6 +1616,38 @@ it("should resolve package.json exports pointing to .js files that only exist as
   );
   assert.ok(
     unusedFilePaths.includes("orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should detect script files referenced in GitHub Actions workflow files", async () => {
+  const result = await analyzeFixture("ci-workflow-scripts");
+  const fixtureDir = resolve(FIXTURES_DIR, "ci-workflow-scripts");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("scripts/deploy.mjs"),
+    `deploy.mjs should be detected from CI workflow run step, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("scripts/build-release.ts"),
+    `build-release.ts should be detected from CI workflow run step, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should detect next.config files in non-workspace directories via global alwaysUsed", async () => {
+  const result = await analyzeFixture("next-config-global");
+  const fixtureDir = resolve(FIXTURES_DIR, "next-config-global");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("examples/my-app/next.config.mjs"),
+    `next.config.mjs in examples should be detected via global alwaysUsed, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
     `orphan.ts should be unused, got: ${unusedFilePaths}`,
   );
 });

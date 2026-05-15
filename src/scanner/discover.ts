@@ -158,8 +158,9 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
 
   const testEntryFiles = discoverTestRunnerEntryPoints(absoluteRoot, workspacePackages);
   const toolingEntryFiles = discoverToolingEntryPoints(absoluteRoot, workspacePackages);
+  const ciEntries = extractCiWorkflowEntries(absoluteRoot);
 
-  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...testSetupEntries, ...pluginFileEntries, ...testEntryFiles, ...toolingEntryFiles])];
+  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...testSetupEntries, ...pluginFileEntries, ...testEntryFiles, ...toolingEntryFiles, ...ciEntries])];
 };
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
@@ -242,7 +243,17 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
     }
 
     if (packageJson.exports) {
-      collectExportPaths(packageJson.exports, rootDir, entries);
+      const exportEntries: string[] = [];
+      collectExportPaths(packageJson.exports, rootDir, exportEntries);
+      for (const exportEntry of exportEntries) {
+        entries.push(exportEntry);
+        if (!existsSync(exportEntry) && exportEntry.endsWith(".ts")) {
+          const tsxFallback = exportEntry.replace(/\.ts$/, ".tsx");
+          if (existsSync(tsxFallback)) {
+            entries.push(tsxFallback);
+          }
+        }
+      }
     }
 
     if (packageJson.bin) {
@@ -314,6 +325,57 @@ const extractScriptEntries = (directory: string): string[] => {
     ignore: ["**/node_modules/**"],
   });
   entries.push(...scriptDirectoryFiles);
+
+  return entries;
+};
+
+const CI_FILE_PATH_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|bun|npx|esr|esno|jiti)\s+(?:(?:-[\w-]+(?:\s+[\w./@-]+)?\s+)|(?:[\w/-]+\s+))*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:\s|$)/;
+const CI_INLINE_FILE_PATTERN = /(?:^|\s)((?:\.\/)?[\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:\s|$)/g;
+
+const extractCiWorkflowEntries = (rootDir: string): string[] => {
+  const entries: string[] = [];
+  const workflowsDir = join(rootDir, ".github", "workflows");
+  if (!existsSync(workflowsDir)) return entries;
+
+  const workflowFiles = fg.sync("*.{yml,yaml}", {
+    cwd: workflowsDir,
+    absolute: true,
+    onlyFiles: true,
+  });
+
+  for (const workflowFile of workflowFiles) {
+    try {
+      const content = readFileSync(workflowFile, "utf-8");
+      const runBlockPattern = /^\s*run:\s*[|>]?\s*\n?([\s\S]*?)(?=\n\s*(?:\w+:|$))/gm;
+      let blockMatch: RegExpExecArray | null;
+      while ((blockMatch = runBlockPattern.exec(content)) !== null) {
+        const runBlock = blockMatch[1];
+        const lines = runBlock.split("\n");
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          const scriptMatch = trimmedLine.match(SCRIPT_FILE_PATTERN);
+          if (scriptMatch?.[1]) {
+            const scriptFilePath = resolve(rootDir, scriptMatch[1]);
+            if (existsSync(scriptFilePath)) {
+              entries.push(scriptFilePath);
+            }
+          }
+          CI_INLINE_FILE_PATTERN.lastIndex = 0;
+          let inlineMatch: RegExpExecArray | null;
+          while ((inlineMatch = CI_INLINE_FILE_PATTERN.exec(trimmedLine)) !== null) {
+            const candidatePath = inlineMatch[1];
+            if (candidatePath.startsWith("./") || candidatePath.includes("/")) {
+              const absoluteCandidatePath = resolve(rootDir, candidatePath);
+              if (existsSync(absoluteCandidatePath)) {
+                entries.push(absoluteCandidatePath);
+              }
+            }
+          }
+        }
+      }
+    } catch {
+    }
+  }
 
   return entries;
 };
@@ -1045,6 +1107,12 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     alwaysUsed: [".changeset/**/*"],
   },
   {
+    enablers: ["next"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["next.config.{ts,js,mjs,mts}"],
+  },
+  {
     enablers: ["vite", "rolldown-vite"],
     enablerPrefixes: ["@vitejs/"],
     entryPatterns: [],
@@ -1099,7 +1167,7 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     enablers: ["rollup"],
     enablerPrefixes: [],
     entryPatterns: [],
-    alwaysUsed: ["rollup.config.{ts,js,mjs,cjs}"],
+    alwaysUsed: ["rollup.config.{ts,js,mjs,cjs}", "rollup.*.config.{ts,js,mjs,cjs}"],
   },
   {
     enablers: ["tsup"],
