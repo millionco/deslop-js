@@ -2007,3 +2007,43 @@ describe("sub-project-workspace", () => {
     );
   });
 });
+
+describe("tanstack-start", () => {
+  it("should treat src/routes and src/server as entry points", async () => {
+    const result = await analyzeFixture("tanstack-start");
+    const fixtureDir = resolve(FIXTURES_DIR, "tanstack-start");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/routes/index.tsx"),
+      `src/routes/index.tsx should be reachable via TanStack Start route, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/routes/about.tsx"),
+      `src/routes/about.tsx should be reachable via TanStack Start route, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/server.ts"),
+      `src/server.ts should be reachable as TanStack Start server entry, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("wrangler-worker", () => {
+  it("should treat src/index.ts as entry point when wrangler is present", async () => {
+    const result = await analyzeFixture("wrangler-worker");
+    const fixtureDir = resolve(FIXTURES_DIR, "wrangler-worker");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/index.ts"),
+      `src/index.ts should be reachable as Wrangler worker entry, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
