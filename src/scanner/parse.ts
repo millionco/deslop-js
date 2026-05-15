@@ -557,6 +557,24 @@ const collectDynamicImports = (
       if (callExpression.callee.type === "MemberExpression" && !callExpression.callee.computed) {
         const memberExpression = callExpression.callee as StaticMemberExpression;
         if (
+          memberExpression.object.type === "Identifier" &&
+          (memberExpression.object.name === "vi" || memberExpression.object.name === "jest") &&
+          memberExpression.property.name === "mock"
+        ) {
+          const mockSpecifier = extractStringLiteralFromArgument(callExpression.arguments);
+          if (mockSpecifier) {
+            imports.push({
+              specifier: mockSpecifier,
+              importedNames: [createNamespaceImportedName()],
+              isTypeOnly: false,
+              isDynamic: true,
+              isSideEffect: true,
+              line: getLineFromOffset(sourceText, callExpression.start),
+              column: getColumnFromOffset(sourceText, callExpression.start),
+            });
+          }
+        }
+        if (
           memberExpression.object.type === "MetaProperty" &&
           memberExpression.property.name === "glob"
         ) {

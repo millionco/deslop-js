@@ -1695,3 +1695,17 @@ it("should exclude config files from unused file detection", async () => {
     `orphan.ts should still be flagged as unused, got: ${unusedFilePaths}`,
   );
 });
+
+it("should detect vi.mock and jest.mock as import edges", async () => {
+  const result = await analyzeFixture("test-mock-imports");
+  const fixtureDir = resolve(FIXTURES_DIR, "test-mock-imports");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/mocked-util.ts"),
+    `mocked-util.ts should not be unused (referenced via vi.mock), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
+    `orphan.ts should still be flagged as unused, got: ${unusedFilePaths}`,
+  );
+});
