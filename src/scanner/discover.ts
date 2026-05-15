@@ -2,7 +2,7 @@ import fg from "fast-glob";
 import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
-import type { FileId, DeslopConfig } from "../types.js";
+import type { FileId, DeslopConfig, DiscoveredEntryPoints } from "../types.js";
 import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, SHALLOW_WORKSPACE_MAX_DEPTH } from "../constants.js";
 import { discoverWorkspacePackagesWithExclusions, discoverFrameworkEntryPoints } from "./workspaces.js";
 import type { WorkspacePackage } from "./workspaces.js";
@@ -92,7 +92,7 @@ export const discoverFrameworkIgnorePatterns = (rootDir: string): string[] => {
   return ignorePatterns;
 };
 
-export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[]> => {
+export const discoverEntryPoints = async (config: DeslopConfig): Promise<DiscoveredEntryPoints> => {
   const absoluteRoot = resolve(config.rootDir);
 
   const entryFiles = config.entryPatterns.length > 0
@@ -177,7 +177,13 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
   const toolingEntryFiles = discoverToolingEntryPoints(absoluteRoot, entryEligiblePackages);
   const ciEntries = extractCiWorkflowEntries(absoluteRoot);
 
-  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...testSetupEntries, ...pluginFileEntries, ...testEntryFiles, ...toolingEntryFiles, ...ciEntries])];
+  const testEntries = [...new Set([...testEntryFiles, ...testSetupEntries])];
+  const testEntryPathSet = new Set(testEntries);
+  const productionEntries = [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...pluginFileEntries, ...toolingEntryFiles, ...ciEntries])].filter(
+    (entryPath) => !testEntryPathSet.has(entryPath),
+  );
+
+  return { productionEntries, testEntries };
 };
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];

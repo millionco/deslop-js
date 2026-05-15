@@ -16,6 +16,7 @@ export interface GraphBuildInput {
   parsed: ParsedModule;
   resolvedImports: Map<string, ResolvedImport>;
   isEntryPoint: boolean;
+  isTestEntry: boolean;
 }
 
 export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
@@ -29,6 +30,7 @@ export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
     imports: input.parsed.imports,
     exports: input.parsed.exports,
     isEntryPoint: input.isEntryPoint,
+    isTestEntry: input.isTestEntry,
     isReachable: false,
     isDeclarationFile:
       input.fileId.path.endsWith(".d.ts") ||
