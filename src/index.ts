@@ -72,8 +72,9 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
     : config;
 
   const files = await discoverFiles(configWithExclusions);
-  const entryPoints = await discoverEntryPoints(configWithExclusions);
-  const entryPointSet = new Set(entryPoints);
+  const discoveredEntries = await discoverEntryPoints(configWithExclusions);
+  const productionEntrySet = new Set(discoveredEntries.productionEntries);
+  const testEntrySet = new Set(discoveredEntries.testEntries);
   const hasReactNative = detectReactNative(config.rootDir, workspacePackages);
   const moduleResolver = createModuleResolver(config, workspacePackages.map((workspacePackage) => ({
     name: workspacePackage.name,
@@ -134,7 +135,8 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
       fileId: file,
       parsed: parsedModule,
       resolvedImports: resolvedImportMap,
-      isEntryPoint: entryPointSet.has(file.path),
+      isEntryPoint: productionEntrySet.has(file.path),
+      isTestEntry: testEntrySet.has(file.path),
     });
   }
 
@@ -175,6 +177,7 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
       parsed: parsedStyleModule,
       resolvedImports: resolvedStyleImportMap,
       isEntryPoint: false,
+      isTestEntry: false,
     });
     discoveredFilePaths.add(styleFilePath);
     nextFileIndex++;

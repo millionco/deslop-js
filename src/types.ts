@@ -39,6 +39,7 @@ export interface ModuleNode {
   imports: ImportInfo[];
   exports: ExportInfo[];
   isEntryPoint: boolean;
+  isTestEntry: boolean;
   isReachable: boolean;
   isDeclarationFile: boolean;
   isConfigFile: boolean;
@@ -97,6 +98,11 @@ export interface AnalysisResult {
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
+}
+
+export interface DiscoveredEntryPoints {
+  productionEntries: string[];
+  testEntries: string[];
 }
 
 export interface DeslopConfig {

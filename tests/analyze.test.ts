@@ -734,37 +734,37 @@ describe("config-files-cjs-mjs", () => {
 });
 
 describe("test-runner-detection", () => {
-  it("should treat .test.ts files as entry points when vitest is a dependency", async () => {
+  it("should flag test files as unused (test files are not production entries)", async () => {
     const result = await analyzeFixture("test-runner-detection");
     const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detection");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/helper.test.ts"),
-      "helper.test.ts should be a test entry point",
+      unusedFilePaths.includes("src/helper.test.ts"),
+      `helper.test.ts should be unused (test file, not production entry), got: ${unusedFilePaths}`,
     );
   });
 
-  it("should treat __tests__ files as entry points when vitest is a dependency", async () => {
+  it("should flag __tests__ files as unused (test files are not production entries)", async () => {
     const result = await analyzeFixture("test-runner-detection");
     const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detection");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/__tests__/utils.test.ts"),
-      "__tests__/utils.test.ts should be a test entry point",
+      unusedFilePaths.includes("src/__tests__/utils.test.ts"),
+      `__tests__/utils.test.ts should be unused (test file), got: ${unusedFilePaths}`,
     );
   });
 
-  it("should keep files imported by test files as reachable", async () => {
+  it("should flag files only imported by test files as unused", async () => {
     const result = await analyzeFixture("test-runner-detection");
     const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detection");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/helper.ts"),
-      "helper.ts is imported by test file and should be reachable",
+      unusedFilePaths.includes("src/helper.ts"),
+      `helper.ts should be unused (only imported by test file), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("src/test-only-used.ts"),
-      "test-only-used.ts is imported by __tests__ file and should be reachable",
+      unusedFilePaths.includes("src/test-only-used.ts"),
+      `test-only-used.ts should be unused (only imported by test file), got: ${unusedFilePaths}`,
     );
   });
 
@@ -816,23 +816,23 @@ describe("path-aliases-mixed-exports", () => {
 });
 
 describe("fixture-patterns", () => {
-  it("should treat __fixtures__ files as entry points when vitest is present", async () => {
+  it("should flag __fixtures__ files as unused (test support files, not production entries)", async () => {
     const result = await analyzeFixture("fixture-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/__fixtures__/user-data.ts"),
-      `__fixtures__/user-data.ts should be treated as entry point, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/__fixtures__/user-data.ts"),
+      `__fixtures__/user-data.ts should be unused (test fixture), got: ${unusedFilePaths}`,
     );
   });
 
-  it("should treat __mocks__ files as entry points when test runner is present", async () => {
+  it("should flag __mocks__ files as unused (test support files, not production entries)", async () => {
     const result = await analyzeFixture("fixture-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/__mocks__/api-client.ts"),
-      `__mocks__/api-client.ts should be treated as entry point (fallow behavior), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/__mocks__/api-client.ts"),
+      `__mocks__/api-client.ts should be unused (test mock), got: ${unusedFilePaths}`,
     );
   });
 
@@ -918,17 +918,17 @@ describe("source-path-fallback", () => {
 });
 
 describe("dash-spec-patterns", () => {
-  it("should treat *-spec.ts and *_spec.ts as test entry points with vitest", async () => {
+  it("should flag *-spec.ts and *_spec.ts as unused (test files, not production entries)", async () => {
     const result = await analyzeFixture("dash-spec-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "dash-spec-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("spec/utils-spec.ts"),
-      `utils-spec.ts should be test entry point, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("spec/utils-spec.ts"),
+      `utils-spec.ts should be unused (test file), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("spec/engine_spec.ts"),
-      `engine_spec.ts should be test entry point, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("spec/engine_spec.ts"),
+      `engine_spec.ts should be unused (test file), got: ${unusedFilePaths}`,
     );
   });
 
@@ -1184,13 +1184,13 @@ describe("nestjs-project", () => {
 });
 
 describe("node-test-runner", () => {
-  it("should detect node --test scripts as test entry points", async () => {
+  it("should flag node --test files as unused (test files, not production entries)", async () => {
     const result = await analyzeFixture("node-test-runner");
     const fixtureDir = resolve(FIXTURES_DIR, "node-test-runner");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/__tests__/main.test.ts"),
-      `main.test.ts should be an entry point (node --test runner), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/__tests__/main.test.ts"),
+      `main.test.ts should be unused (test file), got: ${unusedFilePaths}`,
     );
   });
 
@@ -1356,21 +1356,21 @@ describe("scss-partials", () => {
 });
 
 describe("custom-test-extensions", () => {
-  it("should recognize .clienttest and .servertest as vitest test files", async () => {
+  it("should flag .clienttest, .servertest, and __e2e__ test files as unused (test files, not production entries)", async () => {
     const result = await analyzeFixture("custom-test-extensions");
     const fixtureDir = resolve(FIXTURES_DIR, "custom-test-extensions");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/utils.clienttest.ts"),
-      `.clienttest.ts should be used (vitest custom test), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/utils.clienttest.ts"),
+      `.clienttest.ts should be unused (test file), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("src/api.servertest.ts"),
-      `.servertest.ts should be used (vitest custom test), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/api.servertest.ts"),
+      `.servertest.ts should be unused (test file), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("src/__e2e__/login.test.ts"),
-      `__e2e__ test should be used (vitest e2e dir), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/__e2e__/login.test.ts"),
+      `__e2e__ test should be unused (test file), got: ${unusedFilePaths}`,
     );
   });
 
@@ -1560,12 +1560,12 @@ test("should resolve #hash subpath imports via tsconfig paths with .js extension
   );
 });
 
-test("should detect vitest setupFiles as entry points", async () => {
+test("should flag vitest setupFiles as unused (test support, not production entry)", async () => {
   const result = await analyzeFixture("vitest-setup-files");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
-    !unusedFilePaths.some((filePath) => filePath.endsWith("test/setup.ts")),
-    `test/setup.ts should NOT be unused (referenced in vitest.config.ts setupFiles), got unused: ${unusedFilePaths}`,
+    unusedFilePaths.some((filePath) => filePath.endsWith("test/setup.ts")),
+    `test/setup.ts should be unused (test setup file, not production entry), got unused: ${unusedFilePaths}`,
   );
   assert.ok(
     unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
@@ -1607,16 +1607,16 @@ test("should exclude multi-segment config files (e.g. cypress.config.contract.js
   );
 });
 
-test("should detect jest moduleNameMapper files and __mocks__ as entries", async () => {
+test("should flag jest __mocks__ files as unused (test support, not production entries)", async () => {
   const result = await analyzeFixture("jest-module-mapper");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
-    !unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/styleMock.js")),
-    `styleMock.js should NOT be unused (referenced in moduleNameMapper), got unused: ${unusedFilePaths}`,
+    unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/styleMock.js")),
+    `styleMock.js should be unused (test mock), got unused: ${unusedFilePaths}`,
   );
   assert.ok(
-    !unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/fileMock.js")),
-    `fileMock.js should NOT be unused (referenced in moduleNameMapper), got unused: ${unusedFilePaths}`,
+    unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/fileMock.js")),
+    `fileMock.js should be unused (test mock), got unused: ${unusedFilePaths}`,
   );
   assert.ok(
     unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
@@ -1844,13 +1844,13 @@ it("should exclude config files from unused file detection", async () => {
   );
 });
 
-it("should detect vi.mock and jest.mock as import edges", async () => {
+it("should flag files referenced only via vi.mock/jest.mock as unused (test imports, not production)", async () => {
   const result = await analyzeFixture("test-mock-imports");
   const fixtureDir = resolve(FIXTURES_DIR, "test-mock-imports");
   const unusedFilePaths = relativePaths(result, fixtureDir);
   assert.ok(
-    !unusedFilePaths.includes("src/mocked-util.ts"),
-    `mocked-util.ts should not be unused (referenced via vi.mock), got: ${unusedFilePaths}`,
+    unusedFilePaths.includes("src/mocked-util.ts"),
+    `mocked-util.ts should be unused (only referenced via test mock), got: ${unusedFilePaths}`,
   );
   assert.ok(
     unusedFilePaths.includes("src/orphan.ts"),
@@ -1899,8 +1899,8 @@ test("should exclude .gen.ts files from test entry patterns", async () => {
     `schema.gen.ts should be unused (generated file, not imported), got: ${unusedFilePaths}`,
   );
   assert.ok(
-    !unusedFilePaths.some((filePath) => filePath.endsWith("index.test.ts")),
-    `index.test.ts should NOT be unused (real test file), got: ${unusedFilePaths}`,
+    unusedFilePaths.some((filePath) => filePath.endsWith("index.test.ts")),
+    `index.test.ts should be unused (test file, not production entry), got: ${unusedFilePaths}`,
   );
 });
 
