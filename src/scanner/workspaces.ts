@@ -459,9 +459,6 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   const mobileEntryPoints = discoverMobileEntryPoints(rootDir);
   entryPoints.push(...mobileEntryPoints);
 
-  const sailsEntryPoints = discoverSailsEntryPoints(rootDir);
-  entryPoints.push(...sailsEntryPoints);
-
   return [...new Set(entryPoints)];
 };
 
@@ -611,40 +608,4 @@ const discoverDocumentationEntryPoints = (directory: string): string[] => {
   }
 };
 
-const SAILS_CONVENTION_DIRECTORIES = [
-  "api/controllers",
-  "api/helpers",
-  "api/hooks",
-  "api/models",
-  "api/policies",
-  "api/responses",
-  "config",
-  "db/migrations",
-  "db/seeds",
-];
 
-const discoverSailsEntryPoints = (directory: string): string[] => {
-  const sailsrcPath = join(directory, ".sailsrc");
-  const apiControllersPath = join(directory, "api", "controllers");
-  const apiModelsPath = join(directory, "api", "models");
-
-  const isSailsProject = existsSync(sailsrcPath)
-    || (existsSync(apiControllersPath) && existsSync(apiModelsPath));
-
-  if (!isSailsProject) return [];
-
-  const entryPoints: string[] = [];
-  for (const conventionDir of SAILS_CONVENTION_DIRECTORIES) {
-    const dirPath = join(directory, conventionDir);
-    if (existsSync(dirPath) && statSync(dirPath).isDirectory()) {
-      const conventionFiles = fg.sync(FRAMEWORK_FILE_GLOB, {
-        cwd: dirPath,
-        absolute: true,
-        onlyFiles: true,
-      });
-      entryPoints.push(...conventionFiles);
-    }
-  }
-
-  return entryPoints;
-};
