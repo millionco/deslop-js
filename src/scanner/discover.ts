@@ -295,6 +295,8 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     entryPatterns: [
       "**/*.test.{ts,tsx,js,jsx,mts,mjs}",
       "**/*.spec.{ts,tsx,js,jsx,mts,mjs}",
+      "**/*-spec.{ts,tsx,js,jsx,mts,mjs}",
+      "**/*_spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
       "**/*.bench.{ts,tsx,js,jsx}",
     ],
@@ -319,6 +321,8 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     entryPatterns: [
       "**/*.test.{ts,tsx,js,jsx,mts,mjs}",
       "**/*.spec.{ts,tsx,js,jsx,mts,mjs}",
+      "**/*-spec.{ts,tsx,js,jsx,mts,mjs}",
+      "**/*_spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
       "**/__mocks__/**/*.{ts,tsx,js,jsx,mjs,cjs}",
     ],
