@@ -329,6 +329,7 @@ const collectExportPaths = (
 const NEXTJS_APP_ROUTER_CONVENTIONS = [
   "page", "layout", "loading", "error", "not-found",
   "template", "default", "route", "global-error",
+  "forbidden", "unauthorized",
   "middleware", "instrumentation", "manifest", "robots",
   "sitemap", "opengraph-image", "twitter-image", "icon",
   "apple-icon", "actions",
@@ -473,6 +474,8 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
     "app/entry.client.{ts,tsx,js,jsx}",
     "app/entry.server.{ts,tsx,js,jsx}",
     "app/root.{ts,tsx,js,jsx}",
+    "mdx-components.{ts,tsx,js,jsx}",
+    "src/mdx-components.{ts,tsx,js,jsx}",
   ];
 
   const configFiles = fg.sync(configPatterns, {
