@@ -31,8 +31,11 @@ export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => 
     onlyFiles: true,
   });
 
-  const allowedHiddenGlobs = HIDDEN_DIRECTORY_ALLOWLIST.map(
-    (directory) => `${directory}/**/*{${extensions.join(",")}}`,
+  const allowedHiddenGlobs = HIDDEN_DIRECTORY_ALLOWLIST.flatMap(
+    (directory) => [
+      `${directory}/**/*{${extensions.join(",")}}`,
+      `**/${directory}/**/*{${extensions.join(",")}}`,
+    ],
   );
   const hiddenFiles = allowedHiddenGlobs.length > 0
     ? await fg(allowedHiddenGlobs, {

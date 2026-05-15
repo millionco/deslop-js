@@ -560,6 +560,35 @@ const collectDynamicImports = (
       }
     }
 
+    if (node.type === "NewExpression") {
+      const newExpression = node as unknown as { callee: Expression; arguments: CallExpression["arguments"]; start: number };
+      if (
+        newExpression.callee.type === "Identifier" &&
+        (newExpression.callee as { name: string }).name === "URL" &&
+        newExpression.arguments.length >= 2
+      ) {
+        const secondArgument = newExpression.arguments[1];
+        const isImportMetaUrl =
+          secondArgument.type === "MemberExpression" &&
+          (secondArgument as unknown as StaticMemberExpression).object.type === "MetaProperty" &&
+          (secondArgument as unknown as StaticMemberExpression).property.name === "url";
+        if (isImportMetaUrl) {
+          const urlSpecifier = extractStringLiteralFromArgument(newExpression.arguments);
+          if (urlSpecifier) {
+            imports.push({
+              specifier: urlSpecifier,
+              importedNames: [createNamespaceImportedName()],
+              isTypeOnly: false,
+              isDynamic: true,
+              isSideEffect: true,
+              line: getLineFromOffset(sourceText, newExpression.start),
+              column: getColumnFromOffset(sourceText, newExpression.start),
+            });
+          }
+        }
+      }
+    }
+
     for (const value of Object.values(node)) {
       if (Array.isArray(value)) {
         for (const element of value) {

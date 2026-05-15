@@ -23,6 +23,8 @@ export const HIDDEN_DIRECTORY_ALLOWLIST = [
   ".well-known",
   ".changeset",
   ".github",
+  ".client",
+  ".server",
 ];
 
 export const DEFAULT_IGNORE_PATTERNS = [
