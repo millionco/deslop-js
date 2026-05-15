@@ -500,6 +500,8 @@ const extractNextConfigPluginFiles = (directory: string): string[] => {
 
 const SETUP_FILES_PATTERN = /(?:setupFiles|setupFilesAfterFramework|globalSetup)\s*:\s*(?:\[([^\]]*)\]|['"]([^'"]+)['"])/gs;
 const SETUP_FILE_PATH_PATTERN = /['"]([^'"]+)['"]/g;
+const MODULE_NAME_MAPPER_PATTERN = /moduleNameMapper\s*:\s*\{([^}]*)\}/gs;
+const MODULE_NAME_MAPPER_VALUE_PATTERN = /<rootDir>\/([^'"]+)/g;
 
 const extractTestSetupFiles = (directory: string): string[] => {
   const entries: string[] = [];
@@ -542,6 +544,21 @@ const extractTestSetupFiles = (directory: string): string[] => {
             if (existsSync(absolutePath)) {
               entries.push(absolutePath);
             }
+          }
+        }
+      }
+
+      let mapperMatch: RegExpExecArray | null;
+      MODULE_NAME_MAPPER_PATTERN.lastIndex = 0;
+      while ((mapperMatch = MODULE_NAME_MAPPER_PATTERN.exec(content)) !== null) {
+        const mapperContent = mapperMatch[1];
+        let valueMatch: RegExpExecArray | null;
+        MODULE_NAME_MAPPER_VALUE_PATTERN.lastIndex = 0;
+        while ((valueMatch = MODULE_NAME_MAPPER_VALUE_PATTERN.exec(mapperContent)) !== null) {
+          const relativePath = valueMatch[1];
+          const absolutePath = resolve(configDirectory, relativePath);
+          if (existsSync(absolutePath)) {
+            entries.push(absolutePath);
           }
         }
       }
@@ -609,6 +626,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*.bench.{ts,tsx,js,jsx}",
       "**/*.clienttest.{ts,tsx,js,jsx}",
       "**/*.servertest.{ts,tsx,js,jsx}",
+      "**/__mocks__/**/*.{ts,tsx,js,jsx}",
     ],
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
@@ -638,6 +656,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*-spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/*_spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
+      "**/__mocks__/**/*.{ts,tsx,js,jsx}",
     ],
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",

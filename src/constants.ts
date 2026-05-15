@@ -36,9 +36,10 @@ export const DEFAULT_IGNORE_PATTERNS = [
   "**/*.d.ts",
   "**/*.min.js",
   "**/*.min.mjs",
+  "**/mockServiceWorker.js",
 ];
 
-export const SCRIPT_FILE_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|tsc|npx|bun|esr|esno|jiti)\s+(?:(?:-[\w-]+(?:\s+[\w./@-]+)?\s+)|(?:[\w/-]+\s+))*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:\s|$)/;
+export const SCRIPT_FILE_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|tsc|npx|bun|esr|esno|jiti|babel-node)\s+(?:(?:-[\w-]+(?:\s+[\w./@-]+)?\s+)|(?:[\w/-]+\s+))*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:\s|$)/;
 
 export const SCRIPT_CONFIG_FILE_PATTERN = /--config\s+([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))/;
 
@@ -54,9 +55,9 @@ export const DEFAULT_ENTRY_PATTERNS = [
 ];
 
 export const CONFIG_FILE_PATTERNS: RegExp[] = [
-  /\.config\.(?:[cm]?[jt]sx?|[cm]js)$/,
-  /\.conf\.(?:[cm]?[jt]sx?|[cm]js)$/,
-  /\.cli\.(?:[cm]?[jt]sx?|[cm]js)$/,
+  /\.config\.(?:[\w.-]*\.)?(?:[cm]?[jt]sx?|[cm]js)$/,
+  /\.conf\.(?:[\w.-]*\.)?(?:[cm]?[jt]sx?|[cm]js)$/,
+  /\.cli\.(?:[\w.-]*\.)?(?:[cm]?[jt]sx?|[cm]js)$/,
   /\.eslintrc/,
   /\.prettierrc/,
   /\.babelrc/,
