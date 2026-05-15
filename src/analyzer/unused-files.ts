@@ -7,7 +7,6 @@ export const findUnusedFiles = (graph: ModuleGraph): UnusedFile[] => {
     if (module.isReachable) continue;
     if (module.isEntryPoint) continue;
     if (module.isDeclarationFile) continue;
-    if (module.isConfigFile) continue;
     if (isBarrelWithReachableSources(module, graph)) continue;
     if (hasReachableImporter(module.fileId.index, graph)) continue;
 

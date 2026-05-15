@@ -304,7 +304,6 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
       "**/fixtures/**/*.{ts,tsx,js,jsx,json}",
-      "**/__mocks__/**/*.{ts,tsx,js,jsx,mjs,cjs}",
     ],
     alwaysUsed: [
       "vitest.config.{ts,js,mts,mjs}",
@@ -325,7 +324,6 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*-spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/*_spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
-      "**/__mocks__/**/*.{ts,tsx,js,jsx,mjs,cjs}",
     ],
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
@@ -422,6 +420,53 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "mocks/**/*.{ts,tsx,js,jsx}",
       "src/mocks/**/*.{ts,tsx,js,jsx}",
       "**/mocks/**/*.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: [],
+  },
+  {
+    enablers: ["typeorm"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      "migrations/**/*.{ts,js}",
+      "src/migrations/**/*.{ts,js}",
+      "src/migration/**/*.{ts,js}",
+      "migration/**/*.{ts,js}",
+      "src/entity/**/*.{ts,js}",
+    ],
+    alwaysUsed: ["ormconfig.{ts,js,json}"],
+  },
+  {
+    enablers: ["knex"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      "migrations/**/*.{ts,js}",
+      "seeds/**/*.{ts,js}",
+    ],
+    alwaysUsed: ["knexfile.{ts,js}"],
+  },
+  {
+    enablers: ["drizzle-orm"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      "drizzle/**/*.{ts,js}",
+    ],
+    alwaysUsed: ["drizzle.config.{ts,js,mjs}"],
+  },
+  {
+    enablers: ["kysely"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      "migrations/**/*.{ts,js}",
+      "src/migrations/**/*.{ts,js}",
+    ],
+    alwaysUsed: [],
+  },
+  {
+    enablers: ["prisma", "@prisma/client"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      "prisma/**/*.{ts,js}",
+      "prisma/seed.{ts,js}",
     ],
     alwaysUsed: [],
   },
