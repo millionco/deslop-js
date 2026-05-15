@@ -1369,3 +1369,32 @@ test("should detect script entry points with --key value flag pairs", async () =
     `orphan.ts should be unused, got unused: ${unusedFilePaths}`,
   );
 });
+
+test("should detect Angular workspace entry points from angular.json", async () => {
+  const result = await analyzeFixture("angular-workspace");
+  const unusedFilePaths = result.unusedFiles.map((file) => file.path);
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("main.ts")),
+    `main.ts should NOT be unused (Angular entry), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("polyfills.ts")),
+    `polyfills.ts should NOT be unused (Angular polyfills), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("app.module.ts")),
+    `app.module.ts should NOT be unused (imported by main.ts), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("app.component.ts")),
+    `app.component.ts should NOT be unused (imported by app.module.ts), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("environment.ts")),
+    `environment.ts should be unused (not imported), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
+    `orphan.ts should be unused, got unused: ${unusedFilePaths}`,
+  );
+});
