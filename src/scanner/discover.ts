@@ -661,32 +661,57 @@ const extractAngularEntryPoints = (directory: string): string[] => {
       const angularDir = angularJsonPath.replace(/\/[^/]+$/, "");
 
       for (const projectConfig of Object.values(projects)) {
-        const architect = (projectConfig as Record<string, unknown>).architect as Record<string, Record<string, unknown>> | undefined;
-        if (!architect) continue;
+        const projectRecord = projectConfig as Record<string, unknown>;
+        const architect = projectRecord.architect as Record<string, Record<string, unknown>> | undefined;
+        if (architect) {
+          for (const targetConfig of Object.values(architect)) {
+            const options = targetConfig.options as Record<string, unknown> | undefined;
+            if (!options) continue;
 
-        for (const targetConfig of Object.values(architect)) {
-          const options = targetConfig.options as Record<string, unknown> | undefined;
-          if (!options) continue;
-
-          for (const entryKey of ANGULAR_ENTRY_KEYS) {
-            const entryValue = options[entryKey];
-            if (typeof entryValue === "string") {
-              const absolutePath = resolve(angularDir, entryValue);
-              if (existsSync(absolutePath)) {
-                entries.push(absolutePath);
+            for (const entryKey of ANGULAR_ENTRY_KEYS) {
+              const entryValue = options[entryKey];
+              if (typeof entryValue === "string") {
+                const absolutePath = resolve(angularDir, entryValue);
+                if (existsSync(absolutePath)) {
+                  entries.push(absolutePath);
+                }
               }
-            }
-            if (Array.isArray(entryValue)) {
-              for (const entryItem of entryValue) {
-                if (typeof entryItem === "string") {
-                  const absolutePath = resolve(angularDir, entryItem);
-                  if (existsSync(absolutePath)) {
-                    entries.push(absolutePath);
+              if (Array.isArray(entryValue)) {
+                for (const entryItem of entryValue) {
+                  if (typeof entryItem === "string") {
+                    const absolutePath = resolve(angularDir, entryItem);
+                    if (existsSync(absolutePath)) {
+                      entries.push(absolutePath);
+                    }
                   }
                 }
               }
             }
           }
+        }
+
+        const projectRoot = typeof projectRecord.root === "string" ? projectRecord.root : "";
+        const projectDir = resolve(angularDir, projectRoot);
+        const ngPackagePaths = fg.sync(["ng-package.json", "**/ng-package.json"], {
+          cwd: projectDir,
+          absolute: true,
+          onlyFiles: true,
+          deep: 2,
+          ignore: ["**/node_modules/**"],
+        });
+        for (const ngPackagePath of ngPackagePaths) {
+          try {
+            const ngContent = readFileSync(ngPackagePath, "utf-8");
+            const ngPackage = JSON.parse(ngContent);
+            const ngDir = ngPackagePath.replace(/\/[^/]+$/, "");
+            const libEntry = ngPackage?.lib?.entryFile;
+            if (typeof libEntry === "string") {
+              const absoluteEntry = resolve(ngDir, libEntry);
+              if (existsSync(absoluteEntry)) {
+                entries.push(absoluteEntry);
+              }
+            }
+          } catch {}
         }
       }
     } catch {
@@ -1279,6 +1304,19 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     alwaysUsed: ["next.config.{ts,js,mjs,mts}"],
   },
   {
+    enablers: ["@tanstack/react-router", "@tanstack/react-start", "@tanstack/start", "@tanstack/solid-router", "@tanstack/solid-start"],
+    enablerPrefixes: ["@tanstack/router"],
+    entryPatterns: [
+      "src/routes/**/*.{ts,tsx,js,jsx}",
+      "app/routes/**/*.{ts,tsx,js,jsx}",
+      "src/server.{ts,tsx,js,jsx}",
+      "src/client.{ts,tsx,js,jsx}",
+      "src/router.{ts,tsx,js,jsx}",
+      "src/routeTree.gen.{ts,js}",
+    ],
+    alwaysUsed: ["tsr.config.json", "app.config.{ts,js}"],
+  },
+  {
     enablers: ["vite", "rolldown-vite"],
     enablerPrefixes: ["@vitejs/"],
     entryPatterns: [],
@@ -1433,6 +1471,16 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "app/index.{ts,tsx,js,jsx}",
     ],
     alwaysUsed: ["app.json", "app.config.{ts,js}"],
+  },
+  {
+    enablers: ["wrangler"],
+    enablerPrefixes: ["@cloudflare/"],
+    entryPatterns: [
+      "src/index.{ts,js}",
+      "src/worker.{ts,js}",
+      "functions/**/*.{ts,js}",
+    ],
+    alwaysUsed: ["wrangler.toml", "wrangler.json", "wrangler.jsonc"],
   },
   {
     enablers: ["electron"],
