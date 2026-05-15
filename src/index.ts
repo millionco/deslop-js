@@ -13,7 +13,7 @@ import { markReachable } from "./graph/reachability.js";
 import { propagateReExports } from "./graph/re-exports.js";
 import { analyzeGraph } from "./analyzer/analyze.js";
 
-const STYLE_EXTENSIONS = [".css", ".scss", ".less", ".sass"];
+const STYLE_EXTENSIONS = [".css", ".scss"];
 
 export type { AnalysisResult, DeslopConfig, UnusedFile, UnusedExport, UnusedDependency } from "./types.js";
 
