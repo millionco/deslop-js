@@ -98,8 +98,9 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<string[
   }
 
   const testEntryFiles = discoverTestRunnerEntryPoints(absoluteRoot, workspacePackages);
+  const toolingEntryFiles = discoverToolingEntryPoints(absoluteRoot, workspacePackages);
 
-  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...htmlScriptEntries, ...testEntryFiles])];
+  return [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...htmlScriptEntries, ...testEntryFiles, ...toolingEntryFiles])];
 };
 
 const extractPackageJsonEntries = async (packageJsonPath: string): Promise<string[]> => {
@@ -393,6 +394,39 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
   },
 ];
 
+interface ToolingPluginDefinition {
+  enablers: string[];
+  enablerPrefixes: string[];
+  entryPatterns: string[];
+  alwaysUsed: string[];
+}
+
+const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
+  {
+    enablers: ["storybook"],
+    enablerPrefixes: ["@storybook/"],
+    entryPatterns: [
+      "**/*.stories.{ts,tsx,js,jsx,mdx}",
+      ".storybook/**/*.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: [
+      ".storybook/main.{ts,js,mjs,cjs}",
+      ".storybook/preview.{ts,tsx,js,jsx}",
+      ".storybook/manager.{ts,tsx,js,jsx}",
+    ],
+  },
+  {
+    enablers: ["msw"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      "mocks/**/*.{ts,tsx,js,jsx}",
+      "src/mocks/**/*.{ts,tsx,js,jsx}",
+      "**/mocks/**/*.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: [],
+  },
+];
+
 const detectBunTestRunner = (directory: string): boolean => {
   try {
     const packageJsonPath = join(directory, "package.json");
@@ -495,6 +529,102 @@ const discoverTestRunnerEntryPoints = (
       });
       allEntries.push(...fixtureFiles);
     }
+
+    const uniqueAlwaysUsed = [...new Set(activatedAlwaysUsed)];
+    if (uniqueAlwaysUsed.length > 0) {
+      const alwaysUsedFiles = fg.sync(uniqueAlwaysUsed, {
+        cwd: directory,
+        absolute: true,
+        onlyFiles: true,
+        ignore: ["**/node_modules/**"],
+        dot: true,
+      });
+      allEntries.push(...alwaysUsedFiles);
+    }
+  }
+
+  return allEntries;
+};
+
+const isToolingPluginEnabled = (
+  plugin: ToolingPluginDefinition,
+  dependencies: Record<string, string>,
+): boolean => {
+  if (plugin.enablers.some((enabler) => enabler in dependencies)) return true;
+  if (plugin.enablerPrefixes.length > 0) {
+    const depNames = Object.keys(dependencies);
+    return plugin.enablerPrefixes.some((prefix) =>
+      depNames.some((depName) => depName.startsWith(prefix)),
+    );
+  }
+  return false;
+};
+
+const discoverToolingEntryPoints = (
+  rootDir: string,
+  workspacePackages: WorkspacePackage[],
+): string[] => {
+  const allEntries: string[] = [];
+  const directoriesToCheck = [rootDir, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
+
+  for (const directory of directoriesToCheck) {
+    const packageJsonPath = join(directory, "package.json");
+    if (!existsSync(packageJsonPath)) continue;
+
+    let allDependencies: Record<string, string> = {};
+    try {
+      const content = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(content);
+      allDependencies = {
+        ...packageJson.dependencies,
+        ...packageJson.devDependencies,
+      };
+    } catch {
+      continue;
+    }
+
+    const activatedPatterns: string[] = [];
+    const activatedAlwaysUsed: string[] = [];
+
+    for (const plugin of TOOLING_PLUGIN_DEFINITIONS) {
+      if (isToolingPluginEnabled(plugin, allDependencies)) {
+        activatedPatterns.push(...plugin.entryPatterns);
+        activatedAlwaysUsed.push(...plugin.alwaysUsed);
+      }
+    }
+
+    if (activatedPatterns.length === 0 && directory !== rootDir) {
+      const rootPackageJsonPath = join(rootDir, "package.json");
+      if (existsSync(rootPackageJsonPath)) {
+        try {
+          const rootContent = readFileSync(rootPackageJsonPath, "utf-8");
+          const rootPackageJson = JSON.parse(rootContent);
+          const rootDeps = {
+            ...rootPackageJson.dependencies,
+            ...rootPackageJson.devDependencies,
+          };
+          for (const plugin of TOOLING_PLUGIN_DEFINITIONS) {
+            if (isToolingPluginEnabled(plugin, rootDeps)) {
+              activatedPatterns.push(...plugin.entryPatterns);
+              activatedAlwaysUsed.push(...plugin.alwaysUsed);
+            }
+          }
+        } catch {
+        }
+      }
+    }
+
+    if (activatedPatterns.length === 0) continue;
+
+    const uniquePatterns = [...new Set(activatedPatterns)];
+    const toolingFiles = fg.sync(uniquePatterns, {
+      cwd: directory,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**"],
+      dot: true,
+    });
+    allEntries.push(...toolingFiles);
 
     const uniqueAlwaysUsed = [...new Set(activatedAlwaysUsed)];
     if (uniqueAlwaysUsed.length > 0) {
