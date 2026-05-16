@@ -2179,7 +2179,7 @@ const discoverToolingEntryPoints = (
 
     const mergedDependencies = directory === rootDir
       ? rootDependencies
-      : { ...rootDependencies, ...workspaceDependencies };
+      : workspaceDependencies;
 
     const activatedPatterns: string[] = [];
     const activatedAlwaysUsed: string[] = [];
