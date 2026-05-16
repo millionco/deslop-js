@@ -1025,12 +1025,32 @@ describe("workspace-wildcard-exports", () => {
       `button.ts should be reachable via barrel re-export, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("packages/ui/src/orphan.ts"),
-      `orphan.ts should be reachable via wildcard export ./* -> ./src/*, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("packages/ui/src/orphan.ts"),
+      `orphan.ts should be unused (wildcard exports make files available, not entries), got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("packages/ui/internal/hidden.ts"),
       `internal/hidden.ts should be unused (not covered by exports), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("wildcard-subpath-exports", () => {
+  it("should not treat wildcard export targets as entry points", async () => {
+    const result = await analyzeFixture("wildcard-subpath-exports");
+    const fixtureDir = resolve(FIXTURES_DIR, "wildcard-subpath-exports");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/templates/welcome.tsx"),
+      `welcome.tsx should be unused (wildcard exports are not entries), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/templates/goodbye.tsx"),
+      `goodbye.tsx should be unused (wildcard exports are not entries), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
     );
   });
 });
@@ -1663,16 +1683,16 @@ test("should exclude multi-segment config files (e.g. cypress.config.contract.js
   );
 });
 
-test("should treat jest __mocks__ files as entry points", async () => {
+test("should treat jest __mocks__ files as unused (matching fallow)", async () => {
   const result = await analyzeFixture("jest-module-mapper");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
-    !unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/styleMock.js")),
-    `styleMock.js should be an entry point (jest mock), got unused: ${unusedFilePaths}`,
+    unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/styleMock.js")),
+    `styleMock.js should be unused (not statically imported), got unused: ${unusedFilePaths}`,
   );
   assert.ok(
-    !unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/fileMock.js")),
-    `fileMock.js should be an entry point (jest mock), got unused: ${unusedFilePaths}`,
+    unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/fileMock.js")),
+    `fileMock.js should be unused (not statically imported), got unused: ${unusedFilePaths}`,
   );
   assert.ok(
     unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
@@ -2301,21 +2321,21 @@ describe("cross-env-wrapper", () => {
 });
 
 describe("jest-mocks-entry", () => {
-  it("should treat __mocks__ files as jest test entries (matching fallow behavior)", async () => {
+  it("should treat __mocks__ files as unused (fallow does not auto-enter __mocks__)", async () => {
     const result = await analyzeFixture("jest-mocks-entry");
     const fixtureDir = resolve(FIXTURES_DIR, "jest-mocks-entry");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/__mocks__/fs.ts"),
-      `src/__mocks__/fs.ts should NOT be unused (jest auto-mock entry), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/__mocks__/fs.ts"),
+      `src/__mocks__/fs.ts should be unused (no static import), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("src/__mocks__/axios.ts"),
-      `src/__mocks__/axios.ts should NOT be unused (jest auto-mock entry), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/__mocks__/axios.ts"),
+      `src/__mocks__/axios.ts should be unused (no static import), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("__mocks__/some-lib.js"),
-      `__mocks__/some-lib.js should NOT be unused (jest auto-mock entry), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("__mocks__/some-lib.js"),
+      `__mocks__/some-lib.js should be unused (no static import), got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),

@@ -1014,8 +1014,7 @@ const findNestedBlockRanges = (content: string, blockStartPattern: RegExp): [num
 
 const SETUP_FILES_PATTERN = /(?:setupFiles|setupFilesAfterEnv|globalSetup|globalTeardown)\s*:\s*(?:\[([^\]]*)\]|['"]([^'"]+)['"])/gs;
 const SETUP_FILE_PATH_PATTERN = /['"]([^'"]+)['"]/g;
-const MODULE_NAME_MAPPER_PATTERN = /moduleNameMapper\s*:\s*\{([^}]*)\}/gs;
-const MODULE_NAME_MAPPER_VALUE_PATTERN = /<rootDir>\/([^'"]+)/g;
+
 
 const extractTestSetupFiles = (directory: string): string[] => {
   const entries: string[] = [];
@@ -1062,20 +1061,7 @@ const extractTestSetupFiles = (directory: string): string[] => {
         }
       }
 
-      let mapperMatch: RegExpExecArray | null;
-      MODULE_NAME_MAPPER_PATTERN.lastIndex = 0;
-      while ((mapperMatch = MODULE_NAME_MAPPER_PATTERN.exec(content)) !== null) {
-        const mapperContent = mapperMatch[1];
-        let valueMatch: RegExpExecArray | null;
-        MODULE_NAME_MAPPER_VALUE_PATTERN.lastIndex = 0;
-        while ((valueMatch = MODULE_NAME_MAPPER_VALUE_PATTERN.exec(mapperContent)) !== null) {
-          const relativePath = valueMatch[1];
-          const absolutePath = resolve(configDirectory, relativePath);
-          if (existsSync(absolutePath)) {
-            entries.push(absolutePath);
-          }
-        }
-      }
+
     } catch {
     }
   }
@@ -1090,21 +1076,9 @@ const collectExportPaths = (
 ): void => {
   if (typeof exportValue === "string") {
     if (exportValue.includes("*")) {
-      const globPattern = exportValue.replace(/^\.\/?/, "");
-      try {
-        const expandedFiles = fg.sync(globPattern, {
-          cwd: rootDir,
-          absolute: true,
-          onlyFiles: true,
-          ignore: ["**/node_modules/**"],
-        });
-        entries.push(...expandedFiles);
-      } catch {
-        entries.push(resolve(rootDir, exportValue));
-      }
-    } else {
-      entries.push(resolveEntryPath(exportValue, rootDir));
+      return;
     }
+    entries.push(resolveEntryPath(exportValue, rootDir));
     return;
   }
 
@@ -1166,7 +1140,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*.test.{ts,tsx,js,jsx,mts,mjs}",
       "**/*.spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
-      "**/__mocks__/**/*.{ts,tsx,js,jsx,mjs,cjs}",
+
     ],
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
