@@ -5,7 +5,8 @@ const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs"];
 
 const OUTPUT_DIR_PREFIXES = [
   "dist/esm/", "dist/cjs/", "dist/es/", "dist/lib/",
-  "dist/", "build/", "lib/", "lib-dist/", "esm/", "cjs/", "out/",
+  "dist/", "dist-js/", "dist-es/", "dist-cjs/",
+  "build/", "lib/", "lib-dist/", "esm/", "cjs/", "out/",
 ];
 const SOURCE_INDEX_FALLBACK_STEMS = ["src/index", "src/main", "index", "main"];
 
