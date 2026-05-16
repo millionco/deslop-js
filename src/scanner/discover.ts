@@ -3,7 +3,7 @@ import { resolve, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { FileId, DeslopConfig, DiscoveredEntryPoints } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, SHALLOW_WORKSPACE_MAX_DEPTH } from "../constants.js";
+import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_EXTENSIONLESS_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, SHALLOW_WORKSPACE_MAX_DEPTH } from "../constants.js";
 import { discoverWorkspacePackagesWithExclusions, discoverFrameworkEntryPoints } from "./workspaces.js";
 import type { WorkspacePackage } from "./workspaces.js";
 import { resolveSourcePath } from "../resolver/source-path.js";
@@ -525,6 +525,18 @@ const extractScriptFileArguments = (scriptCommand: string, directory: string): s
   return entries;
 };
 
+const EXTENSIONLESS_SCRIPT_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".cjs"];
+
+const resolveExtensionlessScriptPath = (basePath: string): string | undefined => {
+  for (const extension of EXTENSIONLESS_SCRIPT_EXTENSIONS) {
+    const candidate = basePath + extension;
+    if (existsSync(candidate)) return candidate;
+  }
+  const indexCandidate = resolve(basePath, "index.ts");
+  if (existsSync(indexCandidate)) return indexCandidate;
+  return undefined;
+};
+
 const extractScriptEntries = (directory: string): string[] => {
   const packageJsonPath = resolve(directory, "package.json");
   if (!existsSync(packageJsonPath)) return [];
@@ -547,6 +559,15 @@ const extractScriptEntries = (directory: string): string[] => {
             const sourcePath = resolveSourcePath(scriptFilePath, directory);
             if (sourcePath) {
               entries.push(sourcePath);
+            }
+          }
+        } else {
+          const extensionlessMatch = scriptCommand.match(SCRIPT_EXTENSIONLESS_FILE_PATTERN);
+          if (extensionlessMatch?.[1]) {
+            const extensionlessPath = extensionlessMatch[1];
+            const resolved = resolveExtensionlessScriptPath(resolve(directory, extensionlessPath));
+            if (resolved) {
+              entries.push(resolved);
             }
           }
         }

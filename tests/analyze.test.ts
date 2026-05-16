@@ -2817,3 +2817,31 @@ describe("react-router-v7", () => {
     );
   });
 });
+
+describe("extensionless-script-entry", () => {
+  it("should resolve script file references without extensions to their source files", async () => {
+    const result = await analyzeFixture("extensionless-script-entry");
+    const fixtureDir = resolve(FIXTURES_DIR, "extensionless-script-entry");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("scripts/build-data.ts"),
+      `scripts/build-data.ts should be reachable via 'tsx ./scripts/build-data' (extensionless), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("scripts/lint-code.js"),
+      `scripts/lint-code.js should be reachable via 'node scripts/lint-code' (extensionless), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("scripts/process-items.ts"),
+      `scripts/process-items.ts should be reachable via 'ts-node ./scripts/process-items' (extensionless), got unused: ${unusedFilePaths}`,
+    );
+  });
+});
