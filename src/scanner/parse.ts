@@ -513,6 +513,33 @@ const extractStringLiteralFromArgument = (
   return typeof literalValue === "string" ? literalValue : undefined;
 };
 
+const hasMockFactoryArgument = (callExpression: CallExpression): boolean => {
+  const secondArgument = callExpression.arguments[1];
+  if (!secondArgument) return false;
+  if (secondArgument.type === "SpreadElement") return false;
+  return (
+    secondArgument.type === "ArrowFunctionExpression" ||
+    secondArgument.type === "FunctionExpression"
+  );
+};
+
+const synthesizeAutoMockSibling = (mockSource: string): string | undefined => {
+  if (
+    !mockSource ||
+    mockSource.includes("://") ||
+    mockSource.startsWith("data:") ||
+    mockSource.split("/").some((segment) => segment === "__mocks__")
+  ) {
+    return undefined;
+  }
+  const lastSlashIndex = mockSource.lastIndexOf("/");
+  if (lastSlashIndex === -1) return undefined;
+  const directory = mockSource.slice(0, lastSlashIndex);
+  const fileName = mockSource.slice(lastSlashIndex + 1);
+  if (!fileName) return undefined;
+  return `${directory}/__mocks__/${fileName}`;
+};
+
 const collectDynamicImports = (
   bodyNodes: Array<Statement | ModuleDeclaration>,
   sourceText: string,
@@ -592,6 +619,20 @@ const collectDynamicImports = (
               line: getLineFromOffset(sourceText, callExpression.start),
               column: getColumnFromOffset(sourceText, callExpression.start),
             });
+
+            const hasFactoryArgument = hasMockFactoryArgument(callExpression);
+            const autoMockSibling = synthesizeAutoMockSibling(mockSpecifier);
+            if (!hasFactoryArgument && autoMockSibling) {
+              imports.push({
+                specifier: autoMockSibling,
+                importedNames: [createNamespaceImportedName()],
+                isTypeOnly: false,
+                isDynamic: true,
+                isSideEffect: true,
+                line: getLineFromOffset(sourceText, callExpression.start),
+                column: getColumnFromOffset(sourceText, callExpression.start),
+              });
+            }
           }
         }
         if (

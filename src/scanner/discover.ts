@@ -1726,12 +1726,7 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     ],
     alwaysUsed: [],
   },
-  {
-    enablers: ["lage"],
-    enablerPrefixes: [],
-    entryPatterns: [],
-    alwaysUsed: ["lage.config.{js,cjs,mjs}"],
-  },
+
   {
     enablers: ["lefthook"],
     enablerPrefixes: [],
