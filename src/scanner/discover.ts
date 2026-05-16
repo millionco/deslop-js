@@ -1768,6 +1768,21 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     alwaysUsed: ["rollup.config.{ts,js,mjs,cjs}", "rollup.*.config.{ts,js,mjs,cjs}"],
   },
   {
+    enablers: ["@rspack/core", "@rspack/cli"],
+    enablerPrefixes: ["@rspack/"],
+    entryPatterns: ["src/index.{ts,tsx,js,jsx}"],
+    alwaysUsed: [
+      "rspack.config.{ts,js,mjs,cjs}",
+      "rspack.*.config.{ts,js,mjs,cjs}",
+    ],
+  },
+  {
+    enablers: ["@rsbuild/core"],
+    enablerPrefixes: ["@rsbuild/"],
+    entryPatterns: ["src/index.{ts,tsx,js,jsx}"],
+    alwaysUsed: ["rsbuild.config.{ts,js,mjs,cjs}"],
+  },
+  {
     enablers: ["tsup"],
     enablerPrefixes: [],
     entryPatterns: [],
@@ -1813,13 +1828,18 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     enablers: ["astro"],
     enablerPrefixes: ["@astrojs/"],
     entryPatterns: [
-      "src/pages/**/*.{astro,ts,tsx,js,jsx,md,mdx}",
-      "src/content/**/*.{ts,js,md,mdx}",
+      "src/pages/**/*.{astro,ts,tsx,js,jsx,mts,mjs,cts,cjs,md,mdx}",
+      "src/content/**/*.{ts,js,mts,mjs,cts,cjs,md,mdx}",
       "src/layouts/**/*.astro",
       "src/middleware.{js,ts,mjs,mts,cjs,cts}",
       "src/middleware/index.{js,ts,mjs,mts,cjs,cts}",
+      "src/actions/index.{js,ts,mjs,mts,cjs,cts}",
     ],
-    alwaysUsed: ["astro.config.{ts,js,mjs,cjs}"],
+    alwaysUsed: [
+      "astro.config.{ts,js,mjs,cjs}",
+      "src/content/config.{js,ts,mjs,mts,cjs,cts}",
+      "src/content.config.{js,ts,mjs,mts,cjs,cts}",
+    ],
   },
   {
     enablers: ["i18next", "react-i18next", "vue-i18n", "next-i18next"],

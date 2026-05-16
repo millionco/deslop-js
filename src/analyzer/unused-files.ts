@@ -28,11 +28,11 @@ const isBarrelWithReachableSources = (
 ): boolean => {
   if (module.exports.length === 0) return false;
 
-  const hasOnlyBarrelExports = module.exports.every(
+  const hasOnlyReExports = module.exports.every(
     (exportInfo) =>
       exportInfo.isNamespaceReExport || exportInfo.isSynthetic,
   );
-  if (!hasOnlyBarrelExports) return false;
+  if (!hasOnlyReExports) return false;
 
   for (const edge of graph.edges) {
     if (edge.source === module.fileId.index) {
