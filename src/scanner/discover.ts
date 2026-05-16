@@ -133,7 +133,7 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
       const hasValidEntries = workspacePackageJsonEntries.some((entryPath) => existsSync(entryPath));
       if (hasValidEntries) {
         workspaceEntries.push(...workspacePackageJsonEntries);
-      } else if (workspacePackageJsonEntries.length > 0) {
+      } else {
         const defaultFallback = findDefaultIndexEntry(workspacePackage.directory);
         if (defaultFallback) {
           workspaceEntries.push(defaultFallback);
@@ -220,7 +220,7 @@ const findDefaultIndexEntry = (directory: string): string | undefined => {
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
 
 const COMMON_SOURCE_DIRECTORIES = ["src", "lib", "main", "app", "source"];
-const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist(?:-[a-z]+)?|build|lib-dist|out|output|cjs|esm|es|umd|module)\//;
+const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist(?:-[a-z]+)?|build|lib-dist|lib|out|output|cjs|esm|es|umd|module)\//;
 
 const findSourceFile = (baseDir: string, relativePath: string): string | undefined => {
   const pathWithoutExtension = join(baseDir, relativePath).replace(/\.[cm]?js(x?)$/, "");
