@@ -291,12 +291,20 @@ const resolveEntryPathViaHeuristic = (entryPath: string, rootDir: string): strin
 
 const resolveEntryPath = (entryPath: string, rootDir: string): string => {
   const absolutePath = resolve(rootDir, entryPath);
+  const normalizedEntry = entryPath.replace(/^\.\//, "");
+  const isInBuildOutputDirectory = BUILD_OUTPUT_DIRECTORY_PATTERN.test(normalizedEntry);
+  if (isInBuildOutputDirectory) {
+    const sourcePath = resolveBuiltPathToSource(absolutePath, rootDir);
+    if (sourcePath) return sourcePath;
+    const heuristicMatch = resolveEntryPathViaHeuristic(normalizedEntry, rootDir);
+    if (heuristicMatch) return heuristicMatch;
+  }
   if (existsSync(absolutePath)) return absolutePath;
   const sourcePath = resolveBuiltPathToSource(absolutePath, rootDir);
   if (sourcePath) return sourcePath;
-  const directSourceMatch = findSourceFile(rootDir, entryPath.replace(/^\.\//, ""));
+  const directSourceMatch = findSourceFile(rootDir, normalizedEntry);
   if (directSourceMatch) return directSourceMatch;
-  const heuristicMatch = resolveEntryPathViaHeuristic(entryPath, rootDir);
+  const heuristicMatch = resolveEntryPathViaHeuristic(normalizedEntry, rootDir);
   if (heuristicMatch) return heuristicMatch;
   return absolutePath;
 };
