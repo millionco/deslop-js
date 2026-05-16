@@ -955,6 +955,63 @@ const extractNextConfigPluginFiles = (directory: string): string[] => {
 
 const VITEST_INCLUDE_ITEM_PATTERN = /['"]([^'"]+)['"]/g;
 const COVERAGE_BLOCK_PATTERN = /coverage\s*:\s*\{/g;
+const TEST_MATCH_ARRAY_PATTERN = /testMatch\s*:\s*\[([^\]]*)\]/;
+const STRING_LITERAL_PATTERN = /['"]([^'"]+)['"]/g;
+
+const extractJestTestMatchPatterns = (directory: string): string[] => {
+  const configPaths = fg.sync([
+    "jest.config.{ts,js,mjs,cjs}",
+  ], {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**"],
+  });
+
+  if (configPaths.length === 0) {
+    try {
+      const packageJsonPath = join(directory, "package.json");
+      const packageContent = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(packageContent);
+      if (packageJson.jest?.testMatch) {
+        return convertJestTestMatchToGlobs(packageJson.jest.testMatch);
+      }
+    } catch {
+    }
+    return [];
+  }
+
+  for (const configPath of configPaths) {
+    try {
+      const content = readFileSync(configPath, "utf-8");
+      const testMatchMatch = TEST_MATCH_ARRAY_PATTERN.exec(content);
+      if (!testMatchMatch) continue;
+
+      const arrayContent = testMatchMatch[1];
+      const patterns: string[] = [];
+      STRING_LITERAL_PATTERN.lastIndex = 0;
+      let itemMatch: RegExpExecArray | null;
+      while ((itemMatch = STRING_LITERAL_PATTERN.exec(arrayContent)) !== null) {
+        patterns.push(itemMatch[1]);
+      }
+      if (patterns.length > 0) {
+        return convertJestTestMatchToGlobs(patterns);
+      }
+    } catch {
+    }
+  }
+  return [];
+};
+
+const convertJestTestMatchToGlobs = (patterns: string[]): string[] => {
+  return patterns.map((pattern) => {
+    let converted = pattern.replace(/<rootDir>\/?/g, "");
+    converted = converted.replace(/\?\(\*\.\)/g, "");
+    converted = converted.replace(/\+\(([^)]+)\)/g, "{$1}");
+    converted = converted.replace(/\?\(([^)]+)\)/g, "{$1,}");
+    return converted;
+  });
+};
 
 const extractVitestIncludePatterns = (directory: string): string[] => {
   const configPaths = fg.sync([
@@ -1854,11 +1911,15 @@ const discoverTestRunnerEntryPoints = (
     for (const runner of TEST_RUNNER_DEFINITIONS) {
       if (isRunnerEnabled(runner, allDependencies, directory)) {
         const isVitestRunner = runner.enablers.includes("vitest");
-        const customIncludePatterns = isVitestRunner
-          ? extractVitestIncludePatterns(directory)
-          : [];
-        if (customIncludePatterns.length > 0) {
-          activatedPatterns.push(...customIncludePatterns);
+        const isJestRunner = runner.enablers.includes("jest");
+        let customPatterns: string[] = [];
+        if (isVitestRunner) {
+          customPatterns = extractVitestIncludePatterns(directory);
+        } else if (isJestRunner) {
+          customPatterns = extractJestTestMatchPatterns(directory);
+        }
+        if (customPatterns.length > 0) {
+          activatedPatterns.push(...customPatterns);
         } else {
           activatedPatterns.push(...runner.entryPatterns);
         }
