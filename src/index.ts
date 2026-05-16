@@ -2,7 +2,7 @@ import { resolve, dirname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import fg from "fast-glob";
 import type { DeslopConfig, AnalysisResult } from "./types.js";
-import { DEFAULT_ENTRY_PATTERNS, DEFAULT_EXTENSIONS } from "./constants.js";
+import { DEFAULT_ENTRY_PATTERNS, DEFAULT_EXTENSIONS, OUTPUT_DIRECTORIES } from "./constants.js";
 import { discoverFiles, discoverEntryPoints, discoverFrameworkIgnorePatterns } from "./scanner/discover.js";
 import { discoverWorkspacePackagesWithExclusions } from "./scanner/workspaces.js";
 import { parseModule } from "./scanner/parse.js";
@@ -56,9 +56,19 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
 
   const frameworkIgnorePatterns = discoverFrameworkIgnorePatterns(config.rootDir);
 
+  const absoluteRoot = resolve(config.rootDir);
+  const outputDirectoryExclusions = OUTPUT_DIRECTORIES.flatMap((outputDirectory) => {
+    const exclusions = [`${absoluteRoot}/${outputDirectory}/**`];
+    for (const workspacePackage of workspacePackages) {
+      exclusions.push(`${workspacePackage.directory}/${outputDirectory}/**`);
+    }
+    return exclusions;
+  });
+
   const allExclusionPatterns = [
     ...workspaceDiscovery.excludedDirectories.map((directory) => `${directory}/**`),
     ...frameworkIgnorePatterns,
+    ...outputDirectoryExclusions,
   ];
 
   const configWithExclusions = allExclusionPatterns.length > 0

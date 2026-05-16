@@ -2050,6 +2050,24 @@ it("should extract entry points from tsdown/tsup config files", async () => {
   );
 });
 
+it("should not exclude source directories named build from scanning", async () => {
+  const result = await analyzeFixture("source-build-directory");
+  const fixtureDir = resolve(FIXTURES_DIR, "source-build-directory");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/build/plugins.ts"),
+    `src/build/plugins.ts should be reachable (imported by src/index.ts), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/build/helpers.ts"),
+    `src/build/helpers.ts should be reachable (imported by src/build/plugins.ts), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
+    `src/orphan.ts should be flagged as unused, got: ${unusedFilePaths}`,
+  );
+});
+
 it("should treat files referenced via vi.mock/jest.mock as reachable (test imports create edges)", async () => {
   const result = await analyzeFixture("test-mock-imports");
   const fixtureDir = resolve(FIXTURES_DIR, "test-mock-imports");

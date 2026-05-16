@@ -33,8 +33,6 @@ export const SOURCE_EXTENSIONS = ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs",
 
 export const DEFAULT_IGNORE_PATTERNS = [
   "**/node_modules/**",
-  "**/dist/**",
-  "**/build/**",
   "**/.git/**",
   "**/coverage/**",
   "**/*.min.js",
