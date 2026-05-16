@@ -1077,6 +1077,50 @@ describe("import-meta-glob", () => {
   });
 });
 
+describe("jest-mocks", () => {
+  it("should treat __mocks__ files as test entry points when jest is present (matching fallow)", async () => {
+    const result = await analyzeFixture("jest-mocks");
+    const fixtureDir = resolve(FIXTURES_DIR, "jest-mocks");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("__mocks__/fs.ts"),
+      `__mocks__/fs.ts should be reachable as Jest manual mock entry, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("__mocks__/api-client.ts"),
+      `__mocks__/api-client.ts should be reachable as Jest manual mock entry, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("require-context", () => {
+  it("should resolve require.context patterns with recursive flag and regex filter (matching fallow)", async () => {
+    const result = await analyzeFixture("require-context");
+    const fixtureDir = resolve(FIXTURES_DIR, "require-context");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/components/Button.tsx"),
+      `Button.tsx should be reachable via require.context('./components', true, /\\.tsx$/), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/components/nested/Card.tsx"),
+      `nested/Card.tsx should be reachable via recursive require.context, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/pages/home.ts"),
+      `pages/home.ts should be reachable via require.context('./pages', false), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused (not matched by any require.context), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("storybook-project", () => {
   it("should treat .stories.ts files as entry points when @storybook/* is present", async () => {
     const result = await analyzeFixture("storybook-project");
@@ -1705,16 +1749,16 @@ test("should exclude multi-segment config files (e.g. cypress.config.contract.js
   );
 });
 
-test("should treat jest __mocks__ files as unused (matching fallow)", async () => {
+test("should treat jest __mocks__ files as entry points (matching fallow)", async () => {
   const result = await analyzeFixture("jest-module-mapper");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
-    unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/styleMock.js")),
-    `styleMock.js should be unused (__mocks__ are not entry points), got unused: ${unusedFilePaths}`,
+    !unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/styleMock.js")),
+    `styleMock.js should be reachable as Jest __mocks__ entry, got unused: ${unusedFilePaths}`,
   );
   assert.ok(
-    unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/fileMock.js")),
-    `fileMock.js should be unused (__mocks__ are not entry points), got unused: ${unusedFilePaths}`,
+    !unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/fileMock.js")),
+    `fileMock.js should be reachable as Jest __mocks__ entry, got unused: ${unusedFilePaths}`,
   );
   assert.ok(
     unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
@@ -2343,21 +2387,21 @@ describe("cross-env-wrapper", () => {
 });
 
 describe("jest-mocks-entry", () => {
-  it("should treat __mocks__ files as unused in jest projects (matching fallow)", async () => {
+  it("should treat __mocks__ files as entry points in jest projects (matching fallow)", async () => {
     const result = await analyzeFixture("jest-mocks-entry");
     const fixtureDir = resolve(FIXTURES_DIR, "jest-mocks-entry");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/__mocks__/fs.ts"),
-      `src/__mocks__/fs.ts should be unused (__mocks__ are not entries), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/__mocks__/fs.ts"),
+      `src/__mocks__/fs.ts should be reachable as Jest __mocks__ entry, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("src/__mocks__/axios.ts"),
-      `src/__mocks__/axios.ts should be unused (__mocks__ are not entries), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/__mocks__/axios.ts"),
+      `src/__mocks__/axios.ts should be reachable as Jest __mocks__ entry, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("__mocks__/some-lib.js"),
-      `__mocks__/some-lib.js should be unused (__mocks__ are not entries), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("__mocks__/some-lib.js"),
+      `__mocks__/some-lib.js should be reachable as Jest __mocks__ entry, got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
