@@ -1,6 +1,7 @@
-import { resolve, join, relative } from "node:path";
+import { resolve, join, relative, dirname } from "node:path";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import fg from "fast-glob";
+import { extractReactRouterRouteModuleEntries } from "./parse.js";
 
 export interface WorkspacePackage {
   name: string;
@@ -426,6 +427,52 @@ const extractReactRouterAppDirectory = (directory: string): string => {
   return "app";
 };
 
+const ROUTE_FILE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"];
+
+const resolveRouteModulePath = (modulePath: string, routesFileDirectory: string): string | undefined => {
+  const normalizedPath = modulePath.startsWith("./") ? modulePath.slice(2) : modulePath;
+
+  const hasExtension = ROUTE_FILE_EXTENSIONS.some((extension) => normalizedPath.endsWith(extension));
+  if (hasExtension) {
+    const absolutePath = resolve(routesFileDirectory, normalizedPath);
+    if (existsSync(absolutePath)) return absolutePath;
+    return undefined;
+  }
+
+  for (const extension of ROUTE_FILE_EXTENSIONS) {
+    const absolutePath = resolve(routesFileDirectory, normalizedPath + extension);
+    if (existsSync(absolutePath)) return absolutePath;
+  }
+
+  for (const extension of ROUTE_FILE_EXTENSIONS) {
+    const absolutePath = resolve(routesFileDirectory, normalizedPath, `index${extension}`);
+    if (existsSync(absolutePath)) return absolutePath;
+  }
+
+  return undefined;
+};
+
+const extractRouteModuleEntriesFromRoutesFiles = (rootDir: string, appDirectory: string): string[] => {
+  const routesFileCandidates = fg.sync([
+    `${appDirectory}/routes.{ts,js,mts,mjs}`,
+    `${appDirectory}/routes/**/*.{ts,js,mts,mjs}`,
+    `src/routes.{ts,js,mts,mjs}`,
+  ], { cwd: rootDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"] });
+
+  const resolvedEntries: string[] = [];
+  for (const routesFilePath of routesFileCandidates) {
+    const routesFileDirectory = dirname(routesFilePath);
+    const modulePaths = extractReactRouterRouteModuleEntries(routesFilePath);
+    for (const modulePath of modulePaths) {
+      const resolvedPath = resolveRouteModulePath(modulePath, routesFileDirectory);
+      if (resolvedPath) {
+        resolvedEntries.push(resolvedPath);
+      }
+    }
+  }
+  return resolvedEntries;
+};
+
 export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
   const entryPoints: string[] = [];
   const dependencies = readDependencies(rootDir);
@@ -478,6 +525,9 @@ export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
       `${reactRouterAppDirectory}/entry.server.{ts,tsx,js,jsx}`,
       `${reactRouterAppDirectory}/routes.{ts,js,mts,mjs}`,
     ], { cwd: rootDir, absolute: true, onlyFiles: true, ignore: ["**/node_modules/**"] }));
+
+    const routeModuleEntries = extractRouteModuleEntriesFromRoutesFiles(rootDir, reactRouterAppDirectory);
+    entryPoints.push(...routeModuleEntries);
   }
 
   if (isNuxt) {

@@ -2623,7 +2623,7 @@ describe("vitest-auto-mock", () => {
 });
 
 describe("react-router-v7", () => {
-  it("should only treat app/routes/** as entry points, not app/**/page.tsx or app/**/layout.tsx", async () => {
+  it("should treat files referenced by route/layout/index calls in routes.ts as entry points", async () => {
     const result = await analyzeFixture("react-router-v7");
     const fixtureDir = resolve(FIXTURES_DIR, "react-router-v7");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -2634,23 +2634,23 @@ describe("react-router-v7", () => {
     );
 
     assert.ok(
-      unusedFilePaths.includes("app/dashboard/page.tsx"),
-      `app/dashboard/page.tsx should be unused (not a Next.js app), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("app/dashboard/page.tsx"),
+      `app/dashboard/page.tsx should be reachable via index() in routes.ts, got unused: ${unusedFilePaths}`,
     );
 
     assert.ok(
-      unusedFilePaths.includes("app/dashboard/layout.tsx"),
-      `app/dashboard/layout.tsx should be unused (not a Next.js app), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("app/dashboard/layout.tsx"),
+      `app/dashboard/layout.tsx should be reachable via layout() in routes.ts, got unused: ${unusedFilePaths}`,
     );
 
     assert.ok(
       !unusedFilePaths.includes("app/routes/home.tsx"),
-      `app/routes/home.tsx should be reachable via routes entry, got unused: ${unusedFilePaths}`,
+      `app/routes/home.tsx should be reachable via route() in routes.ts, got unused: ${unusedFilePaths}`,
     );
 
     assert.ok(
       !unusedFilePaths.includes("app/routes/about.tsx"),
-      `app/routes/about.tsx should be reachable via routes entry, got unused: ${unusedFilePaths}`,
+      `app/routes/about.tsx should be reachable via route() in routes.ts, got unused: ${unusedFilePaths}`,
     );
 
     assert.ok(

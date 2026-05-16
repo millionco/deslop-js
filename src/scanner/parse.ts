@@ -783,3 +783,72 @@ const collectDynamicImports = (
     if (isWalkableNode(topLevelNode)) walkNode(topLevelNode);
   }
 };
+
+const ROUTE_CALL_FILE_ARG_INDEX: Record<string, number> = {
+  route: 1,
+  layout: 0,
+  index: 0,
+};
+
+const extractStringFromExpression = (expression: WalkableNode): string | undefined => {
+  if (expression.type === "Literal") {
+    const literalValue = (expression as unknown as StringLiteral).value;
+    return typeof literalValue === "string" ? literalValue : undefined;
+  }
+  if (expression.type === "TemplateLiteral") {
+    const templateLiteral = expression as unknown as { quasis: Array<{ value: { cooked: string } }>; expressions: unknown[] };
+    if (templateLiteral.expressions.length === 0 && templateLiteral.quasis.length === 1) {
+      return templateLiteral.quasis[0]?.value.cooked;
+    }
+  }
+  return undefined;
+};
+
+export const extractReactRouterRouteModuleEntries = (routesFilePath: string): string[] => {
+  const sourceText = readFileSync(routesFilePath, "utf-8");
+  const result = parseSync(routesFilePath, sourceText);
+
+  if (result.errors.length > 0 || !result.program?.body) {
+    return [];
+  }
+
+  const modulePaths: string[] = [];
+
+  const walkForRouteCalls = (node: WalkableNode): void => {
+    if (node.type === "CallExpression") {
+      const callExpression = node as unknown as CallExpression;
+      const callee = callExpression.callee;
+
+      if (callee.type === "Identifier") {
+        const calleeName = (callee as { name: string }).name;
+        const fileArgumentIndex = ROUTE_CALL_FILE_ARG_INDEX[calleeName];
+
+        if (fileArgumentIndex !== undefined) {
+          const fileArgument = callExpression.arguments[fileArgumentIndex];
+          if (fileArgument && fileArgument.type !== "SpreadElement") {
+            const filePath = extractStringFromExpression(fileArgument as unknown as WalkableNode);
+            if (filePath) {
+              modulePaths.push(filePath);
+            }
+          }
+        }
+      }
+    }
+
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) {
+        for (const element of value) {
+          if (isWalkableNode(element)) walkForRouteCalls(element);
+        }
+      } else if (isWalkableNode(value)) {
+        walkForRouteCalls(value);
+      }
+    }
+  };
+
+  for (const topLevelNode of result.program.body) {
+    if (isWalkableNode(topLevelNode)) walkForRouteCalls(topLevelNode);
+  }
+
+  return modulePaths;
+};
