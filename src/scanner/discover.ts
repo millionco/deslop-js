@@ -895,8 +895,8 @@ const extractNextConfigPluginFiles = (directory: string): string[] => {
   return entries;
 };
 
-const VITEST_INCLUDE_PATTERN = /(?:^|\n)\s*include\s*:\s*\[([^\]]*)\]/gs;
 const VITEST_INCLUDE_ITEM_PATTERN = /['"]([^'"]+)['"]/g;
+const COVERAGE_BLOCK_PATTERN = /coverage\s*:\s*\{/g;
 
 const extractVitestIncludePatterns = (directory: string): string[] => {
   const configPaths = fg.sync([
@@ -913,9 +913,17 @@ const extractVitestIncludePatterns = (directory: string): string[] => {
   for (const configPath of configPaths) {
     try {
       const content = readFileSync(configPath, "utf-8");
-      VITEST_INCLUDE_PATTERN.lastIndex = 0;
+      const coverageBlockRanges = findNestedBlockRanges(content, COVERAGE_BLOCK_PATTERN);
+      const includePattern = /include\s*:\s*\[([^\]]*)\]/g;
+      includePattern.lastIndex = 0;
       let includeMatch: RegExpExecArray | null;
-      while ((includeMatch = VITEST_INCLUDE_PATTERN.exec(content)) !== null) {
+      while ((includeMatch = includePattern.exec(content)) !== null) {
+        const matchStart = includeMatch.index;
+        const isInsideCoverageBlock = coverageBlockRanges.some(
+          ([blockStart, blockEnd]) => matchStart > blockStart && matchStart < blockEnd,
+        );
+        if (isInsideCoverageBlock) continue;
+
         const arrayContent = includeMatch[1];
         VITEST_INCLUDE_ITEM_PATTERN.lastIndex = 0;
         let itemMatch: RegExpExecArray | null;
@@ -927,6 +935,25 @@ const extractVitestIncludePatterns = (directory: string): string[] => {
     }
   }
   return patterns;
+};
+
+const findNestedBlockRanges = (content: string, blockStartPattern: RegExp): [number, number][] => {
+  const ranges: [number, number][] = [];
+  blockStartPattern.lastIndex = 0;
+  let blockMatch: RegExpExecArray | null;
+  while ((blockMatch = blockStartPattern.exec(content)) !== null) {
+    const openBraceIndex = content.indexOf("{", blockMatch.index);
+    if (openBraceIndex === -1) continue;
+    let braceDepth = 1;
+    let position = openBraceIndex + 1;
+    while (position < content.length && braceDepth > 0) {
+      if (content[position] === "{") braceDepth++;
+      if (content[position] === "}") braceDepth--;
+      position++;
+    }
+    ranges.push([blockMatch.index, position]);
+  }
+  return ranges;
 };
 
 const SETUP_FILES_PATTERN = /(?:setupFiles|setupFilesAfterEnv|globalSetup|globalTeardown)\s*:\s*(?:\[([^\]]*)\]|['"]([^'"]+)['"])/gs;

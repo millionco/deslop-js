@@ -2339,3 +2339,23 @@ describe("mdx-imports", () => {
     );
   });
 });
+
+describe("vitest-coverage-include", () => {
+  it("should not confuse coverage.include with test.include patterns", async () => {
+    const result = await analyzeFixture("vitest-coverage-include");
+    const fixtureDir = resolve(FIXTURES_DIR, "vitest-coverage-include");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("tests/core.test.ts"),
+      `core.test.ts should NOT be unused (vitest test file), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts should be unused (vitest-coverage-include), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/utils.ts"),
+      `src/utils.ts should be unused (not imported by any test or entry), got: ${unusedFilePaths}`,
+    );
+  });
+});
