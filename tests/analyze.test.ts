@@ -1025,8 +1025,8 @@ describe("workspace-wildcard-exports", () => {
       `button.ts should be reachable via barrel re-export, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("packages/ui/src/orphan.ts"),
-      `orphan.ts should be unused (wildcard exports make files available, not entries), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("packages/ui/src/orphan.ts"),
+      `orphan.ts should be reachable via wildcard export pattern, got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("packages/ui/internal/hidden.ts"),
@@ -1036,21 +1036,21 @@ describe("workspace-wildcard-exports", () => {
 });
 
 describe("wildcard-subpath-exports", () => {
-  it("should not treat wildcard export targets as entry points", async () => {
+  it("should expand wildcard export targets as entry points", async () => {
     const result = await analyzeFixture("wildcard-subpath-exports");
     const fixtureDir = resolve(FIXTURES_DIR, "wildcard-subpath-exports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/templates/welcome.tsx"),
-      `welcome.tsx should be unused (wildcard exports are not entries), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/templates/welcome.tsx"),
+      `welcome.tsx should be reachable via wildcard export, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("src/templates/goodbye.tsx"),
-      `goodbye.tsx should be unused (wildcard exports are not entries), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/templates/goodbye.tsx"),
+      `goodbye.tsx should be reachable via wildcard export, got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
-      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+      `orphan.ts should be unused (not in templates dir), got: ${unusedFilePaths}`,
     );
   });
 });
