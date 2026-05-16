@@ -2918,4 +2918,60 @@ describe("extensionless-script-entry", () => {
   });
 });
 
+describe("rspack-project", () => {
+  it("should treat rspack config files as always-used entry points (matching fallow)", async () => {
+    const result = await analyzeFixture("rspack-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "rspack-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("rspack.config.js"),
+      `rspack.config.js should be always-used (rspack config), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("rspack.dev.config.js"),
+      `rspack.dev.config.js should be always-used (rspack wildcard config), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/index.ts"),
+      `src/index.ts should be reachable via rspack entry, got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("astro-content-config", () => {
+  it("should treat astro content config files as always-used (matching fallow)", async () => {
+    const result = await analyzeFixture("astro-content-config");
+    const fixtureDir = resolve(FIXTURES_DIR, "astro-content-config");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("astro.config.ts"),
+      `astro.config.ts should be always-used, got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/content.config.ts"),
+      `src/content.config.ts should be always-used (astro content config), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/content/config.ts"),
+      `src/content/config.ts should be always-used (astro content config), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 
