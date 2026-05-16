@@ -2468,3 +2468,21 @@ describe("ci-yaml-non-run-values", () => {
     );
   });
 });
+
+describe("bun-test-runner", () => {
+  it("should detect bun test scripts and treat test files as entry points (matching fallow)", async () => {
+    const result = await analyzeFixture("bun-test-runner");
+    const fixtureDir = resolve(FIXTURES_DIR, "bun-test-runner");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("src/__tests__/build-output.test.ts"),
+      `src/__tests__/build-output.test.ts should NOT be unused (bun test discovers __tests__/), got: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});

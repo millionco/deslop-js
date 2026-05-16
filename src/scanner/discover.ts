@@ -1757,6 +1757,21 @@ const detectNodeTestRunner = (directory: string): boolean => {
   }
 };
 
+const detectBunTestRunner = (directory: string): boolean => {
+  try {
+    const packageJsonPath = join(directory, "package.json");
+    if (!existsSync(packageJsonPath)) return false;
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    const scripts = packageJson.scripts ?? {};
+    return Object.values(scripts).some(
+      (scriptValue) => typeof scriptValue === "string" && /\bbun\s+test\b/.test(scriptValue)
+    );
+  } catch {
+    return false;
+  }
+};
+
 
 
 interface TestRunnerDiscoveryResult {
@@ -1839,7 +1854,8 @@ const discoverTestRunnerEntryPoints = (
     }
 
     const hasNodeTestScript = detectNodeTestRunner(directory) || detectNodeTestRunner(rootDir);
-    if (hasNodeTestScript) {
+    const hasBunTestScript = detectBunTestRunner(directory) || detectBunTestRunner(rootDir);
+    if (hasNodeTestScript || hasBunTestScript) {
       activatedPatterns.push(
         "**/*.test.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
         "**/*.spec.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
