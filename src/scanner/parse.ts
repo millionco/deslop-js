@@ -603,6 +603,26 @@ const collectDynamicImports = (
 
       if (callExpression.callee.type === "MemberExpression" && !callExpression.callee.computed) {
         const memberExpression = callExpression.callee as StaticMemberExpression;
+
+        if (
+          memberExpression.object.type === "Identifier" &&
+          memberExpression.object.name === "require" &&
+          memberExpression.property.name === "resolve"
+        ) {
+          const resolveSpecifier = extractStringLiteralFromArgument(callExpression.arguments);
+          if (resolveSpecifier) {
+            imports.push({
+              specifier: resolveSpecifier,
+              importedNames: [createNamespaceImportedName()],
+              isTypeOnly: false,
+              isDynamic: true,
+              isSideEffect: false,
+              line: getLineFromOffset(sourceText, callExpression.start),
+              column: getColumnFromOffset(sourceText, callExpression.start),
+            });
+          }
+        }
+
         if (
           memberExpression.object.type === "Identifier" &&
           (memberExpression.object.name === "vi" || memberExpression.object.name === "jest") &&
