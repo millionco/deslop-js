@@ -363,8 +363,16 @@ const NON_ENTRY_BINARIES = new Set([
   "pnpm", "npm", "yarn", "ni", "nr", "nun",
   "next", "nuxt", "astro", "vite", "svelte-kit",
   "prisma", "drizzle-kit",
-  "formatjs", "i18next-parser", "lingui",
+  "formatjs", "i18next", "i18next-parser", "lingui",
   "storybook", "chromatic", "msw",
+  "patch-package", "syncpack", "manypkg",
+  "jest", "vitest", "mocha", "ava", "tap", "c8", "nyc",
+  "playwright", "cypress", "puppeteer", "webdriver",
+  "sequelize", "typeorm", "mikro-orm",
+  "wait-on", "start-server-and-test",
+  "remark", "markdownlint", "markdownlint-cli2", "textlint", "alex", "cspell",
+  "ncu", "npm-check-updates", "size-limit", "bundlewatch",
+  "dbdocs", "lobe-i18n", "lobe-seo",
 ]);
 
 const looksLikeFilePath = (token: string): boolean => {
@@ -395,19 +403,19 @@ const extractScriptFileArguments = (scriptCommand: string, directory: string): s
 
     const binaryName = tokens[0].replace(/^.*\//, "");
     if (SCRIPT_MULTIPLEXERS.has(binaryName)) continue;
-    if (NON_ENTRY_BINARIES.has(binaryName)) continue;
 
     const effectiveBinaryName = (binaryName === "npx" || binaryName === "pnpx" || binaryName === "bunx")
       ? (tokens[1]?.replace(/^.*\//, "") ?? "")
       : binaryName;
-    if (effectiveBinaryName && NON_ENTRY_BINARIES.has(effectiveBinaryName)) continue;
+    const isNonEntryBinary = NON_ENTRY_BINARIES.has(binaryName) ||
+      (effectiveBinaryName !== "" && NON_ENTRY_BINARIES.has(effectiveBinaryName));
 
     for (let tokenIndex = 1; tokenIndex < tokens.length; tokenIndex++) {
       const token = tokens[tokenIndex].replace(/^['"]|['"]$/g, "");
 
       if (token === "--config" || token === "-c") {
         if (tokenIndex + 1 < tokens.length && !tokens[tokenIndex + 1].startsWith("-")) {
-          const configPath = tokens[tokenIndex + 1];
+          const configPath = tokens[tokenIndex + 1].replace(/^['"]|['"]$/g, "");
           if (looksLikeFilePath(configPath)) {
             const absoluteConfigPath = resolve(directory, configPath);
             if (existsSync(absoluteConfigPath)) {
@@ -431,6 +439,8 @@ const extractScriptFileArguments = (scriptCommand: string, directory: string): s
       }
 
       if (token.startsWith("-")) continue;
+
+      if (isNonEntryBinary) continue;
 
       if (!looksLikeFilePath(token)) continue;
 
@@ -860,6 +870,40 @@ const extractNextConfigPluginFiles = (directory: string): string[] => {
   }
 
   return entries;
+};
+
+const VITEST_INCLUDE_PATTERN = /(?:^|\n)\s*include\s*:\s*\[([^\]]*)\]/gs;
+const VITEST_INCLUDE_ITEM_PATTERN = /['"]([^'"]+)['"]/g;
+
+const extractVitestIncludePatterns = (directory: string): string[] => {
+  const configPaths = fg.sync([
+    "vitest.config.{ts,js,mts,mjs}",
+    "vitest.web.config.{ts,js,mts,mjs}",
+  ], {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**"],
+  });
+
+  const patterns: string[] = [];
+  for (const configPath of configPaths) {
+    try {
+      const content = readFileSync(configPath, "utf-8");
+      VITEST_INCLUDE_PATTERN.lastIndex = 0;
+      let includeMatch: RegExpExecArray | null;
+      while ((includeMatch = VITEST_INCLUDE_PATTERN.exec(content)) !== null) {
+        const arrayContent = includeMatch[1];
+        VITEST_INCLUDE_ITEM_PATTERN.lastIndex = 0;
+        let itemMatch: RegExpExecArray | null;
+        while ((itemMatch = VITEST_INCLUDE_ITEM_PATTERN.exec(arrayContent)) !== null) {
+          patterns.push(itemMatch[1]);
+        }
+      }
+    } catch {
+    }
+  }
+  return patterns;
 };
 
 const SETUP_FILES_PATTERN = /(?:setupFiles|setupFilesAfterEnv|globalSetup|globalTeardown)\s*:\s*(?:\[([^\]]*)\]|['"]([^'"]+)['"])/gs;
@@ -1655,7 +1699,15 @@ const discoverTestRunnerEntryPoints = (
 
     for (const runner of TEST_RUNNER_DEFINITIONS) {
       if (isRunnerEnabled(runner, allDependencies, directory)) {
-        activatedPatterns.push(...runner.entryPatterns);
+        const isVitestRunner = runner.enablers.includes("vitest");
+        const customIncludePatterns = isVitestRunner
+          ? extractVitestIncludePatterns(directory)
+          : [];
+        if (customIncludePatterns.length > 0) {
+          activatedPatterns.push(...customIncludePatterns);
+        } else {
+          activatedPatterns.push(...runner.entryPatterns);
+        }
         activatedFixturePatterns.push(...runner.fixturePatterns);
         activatedAlwaysUsed.push(...runner.alwaysUsed);
       }

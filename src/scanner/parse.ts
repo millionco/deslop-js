@@ -624,6 +624,69 @@ const collectDynamicImports = (
       }
     }
 
+    if (node.type === "Decorator") {
+      const decoratorNode = node as unknown as { expression: WalkableNode };
+      const expression = decoratorNode.expression;
+      if (
+        expression?.type === "CallExpression"
+      ) {
+        const callNode = expression as unknown as CallExpression;
+        const callee = callNode.callee;
+        if (callee.type === "Identifier" && (callee as { name: string }).name === "Component") {
+          const objectArgument = callNode.arguments[0];
+          if (objectArgument?.type === "ObjectExpression") {
+            const objectProperties = (objectArgument as unknown as { properties: Array<WalkableNode> }).properties;
+            for (const property of objectProperties) {
+              if (property.type !== "ObjectProperty" && property.type !== "Property") continue;
+              const propertyKey = (property as unknown as { key: { name?: string; value?: string } }).key;
+              const propertyName = propertyKey?.name ?? propertyKey?.value;
+              const propertyValue = (property as unknown as { value: WalkableNode }).value;
+              if (propertyName === "templateUrl" && propertyValue?.type === "Literal") {
+                const templatePath = (propertyValue as unknown as StringLiteral).value;
+                if (templatePath) {
+                  imports.push({
+                    specifier: templatePath.startsWith(".") ? templatePath : `./${templatePath}`,
+                    importedNames: [],
+                    isTypeOnly: false,
+                    isDynamic: false,
+                    isSideEffect: true,
+                    line: getLineFromOffset(sourceText, property.start),
+                    column: getColumnFromOffset(sourceText, property.start),
+                  });
+                }
+              }
+              if ((propertyName === "styleUrl" || propertyName === "styleUrls") && propertyValue) {
+                const styleUrlValues: string[] = [];
+                if (propertyValue.type === "Literal") {
+                  const singleValue = (propertyValue as unknown as StringLiteral).value;
+                  if (singleValue) styleUrlValues.push(singleValue);
+                } else if (propertyValue.type === "ArrayExpression") {
+                  const arrayElements = (propertyValue as unknown as { elements: Array<WalkableNode> }).elements;
+                  for (const element of arrayElements) {
+                    if (element?.type === "Literal") {
+                      const elementValue = (element as unknown as StringLiteral).value;
+                      if (elementValue) styleUrlValues.push(elementValue);
+                    }
+                  }
+                }
+                for (const styleUrl of styleUrlValues) {
+                  imports.push({
+                    specifier: styleUrl.startsWith(".") ? styleUrl : `./${styleUrl}`,
+                    importedNames: [],
+                    isTypeOnly: false,
+                    isDynamic: false,
+                    isSideEffect: true,
+                    line: getLineFromOffset(sourceText, property.start),
+                    column: getColumnFromOffset(sourceText, property.start),
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     for (const value of Object.values(node)) {
       if (Array.isArray(value)) {
         for (const element of value) {

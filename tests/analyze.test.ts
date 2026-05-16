@@ -1589,6 +1589,18 @@ test("should detect Angular workspace entry points from angular.json", async () 
     unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
     `orphan.ts should be unused, got unused: ${unusedFilePaths}`,
   );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("app.component.css")),
+    `app.component.css should NOT be unused (referenced by @Component styleUrls), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath.endsWith("app.component.html")),
+    `app.component.html should NOT be unused (referenced by @Component templateUrl), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath.endsWith("orphan.css")),
+    `orphan.css should be unused (not referenced by any decorator), got unused: ${unusedFilePaths}`,
+  );
 });
 
 test("should resolve #hash subpath imports via tsconfig paths with .js extension", async () => {
@@ -2172,6 +2184,42 @@ describe("i18n-extract-glob-not-entry", () => {
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `src/orphan.ts should be unused because formatjs extract globs should not seed entries, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("remark-glob-not-entry", () => {
+  it("should not treat remark and cspell glob arguments as entry points", async () => {
+    const result = await analyzeFixture("remark-glob-not-entry");
+    const fixtureDir = resolve(FIXTURES_DIR, "remark-glob-not-entry");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("docs/intro.mdx"),
+      `docs/intro.mdx should be unused (remark glob should not seed entries), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("docs/guide.mdx"),
+      `docs/guide.mdx should be unused (remark glob should not seed entries), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("vitest-custom-include", () => {
+  it("should use custom include patterns from vitest.config.ts", async () => {
+    const result = await analyzeFixture("vitest-custom-include");
+    const fixtureDir = resolve(FIXTURES_DIR, "vitest-custom-include");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("spec/utils-spec.ts"),
+      `utils-spec.ts should be an entry (matched by vitest include pattern), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
     );
   });
 });
