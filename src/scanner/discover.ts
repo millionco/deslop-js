@@ -263,7 +263,10 @@ const resolveBuiltPathToSource = (builtAbsolutePath: string, rootDir: string): s
 
     const rootDirOption = tsconfig?.compilerOptions?.rootDir;
     const sourceRoot = rootDirOption ? resolve(rootDir, rootDirOption) : rootDir;
-    return findSourceFile(sourceRoot, relativeToBuild);
+    const sourceFileMatch = findSourceFile(sourceRoot, relativeToBuild);
+    if (sourceFileMatch) return sourceFileMatch;
+    const directCandidate = join(sourceRoot, relativeToBuild);
+    if (existsSync(directCandidate)) return directCandidate;
   } catch {
   }
   return undefined;
@@ -349,12 +352,21 @@ const SCRIPT_MULTIPLEXERS = new Set([
   "wireit", "turbo", "lerna", "ultra",
 ]);
 
+const CONFIG_LIKE_FLAGS = new Set([
+  "--config", "-c", "--format", "--formatter",
+  "--tsconfig", "--project", "-p", "--setup", "--global-setup",
+]);
+
+const ENV_WRAPPER_BINARIES = new Set([
+  "cross-env", "dotenv", "dotenv-flow", "env-cmd",
+]);
+
 const NON_ENTRY_BINARIES = new Set([
   "prettier", "eslint", "tslint", "stylelint", "biome", "oxlint", "oxfmt",
   "tsc", "tsup", "esbuild", "rollup", "webpack",
   "rimraf", "del-cli", "shx", "cpy-cli", "cpx",
   "echo", "cat", "mkdir", "rm", "cp", "mv", "ls", "pwd", "test",
-  "dotenv", "dotenv-flow", "cross-env", "env-cmd",
+
   "husky", "lint-staged", "commitlint",
   "changeset", "changesets",
   "typedoc", "api-extractor",
@@ -401,19 +413,29 @@ const extractScriptFileArguments = (scriptCommand: string, directory: string): s
     const tokens = trimmedSegment.split(/\s+/);
     if (tokens.length === 0) continue;
 
-    const binaryName = tokens[0].replace(/^.*\//, "");
+    let startIndex = 0;
+    const firstBinary = tokens[0].replace(/^.*\//, "");
+    if (ENV_WRAPPER_BINARIES.has(firstBinary)) {
+      startIndex = 1;
+      while (startIndex < tokens.length && /^[A-Z_][A-Z0-9_]*=/.test(tokens[startIndex])) {
+        startIndex++;
+      }
+      if (startIndex >= tokens.length) continue;
+    }
+
+    const binaryName = tokens[startIndex].replace(/^.*\//, "");
     if (SCRIPT_MULTIPLEXERS.has(binaryName)) continue;
 
     const effectiveBinaryName = (binaryName === "npx" || binaryName === "pnpx" || binaryName === "bunx")
-      ? (tokens[1]?.replace(/^.*\//, "") ?? "")
+      ? (tokens[startIndex + 1]?.replace(/^.*\//, "") ?? "")
       : binaryName;
     const isNonEntryBinary = NON_ENTRY_BINARIES.has(binaryName) ||
       (effectiveBinaryName !== "" && NON_ENTRY_BINARIES.has(effectiveBinaryName));
 
-    for (let tokenIndex = 1; tokenIndex < tokens.length; tokenIndex++) {
+    for (let tokenIndex = startIndex + 1; tokenIndex < tokens.length; tokenIndex++) {
       const token = tokens[tokenIndex].replace(/^['"]|['"]$/g, "");
 
-      if (token === "--config" || token === "-c") {
+      if (CONFIG_LIKE_FLAGS.has(token)) {
         if (tokenIndex + 1 < tokens.length && !tokens[tokenIndex + 1].startsWith("-")) {
           const configPath = tokens[tokenIndex + 1].replace(/^['"]|['"]$/g, "");
           if (looksLikeFilePath(configPath)) {
@@ -427,8 +449,9 @@ const extractScriptFileArguments = (scriptCommand: string, directory: string): s
         continue;
       }
 
-      if (token.startsWith("--config=") || token.startsWith("-c=")) {
-        const configValue = token.split("=")[1];
+      const equalsIndex = token.indexOf("=");
+      if (equalsIndex > 0 && CONFIG_LIKE_FLAGS.has(token.slice(0, equalsIndex))) {
+        const configValue = token.slice(equalsIndex + 1);
         if (configValue && looksLikeFilePath(configValue)) {
           const absoluteConfigPath = resolve(directory, configValue);
           if (existsSync(absoluteConfigPath)) {
