@@ -149,7 +149,6 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
       resolvedImports: resolvedImportMap,
       isEntryPoint: isAlwaysUsed || productionEntrySet.has(file.path) || testEntrySet.has(file.path),
       isTestEntry: testEntrySet.has(file.path),
-      isAlwaysUsed,
     });
   }
 
@@ -191,7 +190,6 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
       resolvedImports: resolvedStyleImportMap,
       isEntryPoint: false,
       isTestEntry: false,
-      isAlwaysUsed: false,
     });
     discoveredFilePaths.add(styleFilePath);
     nextFileIndex++;
