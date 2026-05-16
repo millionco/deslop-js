@@ -1564,6 +1564,8 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "src/pages/**/*.{astro,ts,tsx,js,jsx,md,mdx}",
       "src/content/**/*.{ts,js,md,mdx}",
       "src/layouts/**/*.astro",
+      "src/middleware.{js,ts,mjs,mts,cjs,cts}",
+      "src/middleware/index.{js,ts,mjs,mts,cjs,cts}",
     ],
     alwaysUsed: ["astro.config.{ts,js,mjs,cjs}"],
   },

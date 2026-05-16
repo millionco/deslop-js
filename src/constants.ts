@@ -33,7 +33,6 @@ export const DEFAULT_IGNORE_PATTERNS = [
   "**/build/**",
   "**/.git/**",
   "**/coverage/**",
-  "**/*.d.ts",
   "**/*.min.js",
   "**/*.min.mjs",
   "**/mockServiceWorker.js",
@@ -182,6 +181,9 @@ export const REACT_NATIVE_PLATFORM_EXTENSIONS = [
 
 export const RESOLVER_EXTENSIONS = [
   ...DEFAULT_EXTENSIONS,
+  ".d.ts",
+  ".d.mts",
+  ".d.cts",
   ".json",
   ".node",
   ".css",

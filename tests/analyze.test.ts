@@ -2363,3 +2363,39 @@ describe("vitest-coverage-include", () => {
     );
   });
 });
+
+describe("declaration-file-imports", () => {
+  it("should follow imports from .d.ts files to mark dependencies as reachable (matching fallow)", async () => {
+    const result = await analyzeFixture("declaration-file-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "declaration-file-imports");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/helper.ts"),
+      `src/helper.ts should NOT be unused (imported by types.d.ts which is reachable), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.some((filePath) => filePath.endsWith(".d.ts")),
+      `.d.ts files should NOT appear in unused files report, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("astro-middleware", () => {
+  it("should treat src/middleware.ts as an Astro entry point (matching fallow)", async () => {
+    const result = await analyzeFixture("astro-middleware");
+    const fixtureDir = resolve(FIXTURES_DIR, "astro-middleware");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/middleware.ts"),
+      `src/middleware.ts should NOT be unused (Astro middleware entry), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts should be unused (astro-middleware), got: ${unusedFilePaths}`,
+    );
+  });
+});
