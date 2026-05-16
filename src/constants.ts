@@ -108,7 +108,6 @@ export const CONFIG_FILE_PREFIXES = [
   "release-it.",
   "release.config.",
   "contentlayer.config.",
-  "trigger.config.",
   "next-env.d.",
   "env.d.",
   "vite-env.d.",
