@@ -286,8 +286,6 @@ const resolveEntryPathViaHeuristic = (entryPath: string, rootDir: string): strin
     const sourceFileMatch = findSourceFileStrict(sourceBaseDir, relativeToBuildDir);
     if (sourceFileMatch) return sourceFileMatch;
   }
-  const rootLevelMatch = findSourceFileStrict(rootDir, relativeToBuildDir);
-  if (rootLevelMatch) return rootLevelMatch;
   return undefined;
 };
 

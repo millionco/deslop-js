@@ -9,7 +9,7 @@ const OUTPUT_DIR_PREFIXES = [
   "build/", "lib/", "lib-dist/", "esm/", "cjs/", "out/",
 ];
 const DIST_WILDCARD_PATTERN = /^dist-[^/]+\//;
-const SOURCE_INDEX_FALLBACK_STEMS = ["src/index", "src/main", "index", "main"];
+const SOURCE_INDEX_FALLBACK_STEMS = ["src/index", "src/main"];
 
 const matchesOutputDirectory = (relativePath: string): boolean =>
   OUTPUT_DIR_PREFIXES.some((prefix) => relativePath.startsWith(prefix))
@@ -19,7 +19,7 @@ export const resolveSourcePath = (distPath: string, directory: string): string |
   if (existsSync(distPath)) return distPath;
 
   const relativeToDist = relative(directory, distPath);
-  const sourceReplacements = ["src/", ""];
+  const sourceReplacements = ["src/"];
 
   const allPrefixes = [...OUTPUT_DIR_PREFIXES];
   const wildcardMatch = DIST_WILDCARD_PATTERN.exec(relativeToDist);
