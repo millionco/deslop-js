@@ -1956,6 +1956,21 @@ const detectNodeTestRunner = (directory: string): boolean => {
   }
 };
 
+const detectBunTestRunner = (directory: string): boolean => {
+  try {
+    const packageJsonPath = join(directory, "package.json");
+    if (!existsSync(packageJsonPath)) return false;
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    const scripts = packageJson.scripts ?? {};
+    return Object.values(scripts).some(
+      (scriptValue) => typeof scriptValue === "string" && /\bbun\s+test\b/.test(scriptValue)
+    );
+  } catch {
+    return false;
+  }
+};
+
 
 
 
@@ -2051,6 +2066,17 @@ const discoverTestRunnerEntryPoints = (
         "**/*.test.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
         "**/*.spec.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
         "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+      );
+    }
+
+    const hasBunTestScript = detectBunTestRunner(directory) || detectBunTestRunner(rootDir);
+    if (hasBunTestScript) {
+      activatedPatterns.push(
+        "**/*.test.{ts,tsx,js,jsx,mts,mjs}",
+        "**/*.spec.{ts,tsx,js,jsx,mts,mjs}",
+        "**/*_test.{ts,tsx,js,jsx,mts,mjs}",
+        "**/*_spec.{ts,tsx,js,jsx,mts,mjs}",
+        "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
       );
     }
 

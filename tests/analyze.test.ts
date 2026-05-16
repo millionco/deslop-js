@@ -2661,14 +2661,34 @@ describe("workspace-dist-to-src", () => {
 });
 
 describe("bun-test-runner", () => {
-  it("should not treat bun test files as entry points (matching fallow - bun test has no dedicated plugin)", async () => {
+  it("should detect bun test runner and treat test files as entry points", async () => {
     const result = await analyzeFixture("bun-test-runner");
     const fixtureDir = resolve(FIXTURES_DIR, "bun-test-runner");
     const unusedFilePaths = relativePaths(result, fixtureDir);
 
     assert.ok(
-      unusedFilePaths.includes("src/__tests__/build-output.test.ts"),
-      `src/__tests__/build-output.test.ts SHOULD be unused (bun test has no plugin like vitest/jest), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/__tests__/build-output.test.ts"),
+      `src/__tests__/build-output.test.ts should be reachable via bun test runner, got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/add.test.ts"),
+      `src/add.test.ts should be reachable via bun test runner, got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("__tests__/integration.test.ts"),
+      `__tests__/integration.test.ts should be reachable via bun test runner, got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/utils_test.ts"),
+      `src/utils_test.ts should be reachable via bun _test pattern, got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
     );
 
     assert.ok(
@@ -2845,3 +2865,5 @@ describe("extensionless-script-entry", () => {
     );
   });
 });
+
+

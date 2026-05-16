@@ -1,8 +1,7 @@
 {
   "name": "bun-test-runner",
-  "version": "1.0.0",
-  "main": "src/index.ts",
   "scripts": {
-    "test": "bun test --exit --timeout 10000"
+    "test": "bun test --exit",
+    "dev": "bun run src/index.ts"
   }
 }
