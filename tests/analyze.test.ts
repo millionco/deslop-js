@@ -2301,17 +2301,21 @@ describe("cross-env-wrapper", () => {
 });
 
 describe("jest-mocks-entry", () => {
-  it("should treat __mocks__ files as unused (not auto-discovered as entries)", async () => {
+  it("should treat __mocks__ files as jest test entries (matching fallow behavior)", async () => {
     const result = await analyzeFixture("jest-mocks-entry");
     const fixtureDir = resolve(FIXTURES_DIR, "jest-mocks-entry");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/__mocks__/fs.ts"),
-      `src/__mocks__/fs.ts should be unused (__mocks__ not auto-discovered), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/__mocks__/fs.ts"),
+      `src/__mocks__/fs.ts should NOT be unused (jest auto-mock entry), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("src/__mocks__/axios.ts"),
-      `src/__mocks__/axios.ts should be unused (__mocks__ not auto-discovered), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/__mocks__/axios.ts"),
+      `src/__mocks__/axios.ts should NOT be unused (jest auto-mock entry), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("__mocks__/some-lib.js"),
+      `__mocks__/some-lib.js should NOT be unused (jest auto-mock entry), got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
