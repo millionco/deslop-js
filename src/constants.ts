@@ -42,7 +42,7 @@ export const DEFAULT_IGNORE_PATTERNS = [
   "**/mockServiceWorker.js",
 ];
 
-export const SCRIPT_FILE_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|tsc|npx|bun|esr|esno|jiti|babel-node)\s+(?:(?:-[\w-]+(?:\s+[\w./@-]+)?\s+)|(?:[\w/-]+\s+))*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:\s|$)/;
+export const SCRIPT_FILE_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|tsc|npx|bun|esr|esno|jiti|babel-node|zx)\s+(?:(?:-[\w-]+(?:\s+[\w./@-]+)?\s+)|(?:[\w/-]+\s+))*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:\s|$)/;
 
 export const SCRIPT_CONFIG_FILE_PATTERN = /--config\s+([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))/;
 
@@ -66,6 +66,7 @@ export const CONFIG_FILE_PREFIXES = [
   "remotion.config.",
   "metro.config.",
   "tsup.config.",
+  "tsdown.config.",
   "unbuild.config.",
   "esbuild.config.",
   "swc.config.",

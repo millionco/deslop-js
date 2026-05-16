@@ -2509,3 +2509,21 @@ describe("bun-test-runner", () => {
     );
   });
 });
+
+describe("zx-script-runner", () => {
+  it("should detect zx as a script runner and mark referenced files as entry points", async () => {
+    const result = await analyzeFixture("zx-script-runner");
+    const fixtureDir = resolve(FIXTURES_DIR, "zx-script-runner");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("scripts/build-image.mjs"),
+      `scripts/build-image.mjs should NOT be unused (referenced via zx in package.json scripts), got: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
