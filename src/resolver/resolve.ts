@@ -16,7 +16,8 @@ const existsAsFile = (filePath: string): boolean => {
 const trySourceFallback = (resolvedPath: string): string | undefined => {
   const segments = resolvedPath.split(sep);
 
-  const isOutputDirectory = (segment: string): boolean => OUTPUT_DIRECTORIES.includes(segment);
+  const isOutputDirectory = (segment: string): boolean =>
+    OUTPUT_DIRECTORIES.some((outputDirectory) => segment === outputDirectory || segment.startsWith(`${outputDirectory}-`));
 
   let lastOutputPosition = -1;
   for (let index = segments.length - 1; index >= 0; index--) {
