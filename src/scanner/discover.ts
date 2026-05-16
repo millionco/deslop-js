@@ -396,7 +396,7 @@ const ENV_WRAPPER_BINARIES = new Set([
 
 const NON_ENTRY_BINARIES = new Set([
   "prettier", "eslint", "tslint", "stylelint", "biome", "oxlint", "oxfmt",
-  "tsc", "tsup", "tsdown", "esbuild", "rollup", "webpack",
+  "tsc", "tsup", "tsdown", "rollup", "webpack",
   "rimraf", "del-cli", "shx", "cpy-cli", "cpx",
   "echo", "cat", "mkdir", "rm", "cp", "mv", "ls", "pwd", "test",
 
@@ -1758,6 +1758,12 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     enablerPrefixes: [],
     entryPatterns: [],
     alwaysUsed: ["tsdown.config.{ts,js,cjs,mjs}"],
+  },
+  {
+    enablers: ["@trigger.dev/sdk"],
+    enablerPrefixes: ["@trigger.dev/"],
+    entryPatterns: [],
+    alwaysUsed: ["trigger.config.{ts,js,mjs,mts}"],
   },
   {
     enablers: ["@swc/core"],
