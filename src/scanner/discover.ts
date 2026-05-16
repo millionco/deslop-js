@@ -220,7 +220,7 @@ const findDefaultIndexEntry = (directory: string): string | undefined => {
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
 
 const COMMON_SOURCE_DIRECTORIES = ["src", "lib", "main", "app", "source"];
-const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist(?:-[a-z]+)?|build|lib-dist|lib|out|output|cjs|esm|es|umd|module)\//;
+const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist(?:-[a-z]+)?|build|lib-dist|lib|out|output|cjs|esm|es|umd|module)\/(?:(?:esm|cjs|es|lib|commonjs|module)\/)?/;
 
 const findSourceFile = (baseDir: string, relativePath: string): string | undefined => {
   const pathWithoutExtension = join(baseDir, relativePath).replace(/\.[cm]?js(x?)$/, "");
@@ -317,11 +317,21 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
       const exportEntries: string[] = [];
       collectExportPaths(packageJson.exports, rootDir, exportEntries);
       for (const exportEntry of exportEntries) {
-        entries.push(exportEntry);
-        if (!existsSync(exportEntry) && exportEntry.endsWith(".ts")) {
-          const tsxFallback = exportEntry.replace(/\.ts$/, ".tsx");
-          if (existsSync(tsxFallback)) {
-            entries.push(tsxFallback);
+        if (existsSync(exportEntry)) {
+          entries.push(exportEntry);
+        } else {
+          const sourcePath = resolveSourcePath(exportEntry, rootDir);
+          if (sourcePath) {
+            entries.push(sourcePath);
+          } else if (exportEntry.endsWith(".ts")) {
+            const tsxFallback = exportEntry.replace(/\.ts$/, ".tsx");
+            if (existsSync(tsxFallback)) {
+              entries.push(tsxFallback);
+            } else {
+              entries.push(exportEntry);
+            }
+          } else {
+            entries.push(resolveEntryPath(exportEntry, rootDir));
           }
         }
       }

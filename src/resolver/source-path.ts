@@ -3,15 +3,23 @@ import { existsSync } from "node:fs";
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs"];
 
-const OUTPUT_DIR_PREFIXES = ["dist/", "build/", "lib/", "lib-dist/", "esm/", "cjs/", "out/"];
+const OUTPUT_DIR_PREFIXES = [
+  "dist/esm/", "dist/cjs/", "dist/es/", "dist/lib/",
+  "dist/", "build/", "lib/", "lib-dist/", "esm/", "cjs/", "out/",
+];
 const SOURCE_INDEX_FALLBACK_STEMS = ["src/index", "src/main", "index", "main"];
 
 export const resolveSourcePath = (distPath: string, directory: string): string | undefined => {
   if (existsSync(distPath)) return distPath;
 
   const relativeToDist = relative(directory, distPath);
+  const sourceReplacements = ["src/", ""];
   const sourceVariants = OUTPUT_DIR_PREFIXES
-    .map((prefix) => relativeToDist.replace(new RegExp(`^${prefix}`), "src/"))
+    .flatMap((prefix) =>
+      sourceReplacements.map((replacement) =>
+        relativeToDist.replace(new RegExp(`^${prefix}`), replacement),
+      ),
+    )
     .filter((variant) => variant !== relativeToDist);
 
   for (const variant of sourceVariants) {
