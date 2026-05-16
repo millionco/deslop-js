@@ -62,7 +62,6 @@ export const CONFIG_FILE_PREFIXES = [
   "remotion.config.",
   "metro.config.",
   "tsup.config.",
-  "tsdown.config.",
   "unbuild.config.",
   "esbuild.config.",
   "swc.config.",
@@ -86,7 +85,6 @@ export const CONFIG_FILE_PREFIXES = [
   "nuxt.config.",
   "astro.config.",
   "sanity.config.",
-  "sanity.cli.",
   "vite.config.",
   "tailwind.config.",
   "drizzle.config.",
@@ -108,9 +106,6 @@ export const CONFIG_FILE_PREFIXES = [
   "next-env.d.",
   "env.d.",
   "vite-env.d.",
-  "svelte.config.",
-  "trigger.config.",
-  "lage.config.",
 ];
 
 export const ALWAYS_USED_PACKAGES = new Set([

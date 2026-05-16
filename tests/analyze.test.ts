@@ -712,16 +712,16 @@ describe("config-files-cjs-mjs", () => {
     const fixtureDir = resolve(FIXTURES_DIR, "config-files-cjs-mjs");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("lage.config.cjs"),
-      "lage.config.cjs should be excluded as config file (matches *.config.* pattern)",
-    );
-    assert.ok(
       !unusedFilePaths.includes("prettier.config.mjs"),
       "prettier.config.mjs should be treated as config entry point",
     );
     assert.ok(
       !unusedFilePaths.includes("vitest.config.mts"),
       "vitest.config.mts should be treated as config entry point",
+    );
+    assert.ok(
+      unusedFilePaths.includes("lage.config.cjs"),
+      "lage.config.cjs should be unused (not in fallow's config file list)",
     );
   });
 
@@ -1887,8 +1887,8 @@ it("should exclude config files from unused file detection", async () => {
     `sanity.config.ts should be excluded as config file, got unused: ${unusedFilePaths}`,
   );
   assert.ok(
-    !unusedFilePaths.includes("sanity.cli.ts"),
-    `sanity.cli.ts should be excluded as config file, got unused: ${unusedFilePaths}`,
+    unusedFilePaths.includes("sanity.cli.ts"),
+    `sanity.cli.ts should be unused (only excluded by sanity plugin, not global config), got unused: ${unusedFilePaths}`,
   );
   assert.ok(
     !unusedFilePaths.includes("playwright.smoke.config.mjs"),
