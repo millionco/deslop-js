@@ -938,17 +938,17 @@ describe("heuristic-no-directory-fallback", () => {
 });
 
 describe("dash-spec-patterns", () => {
-  it("should treat *-spec.ts and *_spec.ts as entry points", async () => {
+  it("should treat *-spec.ts and *_spec.ts as unused (not matched by vitest/jest patterns)", async () => {
     const result = await analyzeFixture("dash-spec-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "dash-spec-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("spec/utils-spec.ts"),
-      `utils-spec.ts should be an entry point (jasmine detected), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("spec/utils-spec.ts"),
+      `utils-spec.ts should be unused (*-spec not matched by vitest), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("spec/engine_spec.ts"),
-      `engine_spec.ts should be an entry point (jasmine detected), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("spec/engine_spec.ts"),
+      `engine_spec.ts should be unused (*_spec not matched by vitest), got: ${unusedFilePaths}`,
     );
   });
 
@@ -2136,6 +2136,42 @@ describe("webpack-path-join", () => {
     assert.ok(
       unusedFilePaths.includes("app/orphan.js"),
       `app/orphan.js should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("html-entry-scoping", () => {
+  it("should only discover HTML script entries from root-level HTML files, not nested subdirectories", async () => {
+    const result = await analyzeFixture("html-entry-scoping");
+    const fixtureDir = resolve(FIXTURES_DIR, "html-entry-scoping");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/app/src/main.tsx"),
+      `packages/app/src/main.tsx should be reachable via workspace root index.html, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("packages/app/src/helper.ts"),
+      `packages/app/src/helper.ts should be reachable (imported by main.tsx), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("packages/app/sample/demo.tsx"),
+      `packages/app/sample/demo.tsx should be unused (nested HTML not scanned), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("packages/lib/src/orphan.ts"),
+      `packages/lib/src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("i18n-extract-glob-not-entry", () => {
+  it("should not treat formatjs extract glob arguments as entry points", async () => {
+    const result = await analyzeFixture("i18n-extract-glob-not-entry");
+    const fixtureDir = resolve(FIXTURES_DIR, "i18n-extract-glob-not-entry");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused because formatjs extract globs should not seed entries, got: ${unusedFilePaths}`,
     );
   });
 });

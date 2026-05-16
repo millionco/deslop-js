@@ -322,48 +322,6 @@ const extractWorkspaceEntries = (
     }
   }
 
-  const hasExplicitEntries = entries.length > 0;
-  if (!hasExplicitEntries) {
-    const defaultEntryFiles = [
-      "src/index.ts",
-      "src/index.tsx",
-      "src/index.js",
-      "src/index.jsx",
-      "src/main.ts",
-      "src/main.tsx",
-      "src/main.js",
-      "src/main.jsx",
-      "src/app.ts",
-      "src/app.tsx",
-      "src/app.js",
-      "src/app.jsx",
-      "src/server.ts",
-      "src/server.js",
-      "index.ts",
-      "index.tsx",
-      "index.js",
-      "index.jsx",
-      "main.ts",
-      "main.tsx",
-      "main.js",
-      "main.jsx",
-      "app.ts",
-      "app.tsx",
-      "app.js",
-      "app.jsx",
-      "server.ts",
-      "server.js",
-      "server.tsx",
-    ];
-
-    for (const defaultEntry of defaultEntryFiles) {
-      const absolutePath = resolve(directory, defaultEntry);
-      if (existsSync(absolutePath)) {
-        entries.push(absolutePath);
-      }
-    }
-  }
-
   return [...new Set(entries)];
 };
 
