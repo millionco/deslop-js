@@ -221,7 +221,7 @@ const findDefaultIndexEntry = (directory: string): string | undefined => {
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
 
 const COMMON_SOURCE_DIRECTORIES = ["src", "lib", "main", "app", "source"];
-const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist(?:-[a-z]+)?|build|lib-dist|lib|out|output|cjs|esm|es|umd|module)\/(?:(?:esm|cjs|es|lib|commonjs|module)\/)?/;
+const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist|build|out|esm|cjs)\/(?:(?:esm|cjs|es|lib|commonjs|module)\/)?/;
 
 const findSourceFile = (baseDir: string, relativePath: string): string | undefined => {
   const pathWithoutExtension = join(baseDir, relativePath).replace(/\.[cm]?js(x?)$/, "");
@@ -240,6 +240,8 @@ const findSourceFileStrict = (baseDir: string, relativePath: string): string | u
     const candidatePath = pathWithoutExtension + sourceExtension;
     if (existsSync(candidatePath)) return candidatePath;
   }
+  const exactPath = join(baseDir, relativePath);
+  if (existsSync(exactPath)) return exactPath;
   return undefined;
 };
 
@@ -284,6 +286,8 @@ const resolveEntryPathViaHeuristic = (entryPath: string, rootDir: string): strin
     const sourceFileMatch = findSourceFileStrict(sourceBaseDir, relativeToBuildDir);
     if (sourceFileMatch) return sourceFileMatch;
   }
+  const rootLevelMatch = findSourceFileStrict(rootDir, relativeToBuildDir);
+  if (rootLevelMatch) return rootLevelMatch;
   return undefined;
 };
 
@@ -1156,7 +1160,6 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*.test.{ts,tsx,js,jsx,mts,mjs}",
       "**/*.spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
-      "**/__mocks__/**/*.{ts,tsx,js,jsx,mjs,cjs}",
     ],
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
@@ -1704,13 +1707,15 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     enablers: ["electron"],
     enablerPrefixes: [],
     entryPatterns: [
-      "src/main.{ts,js}",
-      "src/preload.{ts,js}",
-      "src/renderer.{ts,tsx,js,jsx}",
+      "src/main/**/*.{ts,js}",
+      "src/preload/**/*.{ts,js}",
       "electron/main.{ts,js}",
-      "electron/preload.{ts,js}",
     ],
-    alwaysUsed: [],
+    alwaysUsed: [
+      "electron-builder.{yml,yaml,json,json5,toml}",
+      "forge.config.{ts,js,cjs}",
+      "electron.vite.config.{ts,js,mjs}",
+    ],
   },
 
   {
