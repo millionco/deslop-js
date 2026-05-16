@@ -74,6 +74,7 @@ export const discoverFrameworkIgnorePatterns = (rootDir: string): string[] => {
       allDependencies = {
         ...packageJson.dependencies,
         ...packageJson.devDependencies,
+        ...packageJson.optionalDependencies,
       };
     } catch {
       continue;
@@ -1905,6 +1906,7 @@ const discoverTestRunnerEntryPoints = (
       allDependencies = {
         ...packageJson.dependencies,
         ...packageJson.devDependencies,
+        ...packageJson.optionalDependencies,
       };
     } catch {
       continue;
@@ -1951,6 +1953,7 @@ const discoverTestRunnerEntryPoints = (
           const rootDeps = {
             ...rootPackageJson.dependencies,
             ...rootPackageJson.devDependencies,
+            ...rootPackageJson.optionalDependencies,
           };
           for (const runner of TEST_RUNNER_DEFINITIONS) {
             if (isRunnerEnabled(runner, rootDeps, rootDir)) {
@@ -2048,6 +2051,7 @@ const discoverToolingEntryPoints = (
       rootDependencies = {
         ...rootPackageJson.dependencies,
         ...rootPackageJson.devDependencies,
+        ...rootPackageJson.optionalDependencies,
       };
     } catch {
     }
@@ -2064,6 +2068,7 @@ const discoverToolingEntryPoints = (
       workspaceDependencies = {
         ...packageJson.dependencies,
         ...packageJson.devDependencies,
+        ...packageJson.optionalDependencies,
       };
     } catch {
       continue;

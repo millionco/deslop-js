@@ -392,6 +392,7 @@ const readDependencies = (directory: string): Record<string, string> => {
     return {
       ...packageJson.dependencies,
       ...packageJson.devDependencies,
+      ...packageJson.optionalDependencies,
     };
   } catch {
     return {};
@@ -639,6 +640,7 @@ const discoverElectronEntryPoints = (rootDir: string): string[] => {
     const allDependencies = {
       ...packageJson.dependencies,
       ...packageJson.devDependencies,
+      ...packageJson.optionalDependencies,
     };
 
     const isElectronProject = ELECTRON_ENABLERS.some((enabler) => enabler in allDependencies);
@@ -698,6 +700,7 @@ const discoverMobileEntryPoints = (directory: string): string[] => {
     const allDependencies = {
       ...packageJson.dependencies,
       ...packageJson.devDependencies,
+      ...packageJson.optionalDependencies,
     };
 
     const detectedPatterns: string[] = [];

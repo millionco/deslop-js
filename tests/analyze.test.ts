@@ -2010,6 +2010,24 @@ it("should exclude config files from unused file detection", async () => {
   );
 });
 
+it("should activate tooling plugins from optionalDependencies", async () => {
+  const result = await analyzeFixture("optional-dependencies-tooling");
+  const fixtureDir = resolve(FIXTURES_DIR, "optional-dependencies-tooling");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("sanity.config.ts"),
+    `sanity.config.ts should be excluded (sanity in optionalDependencies), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("sanity.cli.ts"),
+    `sanity.cli.ts should be excluded (sanity plugin activated via optionalDependencies), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("orphan.ts"),
+    `orphan.ts should still be flagged as unused, got: ${unusedFilePaths}`,
+  );
+});
+
 it("should treat files referenced via vi.mock/jest.mock as reachable (test imports create edges)", async () => {
   const result = await analyzeFixture("test-mock-imports");
   const fixtureDir = resolve(FIXTURES_DIR, "test-mock-imports");
