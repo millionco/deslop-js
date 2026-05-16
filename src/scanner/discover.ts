@@ -1157,7 +1157,7 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "**/*.test.{ts,tsx,js,jsx,mts,mjs}",
       "**/*.spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
-
+      "**/__mocks__/**/*.{ts,tsx,js,jsx,mjs,cjs}",
     ],
     fixturePatterns: [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
