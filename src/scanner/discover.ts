@@ -834,7 +834,7 @@ const extractNextConfigPluginFiles = (directory: string): string[] => {
   return entries;
 };
 
-const SETUP_FILES_PATTERN = /(?:setupFiles|setupFilesAfterFramework|globalSetup)\s*:\s*(?:\[([^\]]*)\]|['"]([^'"]+)['"])/gs;
+const SETUP_FILES_PATTERN = /(?:setupFiles|setupFilesAfterEnv|globalSetup|globalTeardown)\s*:\s*(?:\[([^\]]*)\]|['"]([^'"]+)['"])/gs;
 const SETUP_FILE_PATH_PATTERN = /['"]([^'"]+)['"]/g;
 const MODULE_NAME_MAPPER_PATTERN = /moduleNameMapper\s*:\s*\{([^}]*)\}/gs;
 const MODULE_NAME_MAPPER_VALUE_PATTERN = /<rootDir>\/([^'"]+)/g;
