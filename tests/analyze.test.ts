@@ -826,13 +826,13 @@ describe("fixture-patterns", () => {
     );
   });
 
-  it("should treat __mocks__ files as unused (not entry points)", async () => {
+  it("should treat __mocks__ files as unused when only vitest is present (not jest)", async () => {
     const result = await analyzeFixture("fixture-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/__mocks__/api-client.ts"),
-      `__mocks__/api-client.ts should be unused (mocks are not entry points), got: ${unusedFilePaths}`,
+      `__mocks__/api-client.ts should be unused (vitest does not auto-discover __mocks__), got: ${unusedFilePaths}`,
     );
   });
 
@@ -2240,6 +2240,82 @@ describe("workspace-no-main-field", () => {
     assert.ok(
       unusedFilePaths.includes("packages/lib-a/orphan.js"),
       `orphan.js should be unused (not imported by anything), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("css-export-map", () => {
+  it("should resolve CSS files exported via package.json exports map through dist→src heuristic", async () => {
+    const result = await analyzeFixture("css-export-map");
+    const fixtureDir = resolve(FIXTURES_DIR, "css-export-map");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/style.css"),
+      `src/style.css should NOT be unused (exported via package.json exports), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.css"),
+      `src/orphan.css should be unused (not exported or imported), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("playwright-pw-extension", () => {
+  it("should NOT treat .pw.ts files as test entries (fallow considers them unused)", async () => {
+    const result = await analyzeFixture("playwright-pw-extension");
+    const fixtureDir = resolve(FIXTURES_DIR, "playwright-pw-extension");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("my-test.pw.ts"),
+      `my-test.pw.ts should be unused (.pw.ts is not a standard test pattern), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("cross-env-wrapper", () => {
+  it("should see through cross-env wrapper to find real binary and file arguments", async () => {
+    const result = await analyzeFixture("cross-env-wrapper");
+    const fixtureDir = resolve(FIXTURES_DIR, "cross-env-wrapper");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/main.js"),
+      `src/main.js should NOT be unused (entry via cross-env node), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/dev-entry.js"),
+      `src/dev-entry.js should NOT be unused (entry via cross-env node), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/helper.js"),
+      `src/helper.js should NOT be unused (imported by entries), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("orphan.js"),
+      `orphan.js should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("jest-mocks-entry", () => {
+  it("should treat __mocks__ files as unused (not auto-discovered as entries)", async () => {
+    const result = await analyzeFixture("jest-mocks-entry");
+    const fixtureDir = resolve(FIXTURES_DIR, "jest-mocks-entry");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/__mocks__/fs.ts"),
+      `src/__mocks__/fs.ts should be unused (__mocks__ not auto-discovered), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/__mocks__/axios.ts"),
+      `src/__mocks__/axios.ts should be unused (__mocks__ not auto-discovered), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
     );
   });
 });
