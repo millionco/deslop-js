@@ -987,6 +987,30 @@ describe("workspace-explicit-entries", () => {
   });
 });
 
+describe("workspace-default-fallback", () => {
+  it("should fall back to src/index when package.json entries point to non-existent dist", async () => {
+    const result = await analyzeFixture("workspace-default-fallback");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-default-fallback");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/lib-a/src/index.ts"),
+      `packages/lib-a/src/index.ts should be reachable (default fallback from dist entry), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("packages/lib-a/src/helper.ts"),
+      `packages/lib-a/src/helper.ts should be reachable (imported by index.ts), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("packages/lib-a/src/orphan.ts"),
+      `packages/lib-a/src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("packages/lib-b/src/index.ts"),
+      `packages/lib-b/src/index.ts should be unused (no entry fields in package.json, no fallback), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("workspace-wildcard-exports", () => {
   it("should resolve wildcard exports and mark imported files as reachable", async () => {
     const result = await analyzeFixture("workspace-wildcard-exports");

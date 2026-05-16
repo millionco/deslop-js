@@ -130,7 +130,15 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
     if (isEligible && workspacePackage.isDeclaredWorkspace) {
       const workspacePackageJsonPath = resolve(workspacePackage.directory, "package.json");
       const workspacePackageJsonEntries = await extractPackageJsonEntries(workspacePackageJsonPath);
-      workspaceEntries.push(...workspacePackageJsonEntries);
+      const hasValidEntries = workspacePackageJsonEntries.some((entryPath) => existsSync(entryPath));
+      if (hasValidEntries) {
+        workspaceEntries.push(...workspacePackageJsonEntries);
+      } else if (workspacePackageJsonEntries.length > 0) {
+        const defaultFallback = findDefaultIndexEntry(workspacePackage.directory);
+        if (defaultFallback) {
+          workspaceEntries.push(defaultFallback);
+        }
+      }
     }
   }
 
@@ -187,10 +195,25 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
   return { productionEntries, testEntries, alwaysUsedFiles };
 };
 
+const DEFAULT_INDEX_PATTERNS = [
+  "src/index.ts", "src/index.tsx", "src/index.js", "src/index.jsx",
+  "src/main.ts", "src/main.tsx", "src/main.js", "src/main.jsx",
+  "index.ts", "index.tsx", "index.js", "index.jsx",
+  "main.ts", "main.tsx", "main.js", "main.jsx",
+];
+
+const findDefaultIndexEntry = (directory: string): string | undefined => {
+  for (const pattern of DEFAULT_INDEX_PATTERNS) {
+    const candidatePath = resolve(directory, pattern);
+    if (existsSync(candidatePath)) return candidatePath;
+  }
+  return undefined;
+};
+
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
 
 const COMMON_SOURCE_DIRECTORIES = ["src", "lib", "main", "app", "source"];
-const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist|build|lib-dist|out|output|cjs|esm|es|umd|module)\//;
+const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist(?:-[a-z]+)?|build|lib-dist|out|output|cjs|esm|es|umd|module)\//;
 
 const findSourceFile = (baseDir: string, relativePath: string): string | undefined => {
   const pathWithoutExtension = join(baseDir, relativePath).replace(/\.[cm]?js(x?)$/, "");
