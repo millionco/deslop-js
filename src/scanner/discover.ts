@@ -745,6 +745,7 @@ const extractBundlerConfigEntryPoints = (directory: string): string[] => {
 const WEBPACK_ENTRY_BLOCK_PATTERN = /entry\s*:\s*(?:\{[^}]*\}|\[[^\]]*\]|['"][^'"]+['"]|path\.(?:join|resolve)\([^)]*\))/gs;
 const WEBPACK_ENTRY_FILE_PATTERN = /['"]([^'"]+)['"]/g;
 const WEBPACK_PATH_JOIN_PATTERN = /path\.(?:join|resolve)\(\s*__dirname\s*,\s*((?:['"][^'"]*['"]\s*,?\s*)+)\)/g;
+const REQUIRE_RESOLVE_PATTERN = /require\.resolve\(\s*['"]([^'"]+)['"]\s*\)/g;
 const RESOLVABLE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts"];
 
 const resolveEntryWithExtensions = (basePath: string): string | undefined => {
@@ -788,6 +789,19 @@ const extractWebpackEntryPoints = (directory: string): string[] => {
         if (segments.length > 0) {
           const joinedPath = resolve(configDirectory, ...segments);
           const resolvedEntry = resolveEntryWithExtensions(joinedPath);
+          if (resolvedEntry) {
+            entries.push(resolvedEntry);
+          }
+        }
+      }
+
+      let requireResolveMatch: RegExpExecArray | null;
+      REQUIRE_RESOLVE_PATTERN.lastIndex = 0;
+      while ((requireResolveMatch = REQUIRE_RESOLVE_PATTERN.exec(content)) !== null) {
+        const requirePath = requireResolveMatch[1];
+        if (requirePath.startsWith("./") || requirePath.startsWith("../")) {
+          const absoluteRequirePath = resolve(configDirectory, requirePath);
+          const resolvedEntry = resolveEntryWithExtensions(absoluteRequirePath);
           if (resolvedEntry) {
             entries.push(resolvedEntry);
           }
@@ -1921,20 +1935,7 @@ const detectNodeTestRunner = (directory: string): boolean => {
   }
 };
 
-const detectBunTestRunner = (directory: string): boolean => {
-  try {
-    const packageJsonPath = join(directory, "package.json");
-    if (!existsSync(packageJsonPath)) return false;
-    const content = readFileSync(packageJsonPath, "utf-8");
-    const packageJson = JSON.parse(content);
-    const scripts = packageJson.scripts ?? {};
-    return Object.values(scripts).some(
-      (scriptValue) => typeof scriptValue === "string" && /\bbun\s+test\b/.test(scriptValue)
-    );
-  } catch {
-    return false;
-  }
-};
+
 
 
 
@@ -2024,8 +2025,7 @@ const discoverTestRunnerEntryPoints = (
     }
 
     const hasNodeTestScript = detectNodeTestRunner(directory) || detectNodeTestRunner(rootDir);
-    const hasBunTestScript = detectBunTestRunner(directory) || detectBunTestRunner(rootDir);
-    if (hasNodeTestScript || hasBunTestScript) {
+    if (hasNodeTestScript) {
       activatedPatterns.push(
         "**/*.test.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
         "**/*.spec.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
