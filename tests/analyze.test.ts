@@ -1012,21 +1012,21 @@ describe("workspace-default-fallback", () => {
 });
 
 describe("workspace-wildcard-exports", () => {
-  it("should resolve wildcard exports and mark imported files as reachable", async () => {
+  it("should resolve wildcard exports via import resolution, not entry expansion (matching fallow)", async () => {
     const result = await analyzeFixture("workspace-wildcard-exports");
     const fixtureDir = resolve(FIXTURES_DIR, "workspace-wildcard-exports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("packages/ui/src/components/index.ts"),
-      `components/index.ts should be reachable via wildcard export, got: ${unusedFilePaths}`,
+      `components/index.ts should be reachable via wildcard export resolution, got: ${unusedFilePaths}`,
     );
     assert.ok(
       !unusedFilePaths.includes("packages/ui/src/components/button.ts"),
       `button.ts should be reachable via barrel re-export, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("packages/ui/src/orphan.ts"),
-      `orphan.ts should be reachable via wildcard export pattern, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("packages/ui/src/orphan.ts"),
+      `orphan.ts should be unused — wildcard exports are resolution patterns, not entries (matching fallow), got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("packages/ui/internal/hidden.ts"),
@@ -1036,21 +1036,41 @@ describe("workspace-wildcard-exports", () => {
 });
 
 describe("wildcard-subpath-exports", () => {
-  it("should expand wildcard export targets as entry points", async () => {
+  it("should not expand wildcard exports as entry points (matching fallow)", async () => {
     const result = await analyzeFixture("wildcard-subpath-exports");
     const fixtureDir = resolve(FIXTURES_DIR, "wildcard-subpath-exports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/templates/welcome.tsx"),
-      `welcome.tsx should be reachable via wildcard export, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/templates/welcome.tsx"),
+      `welcome.tsx should be unused — wildcard exports are resolution patterns, not entries, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("src/templates/goodbye.tsx"),
-      `goodbye.tsx should be reachable via wildcard export, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/templates/goodbye.tsx"),
+      `goodbye.tsx should be unused — wildcard exports are resolution patterns, not entries, got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
       `orphan.ts should be unused (not in templates dir), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("import-meta-glob", () => {
+  it("should resolve import.meta.glob patterns and mark matched files as reachable (matching fallow)", async () => {
+    const result = await analyzeFixture("import-meta-glob");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-meta-glob");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/modules/alpha.ts"),
+      `alpha.ts should be reachable via import.meta.glob, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/modules/beta.ts"),
+      `beta.ts should be reachable via import.meta.glob, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused (not matched by glob pattern), got: ${unusedFilePaths}`,
     );
   });
 });

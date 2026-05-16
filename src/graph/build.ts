@@ -1,3 +1,5 @@
+import path from "node:path";
+import { minimatch } from "minimatch";
 import type {
   FileId,
   ModuleGraph,
@@ -68,11 +70,17 @@ export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
 
     for (const importInfo of input.parsed.imports) {
       if (importInfo.isGlob) {
-        for (const [resolvedPath, resolvedImport] of input.resolvedImports) {
-          if (!resolvedImport.resolvedPath) continue;
-          const targetIndex = fileIdMap.get(resolvedImport.resolvedPath);
-          if (targetIndex === undefined) continue;
-          addEdge(sourceIndex, targetIndex, []);
+        const sourceDir = path.dirname(input.fileId.path);
+        const globPattern = importInfo.specifier;
+        for (const [filePath] of fileIdMap) {
+          const relativePath = path.relative(sourceDir, filePath);
+          const normalizedRelative = relativePath.startsWith(".") ? relativePath : `./${relativePath}`;
+          if (minimatch(normalizedRelative, globPattern)) {
+            const targetIndex = fileIdMap.get(filePath);
+            if (targetIndex !== undefined) {
+              addEdge(sourceIndex, targetIndex, []);
+            }
+          }
         }
         continue;
       }
