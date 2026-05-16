@@ -270,6 +270,12 @@ const resolveBuiltPathToSource = (builtAbsolutePath: string, rootDir: string): s
     if (sourceFileMatch) return sourceFileMatch;
     const directCandidate = join(sourceRoot, relativeToBuild);
     if (existsSync(directCandidate)) return directCandidate;
+    if (!rootDirOption) {
+      for (const sourceDir of COMMON_SOURCE_DIRECTORIES) {
+        const candidate = findSourceFile(resolve(rootDir, sourceDir), relativeToBuild);
+        if (candidate) return candidate;
+      }
+    }
   } catch {
   }
   return undefined;
@@ -1006,9 +1012,17 @@ const extractJestTestMatchPatterns = (directory: string): string[] => {
 const convertJestTestMatchToGlobs = (patterns: string[]): string[] => {
   return patterns.map((pattern) => {
     let converted = pattern.replace(/<rootDir>\/?/g, "");
-    converted = converted.replace(/\?\(\*\.\)/g, "");
-    converted = converted.replace(/\+\(([^)]+)\)/g, "{$1}");
-    converted = converted.replace(/\?\(([^)]+)\)/g, "{$1,}");
+    converted = converted.replace(/\?\(\*\.\)/g, "*.");
+    converted = converted.replace(/\?\(([^)]+)\)/g, (_, group: string) => {
+      const options = group.includes("|") ? group.split("|") : [group];
+      return `{${[...options, ""].join(",")}}`;
+    });
+    converted = converted.replace(/\+\(([^)]+)\)/g, (_, group: string) => {
+      return group.includes("|") ? `{${group.replace(/\|/g, ",")}}` : group;
+    });
+    converted = converted.replace(/\(([^)]+)\)/g, (_, group: string) => {
+      return group.includes("|") ? `{${group.replace(/\|/g, ",")}}` : group;
+    });
     return converted;
   });
 };
