@@ -2578,3 +2578,26 @@ describe("build-output-root-fallback", () => {
     );
   });
 });
+
+describe("vitest-auto-mock", () => {
+  it("should treat __mocks__ sibling as reachable when vi.mock has no factory", async () => {
+    const result = await analyzeFixture("vitest-auto-mock");
+    const fixtureDir = resolve(FIXTURES_DIR, "vitest-auto-mock");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("src/server/__mocks__/api.ts"),
+      `__mocks__/api.ts should be reachable via vi.mock auto-mock sibling, got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("src/utils/__mocks__/helper.ts"),
+      `__mocks__/helper.ts should be unused when vi.mock has a factory, got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("src/server/unused.ts"),
+      `src/server/unused.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
