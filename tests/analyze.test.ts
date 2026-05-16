@@ -826,13 +826,13 @@ describe("fixture-patterns", () => {
     );
   });
 
-  it("should treat __mocks__ files as entry points", async () => {
+  it("should treat __mocks__ files as unused (not entry points)", async () => {
     const result = await analyzeFixture("fixture-patterns");
     const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/__mocks__/api-client.ts"),
-      `__mocks__/api-client.ts should be an entry point (vitest mock), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/__mocks__/api-client.ts"),
+      `__mocks__/api-client.ts should be unused (mocks are not entry points), got: ${unusedFilePaths}`,
     );
   });
 
@@ -2069,7 +2069,7 @@ describe("wrangler-worker", () => {
 });
 
 describe("config-always-used", () => {
-  it("should exclude config files from unused reporting but not seed BFS from them", async () => {
+  it("should exclude config files from unused reporting and seed BFS from them", async () => {
     const result = await analyzeFixture("config-always-used");
     const fixtureDir = resolve(FIXTURES_DIR, "config-always-used");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -2078,8 +2078,8 @@ describe("config-always-used", () => {
       `vite.config.ts should be excluded from unused (always-used config), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("src/vite-plugin.ts"),
-      `src/vite-plugin.ts should be unused (only imported by config, which does not seed BFS), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/vite-plugin.ts"),
+      `src/vite-plugin.ts should be reachable (imported by vite.config.ts which seeds BFS), got: ${unusedFilePaths}`,
     );
     assert.ok(
       !unusedFilePaths.includes("src/index.ts"),

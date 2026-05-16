@@ -137,7 +137,7 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
       fileId: file,
       parsed: parsedModule,
       resolvedImports: resolvedImportMap,
-      isEntryPoint: !isAlwaysUsed && (productionEntrySet.has(file.path) || testEntrySet.has(file.path)),
+      isEntryPoint: isAlwaysUsed || productionEntrySet.has(file.path) || testEntrySet.has(file.path),
       isTestEntry: testEntrySet.has(file.path),
       isAlwaysUsed,
     });
