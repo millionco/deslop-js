@@ -1510,21 +1510,21 @@ describe("scss-partials", () => {
 });
 
 describe("custom-test-extensions", () => {
-  it("should treat .clienttest, .servertest, and __e2e__ test files as entry points", async () => {
+  it("should treat .clienttest, .servertest, and __e2e__ test files as unused (non-standard patterns)", async () => {
     const result = await analyzeFixture("custom-test-extensions");
     const fixtureDir = resolve(FIXTURES_DIR, "custom-test-extensions");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      !unusedFilePaths.includes("src/utils.clienttest.ts"),
-      `.clienttest.ts should be an entry point, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/utils.clienttest.ts"),
+      `.clienttest.ts should be unused (non-standard pattern), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("src/api.servertest.ts"),
-      `.servertest.ts should be an entry point, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/api.servertest.ts"),
+      `.servertest.ts should be unused (non-standard pattern), got: ${unusedFilePaths}`,
     );
     assert.ok(
       !unusedFilePaths.includes("src/__e2e__/login.test.ts"),
-      `__e2e__ test should be an entry point, got: ${unusedFilePaths}`,
+      `__e2e__/*.test.ts should still be matched by **/*.test.* pattern, got: ${unusedFilePaths}`,
     );
   });
 
@@ -2460,6 +2460,34 @@ describe("playwright-pw-extension", () => {
     assert.ok(
       unusedFilePaths.includes("my-test.pw.ts"),
       `my-test.pw.ts should be unused (.pw.ts is not a standard test pattern), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("playwright-lib-support", () => {
+  it("should NOT treat lib/ and support/ directories as Playwright test entry points", async () => {
+    const result = await analyzeFixture("playwright-lib-support");
+    const fixtureDir = resolve(FIXTURES_DIR, "playwright-lib-support");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("lib/helpers.ts"),
+      `lib/helpers.ts should be unused (lib/ is not a Playwright entry pattern), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("support/commands.ts"),
+      `support/commands.ts should be unused (support/ is not a Playwright entry pattern), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("e2e/login.spec.ts"),
+      `e2e/login.spec.ts should be a test entry point, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("tests/smoke.spec.ts"),
+      `tests/smoke.spec.ts should be a test entry point, got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
