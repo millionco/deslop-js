@@ -1,2 +1,3 @@
 const modules = import.meta.glob('./modules/*.ts');
-export { modules };
+const layouts = import.meta.glob(['./layouts/*.ts', './modules/*.ts']);
+export { modules, layouts };

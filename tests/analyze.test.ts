@@ -1054,7 +1054,7 @@ describe("wildcard-subpath-exports", () => {
 });
 
 describe("import-meta-glob", () => {
-  it("should resolve import.meta.glob patterns and mark matched files as reachable (matching fallow)", async () => {
+  it("should resolve import.meta.glob patterns including array syntax (matching fallow)", async () => {
     const result = await analyzeFixture("import-meta-glob");
     const fixtureDir = resolve(FIXTURES_DIR, "import-meta-glob");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -1065,6 +1065,10 @@ describe("import-meta-glob", () => {
     assert.ok(
       !unusedFilePaths.includes("src/modules/beta.ts"),
       `beta.ts should be reachable via import.meta.glob, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/layouts/main.ts"),
+      `layouts/main.ts should be reachable via import.meta.glob array pattern, got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
@@ -2600,14 +2604,19 @@ describe("polyrepo-workspace", () => {
 });
 
 describe("build-output-root-fallback", () => {
-  it("should resolve build output paths to root-level source files when src/ dir has no match", async () => {
+  it("should only resolve build output to src/ directory, not root-level fallback (matching fallow)", async () => {
     const result = await analyzeFixture("build-output-root-fallback");
     const fixtureDir = resolve(FIXTURES_DIR, "build-output-root-fallback");
     const unusedFilePaths = relativePaths(result, fixtureDir);
 
     assert.ok(
-      !unusedFilePaths.includes("bin/server.js"),
-      `bin/server.js should be reachable via build/bin/server.js bin entry fallback`,
+      unusedFilePaths.includes("bin/server.js"),
+      `bin/server.js should be unused — build/bin/server.js only resolves to src/bin/ not root bin/, got: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/app.ts"),
+      `src/app.ts should be reachable via build/app.js → src/app.ts, got: ${unusedFilePaths}`,
     );
 
     assert.ok(

@@ -513,6 +513,51 @@ const extractStringLiteralFromArgument = (
   return typeof literalValue === "string" ? literalValue : undefined;
 };
 
+const extractGlobPatterns = (
+  callArguments: CallExpression["arguments"],
+): string[] => {
+  const firstArgument = callArguments[0];
+  if (!firstArgument || firstArgument.type === "SpreadElement") return [];
+
+  if (firstArgument.type === "Literal") {
+    const literalValue = (firstArgument as StringLiteral).value;
+    if (typeof literalValue === "string" && (literalValue.startsWith("./") || literalValue.startsWith("../"))) {
+      return [literalValue];
+    }
+    return [];
+  }
+
+  if (firstArgument.type === "ArrayExpression") {
+    const arrayExpression = firstArgument as unknown as { elements: Array<{ type: string; value?: unknown }> };
+    return arrayExpression.elements
+      .filter((element): element is { type: "Literal"; value: string } =>
+        element.type === "Literal" && typeof element.value === "string"
+        && ((element.value as string).startsWith("./") || (element.value as string).startsWith("../")),
+      )
+      .map((element) => element.value);
+  }
+
+  return [];
+};
+
+const extractRegexGlobSuffix = (
+  callArguments: CallExpression["arguments"],
+): string | undefined => {
+  const thirdArgument = callArguments[2];
+  if (!thirdArgument || thirdArgument.type === "SpreadElement") return undefined;
+  if (thirdArgument.type !== "Literal") return undefined;
+  const regExpValue = (thirdArgument as unknown as { regex?: { pattern: string } }).regex;
+  if (!regExpValue) return undefined;
+  const pattern = regExpValue.pattern;
+  const extensionMatch = pattern.match(/^\\\.([\w|]+)\$$/);
+  if (extensionMatch) {
+    const extensions = extensionMatch[1].split("|");
+    if (extensions.length === 1) return `*.${extensions[0]}`;
+    return `*.{${extensions.join(",")}}`;
+  }
+  return undefined;
+};
+
 const hasMockFactoryArgument = (callExpression: CallExpression): boolean => {
   const secondArgument = callExpression.arguments[1];
   if (!secondArgument) return false;
@@ -659,10 +704,35 @@ const collectDynamicImports = (
           memberExpression.object.type === "MetaProperty" &&
           memberExpression.property.name === "glob"
         ) {
-          const globSpecifier = extractStringLiteralFromArgument(callExpression.arguments);
-          if (globSpecifier) {
+          const globPatterns = extractGlobPatterns(callExpression.arguments);
+          for (const globPattern of globPatterns) {
             imports.push({
-              specifier: globSpecifier,
+              specifier: globPattern,
+              importedNames: [createNamespaceImportedName()],
+              isTypeOnly: false,
+              isDynamic: true,
+              isSideEffect: false,
+              isGlob: true,
+              line: getLineFromOffset(sourceText, callExpression.start),
+              column: getColumnFromOffset(sourceText, callExpression.start),
+            });
+          }
+        }
+
+        if (
+          memberExpression.object.type === "Identifier" &&
+          memberExpression.object.name === "require" &&
+          memberExpression.property.name === "context"
+        ) {
+          const directoryArgument = extractStringLiteralFromArgument(callExpression.arguments);
+          if (directoryArgument && (directoryArgument.startsWith("./") || directoryArgument.startsWith("../"))) {
+            const isRecursive = callExpression.arguments[1]?.type === "Literal"
+              && (callExpression.arguments[1] as unknown as { value: unknown }).value === true;
+            const contextGlobPrefix = isRecursive ? `${directoryArgument}/**/` : `${directoryArgument}/`;
+            const regexSuffix = extractRegexGlobSuffix(callExpression.arguments);
+            const contextGlobPattern = regexSuffix ? `${contextGlobPrefix}${regexSuffix}` : `${contextGlobPrefix}*`;
+            imports.push({
+              specifier: contextGlobPattern,
               importedNames: [createNamespaceImportedName()],
               isTypeOnly: false,
               isDynamic: true,
