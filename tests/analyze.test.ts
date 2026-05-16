@@ -2315,7 +2315,27 @@ describe("jest-mocks-entry", () => {
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
-      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+      `orphan.ts should be unused (jest-mocks-entry), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("mdx-imports", () => {
+  it("should trace imports from MDX entry points in Docusaurus projects", async () => {
+    const result = await analyzeFixture("mdx-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "mdx-imports");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/components/Chart.tsx"),
+      `Chart.tsx should NOT be unused (imported by MDX entry), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/components/Unused.tsx"),
+      `Unused.tsx should be unused (not imported by any MDX), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts should be unused (mdx-imports), got: ${unusedFilePaths}`,
     );
   });
 });
