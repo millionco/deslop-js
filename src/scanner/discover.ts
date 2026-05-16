@@ -1477,7 +1477,7 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     entryPatterns: [
       "src/pages/**/*.{ts,tsx,js,jsx}",
       "src/templates/**/*.{ts,tsx,js,jsx}",
-      "src/components/**/*.{ts,tsx,js,jsx}",
+      "src/api/**/*.{ts,js}",
     ],
     alwaysUsed: [
       "gatsby-config.{ts,js,mjs}",
@@ -1891,6 +1891,20 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     alwaysUsed: ["nx.json", "**/project.json"],
   },
   {
+    enablers: ["react-native"],
+    enablerPrefixes: ["@react-native/", "@react-native-community/"],
+    entryPatterns: [
+      "index.{ts,tsx,js,jsx}",
+      "App.{ts,tsx,js,jsx}",
+      "src/App.{ts,tsx,js,jsx}",
+    ],
+    alwaysUsed: [
+      "metro.config.{ts,js}",
+      "react-native.config.{ts,js}",
+      "app.json",
+    ],
+  },
+  {
     enablers: ["expo"],
     enablerPrefixes: ["@expo/"],
     entryPatterns: [
@@ -1911,8 +1925,8 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     alwaysUsed: ["wrangler.toml", "wrangler.json", "wrangler.jsonc"],
   },
   {
-    enablers: ["electron"],
-    enablerPrefixes: [],
+    enablers: ["electron", "electron-builder", "@electron-forge/cli", "electron-vite"],
+    enablerPrefixes: ["@electron-forge/", "@electron/"],
     entryPatterns: [
       "src/main/**/*.{ts,js}",
       "src/preload/**/*.{ts,js}",

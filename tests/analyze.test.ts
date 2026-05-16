@@ -2969,7 +2969,68 @@ describe("astro-content-config", () => {
 
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
-      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+      `src/orphan.ts should be unused (astro-content-config), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("gatsby-components", () => {
+  it("should flag unused components but not pages, templates, or api routes", async () => {
+    const result = await analyzeFixture("gatsby-components");
+    const fixtureDir = resolve(FIXTURES_DIR, "gatsby-components");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      unusedFilePaths.includes("src/components/unused.tsx"),
+      `src/components/unused.tsx should be unused (Gatsby does not auto-discover components), got: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/pages/index.tsx"),
+      `src/pages/index.tsx should be reachable (Gatsby page), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/templates/post.tsx"),
+      `src/templates/post.tsx should be reachable (Gatsby template), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/api/hello.ts"),
+      `src/api/hello.ts should be reachable (Gatsby API route), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/components/used.tsx"),
+      `src/components/used.tsx should be reachable (imported by page), got unused: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("react-native-app", () => {
+  it("should detect React Native entry points and flag orphan screens", async () => {
+    const result = await analyzeFixture("react-native-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "react-native-app");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("index.js"),
+      `index.js should be reachable (React Native entry), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("App.tsx"),
+      `App.tsx should be reachable (React Native entry), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/screens/used.tsx"),
+      `src/screens/used.tsx should be reachable (imported by App), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("src/screens/orphan.tsx"),
+      `src/screens/orphan.tsx should be unused (react-native-app), got: ${unusedFilePaths}`,
     );
   });
 });
