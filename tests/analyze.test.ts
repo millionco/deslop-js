@@ -2661,14 +2661,14 @@ describe("workspace-dist-to-src", () => {
 });
 
 describe("bun-test-runner", () => {
-  it("should detect bun test scripts and treat test files as entry points (matching fallow)", async () => {
+  it("should not treat bun test files as entry points (matching fallow - bun test has no dedicated plugin)", async () => {
     const result = await analyzeFixture("bun-test-runner");
     const fixtureDir = resolve(FIXTURES_DIR, "bun-test-runner");
     const unusedFilePaths = relativePaths(result, fixtureDir);
 
     assert.ok(
-      !unusedFilePaths.includes("src/__tests__/build-output.test.ts"),
-      `src/__tests__/build-output.test.ts should NOT be unused (bun test discovers __tests__/), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/__tests__/build-output.test.ts"),
+      `src/__tests__/build-output.test.ts SHOULD be unused (bun test has no plugin like vitest/jest), got: ${unusedFilePaths}`,
     );
 
     assert.ok(
