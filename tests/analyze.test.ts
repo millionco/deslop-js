@@ -2273,17 +2273,17 @@ describe("wrangler-worker", () => {
 });
 
 describe("config-always-used", () => {
-  it("should exclude config files from unused reporting and seed BFS from them", async () => {
+  it("should exclude config files from unused reporting but not propagate reachability", async () => {
     const result = await analyzeFixture("config-always-used");
     const fixtureDir = resolve(FIXTURES_DIR, "config-always-used");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("vite.config.ts"),
-      `vite.config.ts should be excluded from unused (always-used config), got: ${unusedFilePaths}`,
+      `vite.config.ts should be excluded from unused (config file), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      !unusedFilePaths.includes("src/vite-plugin.ts"),
-      `src/vite-plugin.ts should be reachable (imported by vite.config.ts which seeds BFS), got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("src/vite-plugin.ts"),
+      `src/vite-plugin.ts should be unused (only imported from config file), got: ${unusedFilePaths}`,
     );
     assert.ok(
       !unusedFilePaths.includes("src/index.ts"),
@@ -2296,6 +2296,30 @@ describe("config-always-used", () => {
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("config-file-imports", () => {
+  it("should report config-only imports as unused but keep shared imports reachable", async () => {
+    const result = await analyzeFixture("config-file-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-file-imports");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("vite.config.ts"),
+      `vite.config.ts should be excluded (config file), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("my-vite-plugin.ts"),
+      `my-vite-plugin.ts should be unused (only imported from config), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/shared-util.ts"),
+      `src/shared-util.ts should be reachable (imported from both config and app), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/index.ts"),
+      `src/index.ts should be reachable as main entry, got: ${unusedFilePaths}`,
     );
   });
 });
