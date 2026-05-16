@@ -1012,7 +1012,7 @@ describe("workspace-default-fallback", () => {
 });
 
 describe("workspace-wildcard-exports", () => {
-  it("should resolve wildcard exports via import resolution, not entry expansion (matching fallow)", async () => {
+  it("should expand wildcard exports as entry points and resolve via imports (matching fallow)", async () => {
     const result = await analyzeFixture("workspace-wildcard-exports");
     const fixtureDir = resolve(FIXTURES_DIR, "workspace-wildcard-exports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -1025,8 +1025,8 @@ describe("workspace-wildcard-exports", () => {
       `button.ts should be reachable via barrel re-export, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("packages/ui/src/orphan.ts"),
-      `orphan.ts should be unused — wildcard exports are resolution patterns, not entries (matching fallow), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("packages/ui/src/orphan.ts"),
+      `orphan.ts should be reachable — wildcard export src/* expands it as entry point (matching fallow), got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("packages/ui/internal/hidden.ts"),
@@ -1036,17 +1036,17 @@ describe("workspace-wildcard-exports", () => {
 });
 
 describe("wildcard-subpath-exports", () => {
-  it("should not expand wildcard exports as entry points (matching fallow)", async () => {
+  it("should expand wildcard exports as entry points (matching fallow)", async () => {
     const result = await analyzeFixture("wildcard-subpath-exports");
     const fixtureDir = resolve(FIXTURES_DIR, "wildcard-subpath-exports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/templates/welcome.tsx"),
-      `welcome.tsx should be unused — wildcard exports are resolution patterns, not entries, got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/templates/welcome.tsx"),
+      `welcome.tsx should be reachable — wildcard exports are expanded as entries (matching fallow), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("src/templates/goodbye.tsx"),
-      `goodbye.tsx should be unused — wildcard exports are resolution patterns, not entries, got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/templates/goodbye.tsx"),
+      `goodbye.tsx should be reachable — wildcard exports are expanded as entries (matching fallow), got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
