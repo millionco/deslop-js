@@ -40,6 +40,7 @@ export const propagateReExports = (graph: ModuleGraph): void => {
                 isDefault: targetExport.isDefault,
                 isTypeOnly: targetExport.isTypeOnly || exportInfo.isTypeOnly,
                 isReExport: true,
+                isSynthetic: true,
                 reExportSource: exportInfo.reExportSource,
                 reExportOriginalName: targetExport.name,
                 isNamespaceReExport: false,

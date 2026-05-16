@@ -2427,3 +2427,26 @@ describe("nextjs-middleware", () => {
     );
   });
 });
+
+describe("barrel-file-types", () => {
+  it("should exempt star-re-export barrels but not named-re-export barrels (matching fallow)", async () => {
+    const result = await analyzeFixture("barrel-file-types");
+    const fixtureDir = resolve(FIXTURES_DIR, "barrel-file-types");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("src/star-barrel.ts"),
+      `src/star-barrel.ts should NOT be unused (star re-export barrel with reachable sources), got: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("src/named-barrel.ts"),
+      `src/named-barrel.ts SHOULD be unused (named re-export barrel — fallow reports these), got: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused (barrel-file-types), got: ${unusedFilePaths}`,
+    );
+  });
+});

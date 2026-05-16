@@ -27,6 +27,7 @@ export interface ExportInfo {
   isDefault: boolean;
   isTypeOnly: boolean;
   isReExport: boolean;
+  isSynthetic: boolean;
   reExportSource: string | undefined;
   reExportOriginalName: string | undefined;
   isNamespaceReExport: boolean;
