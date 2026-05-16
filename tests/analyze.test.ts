@@ -2527,3 +2527,54 @@ describe("zx-script-runner", () => {
     );
   });
 });
+
+describe("polyrepo-workspace", () => {
+  it("should extract entry points from all sub-project package.json files without root workspace patterns", async () => {
+    const result = await analyzeFixture("polyrepo-workspace");
+    const fixtureDir = resolve(FIXTURES_DIR, "polyrepo-workspace");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("project-a/src/index.ts"),
+      `project-a/src/index.ts should be reachable via lib/index.js main entry fallback`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("project-a/src/helper.ts"),
+      `project-a/src/helper.ts should be reachable via import from index.ts`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("project-b/src/index.ts"),
+      `project-b/src/index.ts should be reachable via dist/index.js main entry fallback`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("project-a/src/orphan.ts"),
+      `project-a/src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("project-b/src/unused.ts"),
+      `project-b/src/unused.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("build-output-root-fallback", () => {
+  it("should resolve build output paths to root-level source files when src/ dir has no match", async () => {
+    const result = await analyzeFixture("build-output-root-fallback");
+    const fixtureDir = resolve(FIXTURES_DIR, "build-output-root-fallback");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("bin/server.js"),
+      `bin/server.js should be reachable via build/bin/server.js bin entry fallback`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});

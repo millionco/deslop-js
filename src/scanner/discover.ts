@@ -127,7 +127,8 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
       workspaceEntries.push(...workspaceFrameworkEntries);
     }
 
-    if (isEligible && workspacePackage.isDeclaredWorkspace) {
+    const shouldExtractEntries = isEligible && (workspacePackage.isDeclaredWorkspace || !workspaceDiscovery.hasRootLevelWorkspacePatterns);
+    if (shouldExtractEntries) {
       const workspacePackageJsonPath = resolve(workspacePackage.directory, "package.json");
       const workspacePackageJsonEntries = await extractPackageJsonEntries(workspacePackageJsonPath);
       const hasValidEntries = workspacePackageJsonEntries.some((entryPath) => existsSync(entryPath));
@@ -283,6 +284,8 @@ const resolveEntryPathViaHeuristic = (entryPath: string, rootDir: string): strin
     const sourceFileMatch = findSourceFileStrict(sourceBaseDir, relativeToBuildDir);
     if (sourceFileMatch) return sourceFileMatch;
   }
+  const rootSourceMatch = findSourceFile(rootDir, relativeToBuildDir);
+  if (rootSourceMatch) return rootSourceMatch;
   return undefined;
 };
 
