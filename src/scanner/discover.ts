@@ -1393,10 +1393,8 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
       "app/root.{ts,tsx,js,jsx}",
       "app/entry.client.{ts,tsx,js,jsx}",
       "app/entry.server.{ts,tsx,js,jsx}",
-      "app/**/page.{ts,tsx,js,jsx}",
-      "app/**/layout.{ts,tsx,js,jsx}",
-      "app/**/error.{ts,tsx,js,jsx}",
-      "app/**/loading.{ts,tsx,js,jsx}",
+      "app/routes.{ts,js,mts,mjs}",
+      "src/routes.{ts,js,mts,mjs}",
     ],
     alwaysUsed: [
       "react-router.config.{ts,js,mjs}",
@@ -1737,17 +1735,7 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     entryPatterns: [],
     alwaysUsed: [".syncpackrc", ".syncpackrc.{json,yaml,yml}", "syncpack.config.{js,mjs,cjs}"],
   },
-  {
-    enablers: ["@react-router/dev"],
-    enablerPrefixes: [],
-    entryPatterns: [
-      "app/routes/**/*.{ts,tsx,js,jsx}",
-      "app/root.{ts,tsx,js,jsx}",
-      "app/entry.client.{ts,tsx,js,jsx}",
-      "app/entry.server.{ts,tsx,js,jsx}",
-    ],
-    alwaysUsed: ["react-router.config.{ts,js,mjs,cjs}"],
-  },
+  
   {
     enablers: ["@capacitor/core", "@capacitor/cli"],
     enablerPrefixes: ["@capacitor/"],
