@@ -26,9 +26,6 @@ const isBarrelWithReachableSources = (
   module: ModuleNode,
   graph: ModuleGraph,
 ): boolean => {
-  const fileName = module.fileId.path.split("/").pop() ?? "";
-  if (!fileName.startsWith("index.")) return false;
-
   const hasOnlyReExports =
     module.exports.length > 0 &&
     module.exports.every((exportInfo) => exportInfo.isReExport);

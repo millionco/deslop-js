@@ -2399,3 +2399,31 @@ describe("astro-middleware", () => {
     );
   });
 });
+
+describe("nextjs-middleware", () => {
+  it("should treat middleware, proxy, and instrumentation as Next.js entry points (matching fallow)", async () => {
+    const result = await analyzeFixture("nextjs-middleware");
+    const fixtureDir = resolve(FIXTURES_DIR, "nextjs-middleware");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/middleware.ts"),
+      `src/middleware.ts should NOT be unused (Next.js middleware entry), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/auth.ts"),
+      `src/auth.ts should NOT be unused (imported by middleware), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("proxy.ts"),
+      `proxy.ts should NOT be unused (Next.js proxy entry), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("instrumentation.ts"),
+      `instrumentation.ts should NOT be unused (Next.js instrumentation entry), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts should be unused (nextjs-middleware), got: ${unusedFilePaths}`,
+    );
+  });
+});

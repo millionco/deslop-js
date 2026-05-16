@@ -1454,8 +1454,26 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
   {
     enablers: ["next"],
     enablerPrefixes: [],
-    entryPatterns: [],
-    alwaysUsed: ["next.config.{ts,js,mjs,mts}"],
+    entryPatterns: [
+      "middleware.{ts,js}",
+      "src/middleware.{ts,js}",
+      "proxy.{ts,js}",
+      "src/proxy.{ts,js}",
+      "instrumentation.{ts,js}",
+      "instrumentation-client.{ts,js}",
+      "src/instrumentation.{ts,js}",
+      "src/instrumentation-client.{ts,js}",
+    ],
+    alwaysUsed: [
+      "next.config.{ts,js,mjs,mts}",
+      "next-env.d.ts",
+      "mdx-components.{ts,tsx,js,jsx}",
+      "src/mdx-components.{ts,tsx,js,jsx}",
+      "src/i18n/request.{ts,js}",
+      "src/i18n/routing.{ts,js}",
+      "i18n/request.{ts,js}",
+      "i18n/routing.{ts,js}",
+    ],
   },
   {
     enablers: ["@tanstack/react-router", "@tanstack/react-start", "@tanstack/start", "@tanstack/solid-router", "@tanstack/solid-start"],
