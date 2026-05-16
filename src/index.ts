@@ -25,7 +25,7 @@ const detectReactNative = (rootDir: string, workspacePackages: Array<{ directory
     try {
       const content = readFileSync(packageJsonPath, "utf-8");
       const packageJson = JSON.parse(content);
-      const allDependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+      const allDependencies = { ...packageJson.dependencies, ...packageJson.devDependencies, ...packageJson.optionalDependencies };
       if (REACT_NATIVE_ENABLERS.some((enabler) => enabler in allDependencies)) return true;
     } catch {
       continue;
