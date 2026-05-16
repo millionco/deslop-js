@@ -726,21 +726,26 @@ const collectDynamicImports = (
         ) {
           const directoryArgument = extractStringLiteralFromArgument(callExpression.arguments);
           if (directoryArgument && (directoryArgument.startsWith("./") || directoryArgument.startsWith("../"))) {
-            const isRecursive = callExpression.arguments[1]?.type === "Literal"
-              && (callExpression.arguments[1] as unknown as { value: unknown }).value === true;
-            const contextGlobPrefix = isRecursive ? `${directoryArgument}/**/` : `${directoryArgument}/`;
+            const hasRegexArgument = callExpression.arguments.length >= 3
+              && callExpression.arguments[2].type !== "SpreadElement";
             const regexSuffix = extractRegexGlobSuffix(callExpression.arguments);
-            const contextGlobPattern = regexSuffix ? `${contextGlobPrefix}${regexSuffix}` : `${contextGlobPrefix}*`;
-            imports.push({
-              specifier: contextGlobPattern,
-              importedNames: [createNamespaceImportedName()],
-              isTypeOnly: false,
-              isDynamic: true,
-              isSideEffect: false,
-              isGlob: true,
-              line: getLineFromOffset(sourceText, callExpression.start),
-              column: getColumnFromOffset(sourceText, callExpression.start),
-            });
+            const canResolveFilter = !hasRegexArgument || Boolean(regexSuffix);
+            if (canResolveFilter) {
+              const isRecursive = callExpression.arguments[1]?.type === "Literal"
+                && (callExpression.arguments[1] as unknown as { value: unknown }).value === true;
+              const contextGlobPrefix = isRecursive ? `${directoryArgument}/**/` : `${directoryArgument}/`;
+              const contextGlobPattern = regexSuffix ? `${contextGlobPrefix}${regexSuffix}` : `${contextGlobPrefix}*`;
+              imports.push({
+                specifier: contextGlobPattern,
+                importedNames: [createNamespaceImportedName()],
+                isTypeOnly: false,
+                isDynamic: true,
+                isSideEffect: false,
+                isGlob: true,
+                line: getLineFromOffset(sourceText, callExpression.start),
+                column: getColumnFromOffset(sourceText, callExpression.start),
+              });
+            }
           }
         }
       }
