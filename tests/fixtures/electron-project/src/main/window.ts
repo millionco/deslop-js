@@ -1,1 +1,1 @@
-export const createWindow = () => "main window";
+export const createWindow = () => {};
