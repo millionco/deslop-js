@@ -1069,21 +1069,6 @@ const extractTestSetupFiles = (directory: string): string[] => {
   return entries;
 };
 
-const expandWildcardExportPattern = (
-  pattern: string,
-  rootDir: string,
-): string[] => {
-  const normalized = pattern.startsWith("./") ? pattern.slice(2) : pattern;
-  const globPattern = normalized.replace(/\*/g, "**/*");
-  const matchedFiles = fg.sync(globPattern, {
-    cwd: rootDir,
-    absolute: true,
-    onlyFiles: true,
-    ignore: ["**/node_modules/**"],
-  });
-  return matchedFiles;
-};
-
 const collectExportPaths = (
   exportValue: unknown,
   rootDir: string,
@@ -1091,8 +1076,6 @@ const collectExportPaths = (
 ): void => {
   if (typeof exportValue === "string") {
     if (exportValue.includes("*")) {
-      const expandedFiles = expandWildcardExportPattern(exportValue, rootDir);
-      entries.push(...expandedFiles);
       return;
     }
     entries.push(resolveEntryPath(exportValue, rootDir));
