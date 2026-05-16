@@ -9,6 +9,7 @@ export interface ImportInfo {
   isTypeOnly: boolean;
   isDynamic: boolean;
   isSideEffect: boolean;
+  isGlob?: boolean;
   line: number;
   column: number;
 }
@@ -38,15 +39,24 @@ export interface ModuleNode {
   imports: ImportInfo[];
   exports: ExportInfo[];
   isEntryPoint: boolean;
+  isTestEntry: boolean;
   isReachable: boolean;
   isDeclarationFile: boolean;
   isConfigFile: boolean;
+}
+
+export interface ReExportMapping {
+  exportedName: string;
+  originalName: string;
 }
 
 export interface Edge {
   source: number;
   target: number;
   importedSymbols: ImportedSymbol[];
+  isReExportEdge: boolean;
+  reExportedNames: string[];
+  reExportMappings: ReExportMapping[];
 }
 
 export interface ImportedSymbol {
@@ -88,6 +98,12 @@ export interface AnalysisResult {
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
+}
+
+export interface DiscoveredEntryPoints {
+  productionEntries: string[];
+  testEntries: string[];
+  alwaysUsedFiles: string[];
 }
 
 export interface DeslopConfig {

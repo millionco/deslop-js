@@ -1,7 +1,10 @@
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import fg from "fast-glob";
 import type { DeslopConfig, AnalysisResult } from "./types.js";
 import { DEFAULT_ENTRY_PATTERNS, DEFAULT_EXTENSIONS } from "./constants.js";
-import { discoverFiles, discoverEntryPoints } from "./scanner/discover.js";
+import { discoverFiles, discoverEntryPoints, discoverFrameworkIgnorePatterns } from "./scanner/discover.js";
+import { discoverWorkspacePackagesWithExclusions } from "./scanner/workspaces.js";
 import { parseModule } from "./scanner/parse.js";
 import { createModuleResolver } from "./resolver/resolve.js";
 import { buildModuleGraph } from "./graph/build.js";
@@ -9,6 +12,27 @@ import type { GraphBuildInput } from "./graph/build.js";
 import { markReachable } from "./graph/reachability.js";
 import { propagateReExports } from "./graph/re-exports.js";
 import { analyzeGraph } from "./analyzer/analyze.js";
+
+const STYLE_EXTENSIONS = [".css", ".scss"];
+
+const REACT_NATIVE_ENABLERS = ["react-native", "expo"];
+
+const detectReactNative = (rootDir: string, workspacePackages: Array<{ directory: string }>): boolean => {
+  const directoriesToCheck = [rootDir, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
+  for (const directory of directoriesToCheck) {
+    const packageJsonPath = resolve(directory, "package.json");
+    if (!existsSync(packageJsonPath)) continue;
+    try {
+      const content = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(content);
+      const allDependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+      if (REACT_NATIVE_ENABLERS.some((enabler) => enabler in allDependencies)) return true;
+    } catch {
+      continue;
+    }
+  }
+  return false;
+};
 
 export type { AnalysisResult, DeslopConfig, UnusedFile, UnusedExport, UnusedDependency } from "./types.js";
 
@@ -27,11 +51,36 @@ export const createConfig = (
 export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => {
   const pipelineStartTime = performance.now();
 
-  const files = await discoverFiles(config);
-  const entryPoints = await discoverEntryPoints(config);
-  const entryPointSet = new Set(entryPoints);
+  const workspaceDiscovery = discoverWorkspacePackagesWithExclusions(resolve(config.rootDir));
+  const workspacePackages = workspaceDiscovery.packages;
 
-  const moduleResolver = createModuleResolver(config);
+  const frameworkIgnorePatterns = discoverFrameworkIgnorePatterns(config.rootDir);
+
+  const allExclusionPatterns = [
+    ...workspaceDiscovery.excludedDirectories.map((directory) => `${directory}/**`),
+    ...frameworkIgnorePatterns,
+  ];
+
+  const configWithExclusions = allExclusionPatterns.length > 0
+    ? {
+        ...config,
+        ignorePatterns: [
+          ...config.ignorePatterns,
+          ...allExclusionPatterns,
+        ],
+      }
+    : config;
+
+  const files = await discoverFiles(configWithExclusions);
+  const discoveredEntries = await discoverEntryPoints(configWithExclusions);
+  const productionEntrySet = new Set(discoveredEntries.productionEntries);
+  const testEntrySet = new Set(discoveredEntries.testEntries);
+  const alwaysUsedFileSet = new Set(discoveredEntries.alwaysUsedFiles);
+  const hasReactNative = detectReactNative(config.rootDir, workspacePackages);
+  const moduleResolver = createModuleResolver(config, workspacePackages.map((workspacePackage) => ({
+    name: workspacePackage.name,
+    directory: workspacePackage.directory,
+  })), { hasReactNative });
   const graphInputs: GraphBuildInput[] = [];
 
   for (const file of files) {
@@ -42,6 +91,28 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
     >();
 
     for (const importInfo of parsedModule.imports) {
+      if (importInfo.isGlob) {
+        const fileDir = dirname(file.path);
+        const expandedFiles = fg.sync(importInfo.specifier, {
+          cwd: fileDir,
+          absolute: true,
+          onlyFiles: true,
+          ignore: ["**/node_modules/**"],
+        });
+        for (const expandedFile of expandedFiles) {
+          resolvedImportMap.set(expandedFile, {
+            resolvedPath: expandedFile,
+            isExternal: false,
+            packageName: undefined,
+          });
+        }
+        resolvedImportMap.set(importInfo.specifier, {
+          resolvedPath: undefined,
+          isExternal: false,
+          packageName: undefined,
+        });
+        continue;
+      }
       const resolvedImport = moduleResolver.resolveModule(
         importInfo.specifier,
         file.path,
@@ -61,12 +132,59 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
       }
     }
 
+    const isAlwaysUsed = alwaysUsedFileSet.has(file.path);
     graphInputs.push({
       fileId: file,
       parsed: parsedModule,
       resolvedImports: resolvedImportMap,
-      isEntryPoint: entryPointSet.has(file.path),
+      isEntryPoint: isAlwaysUsed || productionEntrySet.has(file.path) || testEntrySet.has(file.path),
+      isTestEntry: testEntrySet.has(file.path),
+      isAlwaysUsed,
     });
+  }
+
+  const discoveredFilePaths = new Set(files.map((file) => file.path));
+  const styleFilesToAdd = new Set<string>();
+
+  for (const input of graphInputs) {
+    for (const [, resolvedImport] of input.resolvedImports) {
+      if (!resolvedImport.resolvedPath || resolvedImport.isExternal) continue;
+      if (discoveredFilePaths.has(resolvedImport.resolvedPath)) continue;
+      const isStyleFile = STYLE_EXTENSIONS.some((ext) => resolvedImport.resolvedPath!.endsWith(ext));
+      if (isStyleFile && existsSync(resolvedImport.resolvedPath)) {
+        styleFilesToAdd.add(resolvedImport.resolvedPath);
+      }
+    }
+  }
+
+  const sortedStyleFiles = [...styleFilesToAdd].sort();
+  let nextFileIndex = files.length;
+  for (const styleFilePath of sortedStyleFiles) {
+    const styleFileId = { index: nextFileIndex, path: styleFilePath };
+    const parsedStyleModule = parseModule(styleFilePath);
+    const resolvedStyleImportMap = new Map<string, ReturnType<typeof moduleResolver.resolveModule>>();
+
+    for (const importInfo of parsedStyleModule.imports) {
+      const resolvedImport = moduleResolver.resolveModule(importInfo.specifier, styleFilePath);
+      resolvedStyleImportMap.set(importInfo.specifier, resolvedImport);
+      if (resolvedImport.resolvedPath && !discoveredFilePaths.has(resolvedImport.resolvedPath)) {
+        const isNestedStyle = STYLE_EXTENSIONS.some((ext) => resolvedImport.resolvedPath!.endsWith(ext));
+        if (isNestedStyle && existsSync(resolvedImport.resolvedPath)) {
+          styleFilesToAdd.add(resolvedImport.resolvedPath);
+        }
+      }
+    }
+
+    graphInputs.push({
+      fileId: styleFileId,
+      parsed: parsedStyleModule,
+      resolvedImports: resolvedStyleImportMap,
+      isEntryPoint: false,
+      isTestEntry: false,
+      isAlwaysUsed: false,
+    });
+    discoveredFilePaths.add(styleFilePath);
+    nextFileIndex++;
   }
 
   const moduleGraph = buildModuleGraph(graphInputs);

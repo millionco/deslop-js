@@ -175,18 +175,23 @@ const main = async (): Promise<void> => {
   try {
     const analysisResult = await analyze(config);
 
-    if (cliArguments.outputJson) {
-      process.stdout.write(JSON.stringify(analysisResult, null, 2) + "\n");
-    } else {
-      process.stdout.write(formatResults(analysisResult, rootDir));
-    }
+    const outputContent = cliArguments.outputJson
+      ? JSON.stringify(analysisResult, null, 2) + "\n"
+      : formatResults(analysisResult, rootDir);
 
     const totalIssueCount =
       analysisResult.unusedFiles.length +
       analysisResult.unusedExports.length +
       analysisResult.unusedDependencies.length;
 
-    process.exit(totalIssueCount > 0 ? 1 : 0);
+    const exitCode = totalIssueCount > 0 ? 1 : 0;
+
+    const didFlush = process.stdout.write(outputContent);
+    if (didFlush) {
+      process.exit(exitCode);
+    } else {
+      process.stdout.once("drain", () => process.exit(exitCode));
+    }
   } catch (error) {
     process.stderr.write(
       `Error: ${error instanceof Error ? error.message : String(error)}\n`,
