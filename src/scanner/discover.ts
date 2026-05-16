@@ -190,15 +190,25 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
 
 const COMMON_SOURCE_DIRECTORIES = ["src", "lib", "main", "app", "source"];
+const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist|build|lib-dist|out|output|cjs|esm|es|umd|module)\//;
 
 const findSourceFile = (baseDir: string, relativePath: string): string | undefined => {
-  const pathWithoutExtension = join(baseDir, relativePath).replace(/\.[cm]?js$/, "");
+  const pathWithoutExtension = join(baseDir, relativePath).replace(/\.[cm]?js(x?)$/, "");
   for (const sourceExtension of SOURCE_EXTENSIONS) {
     const candidatePath = pathWithoutExtension + sourceExtension;
     if (existsSync(candidatePath)) return candidatePath;
   }
   const indexCandidate = join(pathWithoutExtension, "index.ts");
   if (existsSync(indexCandidate)) return indexCandidate;
+  return undefined;
+};
+
+const findSourceFileStrict = (baseDir: string, relativePath: string): string | undefined => {
+  const pathWithoutExtension = join(baseDir, relativePath).replace(/\.[cm]?js(x?)$/, "");
+  for (const sourceExtension of SOURCE_EXTENSIONS) {
+    const candidatePath = pathWithoutExtension + sourceExtension;
+    if (existsSync(candidatePath)) return candidatePath;
+  }
   return undefined;
 };
 
@@ -222,27 +232,26 @@ const resolveBuiltPathToSource = (builtAbsolutePath: string, rootDir: string): s
     if (!relativeToBuild) return undefined;
 
     const rootDirOption = tsconfig?.compilerOptions?.rootDir;
-    if (rootDirOption) {
-      const sourceRootDir = resolve(rootDir, rootDirOption);
-      return findSourceFile(sourceRootDir, relativeToBuild);
-    }
-
-    const fromProjectRoot = findSourceFile(rootDir, relativeToBuild);
-    if (fromProjectRoot) return fromProjectRoot;
-
-    for (const sourceDir of COMMON_SOURCE_DIRECTORIES) {
-      const candidateSourceDir = resolve(rootDir, sourceDir);
-      if (existsSync(candidateSourceDir)) {
-        const fromSourceDir = findSourceFile(candidateSourceDir, relativeToBuild);
-        if (fromSourceDir) return fromSourceDir;
-      }
-    }
+    const sourceRoot = rootDirOption ? resolve(rootDir, rootDirOption) : rootDir;
+    return findSourceFile(sourceRoot, relativeToBuild);
   } catch {
   }
   return undefined;
 };
 
-const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist|build|lib|lib-dist|out|output|cjs|esm|es|umd|module)\//;
+const resolveEntryPathViaHeuristic = (entryPath: string, rootDir: string): string | undefined => {
+  if (!BUILD_OUTPUT_DIRECTORY_PATTERN.test(entryPath)) return undefined;
+  const buildDirMatch = entryPath.match(BUILD_OUTPUT_DIRECTORY_PATTERN);
+  if (!buildDirMatch) return undefined;
+  const relativeToBuildDir = entryPath.slice(buildDirMatch[0].length);
+  for (const sourceDir of COMMON_SOURCE_DIRECTORIES) {
+    const sourceBaseDir = resolve(rootDir, sourceDir);
+    if (!existsSync(sourceBaseDir)) continue;
+    const sourceFileMatch = findSourceFileStrict(sourceBaseDir, relativeToBuildDir);
+    if (sourceFileMatch) return sourceFileMatch;
+  }
+  return undefined;
+};
 
 const resolveEntryPath = (entryPath: string, rootDir: string): string => {
   const absolutePath = resolve(rootDir, entryPath);
@@ -251,28 +260,8 @@ const resolveEntryPath = (entryPath: string, rootDir: string): string => {
   if (sourcePath) return sourcePath;
   const directSourceMatch = findSourceFile(rootDir, entryPath.replace(/^\.\//, ""));
   if (directSourceMatch) return directSourceMatch;
-
-  if (BUILD_OUTPUT_DIRECTORY_PATTERN.test(entryPath)) {
-    const buildDirMatch = entryPath.match(BUILD_OUTPUT_DIRECTORY_PATTERN);
-    const relativeToBuildDir = buildDirMatch ? entryPath.slice(buildDirMatch[0].length) : undefined;
-    for (const sourceDir of COMMON_SOURCE_DIRECTORIES) {
-      const sourceIndexDir = resolve(rootDir, sourceDir);
-      if (!existsSync(sourceIndexDir)) continue;
-      if (relativeToBuildDir) {
-        const sourceFileMatch = findSourceFile(sourceIndexDir, relativeToBuildDir);
-        if (sourceFileMatch) return sourceFileMatch;
-      }
-      for (const sourceExtension of SOURCE_EXTENSIONS) {
-        const indexCandidate = join(sourceIndexDir, `index${sourceExtension}`);
-        if (existsSync(indexCandidate)) return indexCandidate;
-      }
-      const jsIndexCandidate = join(sourceIndexDir, "index.js");
-      if (existsSync(jsIndexCandidate)) return jsIndexCandidate;
-      const jsxIndexCandidate = join(sourceIndexDir, "index.jsx");
-      if (existsSync(jsxIndexCandidate)) return jsxIndexCandidate;
-    }
-  }
-
+  const heuristicMatch = resolveEntryPathViaHeuristic(entryPath, rootDir);
+  if (heuristicMatch) return heuristicMatch;
   return absolutePath;
 };
 
