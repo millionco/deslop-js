@@ -163,12 +163,17 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
     viteEntries.push(...extractViteEntryPoints(workspacePackage.directory));
   }
 
+  const bundlerConfigEntries = extractBundlerConfigEntryPoints(absoluteRoot);
+  for (const workspacePackage of entryEligiblePackages) {
+    bundlerConfigEntries.push(...extractBundlerConfigEntryPoints(workspacePackage.directory));
+  }
+
   const htmlScriptEntries = extractHtmlScriptEntries(absoluteRoot);
   for (const workspacePackage of entryEligiblePackages) {
     htmlScriptEntries.push(...extractHtmlScriptEntries(workspacePackage.directory));
   }
 
-  const allDiscoveredEntries = [...scriptEntries, ...webpackEntries, ...viteEntries];
+  const allDiscoveredEntries = [...scriptEntries, ...webpackEntries, ...viteEntries, ...bundlerConfigEntries];
   for (const entryPath of allDiscoveredEntries) {
     if (entryPath.endsWith(".html") && existsSync(entryPath)) {
       htmlScriptEntries.push(...extractScriptTagsFromHtmlFile(entryPath));
@@ -196,7 +201,7 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
 
   const testEntries = [...new Set([...testRunnerDiscovery.entryFiles, ...testSetupEntries])];
   const testEntryPathSet = new Set(testEntries);
-  const productionEntries = [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...htmlScriptEntries, ...angularEntries, ...pluginFileEntries, ...toolingDiscovery.entryFiles, ...ciEntries])].filter(
+  const productionEntries = [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...bundlerConfigEntries, ...htmlScriptEntries, ...angularEntries, ...pluginFileEntries, ...toolingDiscovery.entryFiles, ...ciEntries])].filter(
     (entryPath) => !testEntryPathSet.has(entryPath),
   );
   const alwaysUsedFiles = [...new Set([...toolingDiscovery.alwaysUsedFiles, ...testRunnerDiscovery.alwaysUsedFiles])];
@@ -391,7 +396,7 @@ const ENV_WRAPPER_BINARIES = new Set([
 
 const NON_ENTRY_BINARIES = new Set([
   "prettier", "eslint", "tslint", "stylelint", "biome", "oxlint", "oxfmt",
-  "tsc", "tsup", "esbuild", "rollup", "webpack",
+  "tsc", "tsup", "tsdown", "esbuild", "rollup", "webpack",
   "rimraf", "del-cli", "shx", "cpy-cli", "cpx",
   "echo", "cat", "mkdir", "rm", "cp", "mv", "ls", "pwd", "test",
 
@@ -688,6 +693,45 @@ const extractViteEntryPoints = (directory: string): string[] => {
             if (existsSync(absoluteEntryPath)) {
               entries.push(absoluteEntryPath);
             }
+          }
+        }
+      }
+    } catch {
+    }
+  }
+
+  return entries;
+};
+
+const BUNDLER_CONFIG_ENTRY_BLOCK_PATTERN = /entry\s*:\s*\[([^\]]*)\]/gs;
+const BUNDLER_CONFIG_ENTRY_STRING_PATTERN = /['"]([^'"]+)['"]/g;
+
+const extractBundlerConfigEntryPoints = (directory: string): string[] => {
+  const entries: string[] = [];
+  const configPaths = fg.sync([
+    "tsdown.config.{ts,js,cjs,mjs}",
+    "tsup.config.{ts,js,cjs,mjs}",
+  ], {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+  });
+
+  for (const configPath of configPaths) {
+    try {
+      const content = readFileSync(configPath, "utf-8");
+      let blockMatch: RegExpExecArray | null;
+      BUNDLER_CONFIG_ENTRY_BLOCK_PATTERN.lastIndex = 0;
+      while ((blockMatch = BUNDLER_CONFIG_ENTRY_BLOCK_PATTERN.exec(content)) !== null) {
+        const arrayContent = blockMatch[1];
+        let stringMatch: RegExpExecArray | null;
+        BUNDLER_CONFIG_ENTRY_STRING_PATTERN.lastIndex = 0;
+        while ((stringMatch = BUNDLER_CONFIG_ENTRY_STRING_PATTERN.exec(arrayContent)) !== null) {
+          const entryPath = stringMatch[1];
+          const absoluteEntryPath = resolve(directory, entryPath);
+          const resolvedPath = resolveEntryWithExtensions(absoluteEntryPath);
+          if (resolvedPath) {
+            entries.push(resolvedPath);
           }
         }
       }
@@ -1708,6 +1752,12 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     enablerPrefixes: [],
     entryPatterns: [],
     alwaysUsed: ["tsup.config.{ts,js,cjs,mjs}"],
+  },
+  {
+    enablers: ["tsdown"],
+    enablerPrefixes: [],
+    entryPatterns: [],
+    alwaysUsed: ["tsdown.config.{ts,js,cjs,mjs}"],
   },
   {
     enablers: ["@swc/core"],
