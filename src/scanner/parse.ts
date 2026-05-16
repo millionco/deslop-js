@@ -25,30 +25,44 @@ export interface ParsedModule {
   exports: ExportInfo[];
 }
 
-const IMPORT_EXPORT_LINE_PATTERN = /^[a-zA-Z{}\s,*'"`]/;
-
 const extractMdxImportsExports = (sourceText: string): string => {
-  const lines = sourceText.split("\n");
-  const jsLines: string[] = [];
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-    const isLineContinuation = jsLines.length > 0
-      && !jsLines[jsLines.length - 1].endsWith(";")
-      && !trimmedLine.startsWith("#")
-      && !trimmedLine.startsWith("<")
-      && trimmedLine.length > 0
-      && IMPORT_EXPORT_LINE_PATTERN.test(trimmedLine);
+  const statements: string[] = [];
+  let isInMultiline = false;
+  let braceDepth = 0;
 
-    if (
+  for (const line of sourceText.split("\n")) {
+    const trimmedLine = line.trim();
+    if (isInMultiline) {
+      statements.push(line);
+      for (const character of trimmedLine) {
+        if (character === "{") braceDepth++;
+        if (character === "}") braceDepth--;
+      }
+      const hasFromClause = trimmedLine.includes(" from ")
+        || trimmedLine.includes(" from'")
+        || trimmedLine.includes(" from\"");
+      if (braceDepth <= 0 || trimmedLine.endsWith(";") || hasFromClause) {
+        isInMultiline = false;
+        braceDepth = 0;
+      }
+    } else if (
       trimmedLine.startsWith("import ") ||
+      trimmedLine.startsWith("import{") ||
       trimmedLine.startsWith("export ") ||
-      trimmedLine.startsWith("from ") ||
-      isLineContinuation
+      trimmedLine.startsWith("export{")
     ) {
-      jsLines.push(line);
+      statements.push(line);
+      for (const character of trimmedLine) {
+        if (character === "{") braceDepth++;
+        if (character === "}") braceDepth--;
+      }
+      if (braceDepth > 0 && !trimmedLine.includes(" from ")) {
+        isInMultiline = true;
+      }
     }
   }
-  return jsLines.join("\n");
+
+  return statements.join("\n");
 };
 
 const ASTRO_FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---/;
