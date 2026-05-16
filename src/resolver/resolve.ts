@@ -1,8 +1,8 @@
 import { ResolverFactory } from "oxc-resolver";
-import { dirname, resolve, join } from "node:path";
+import { dirname, resolve, join, basename, extname, sep } from "node:path";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import type { DeslopConfig } from "../types.js";
-import { BUILTIN_MODULES, RESOLVER_EXTENSIONS, REACT_NATIVE_PLATFORM_EXTENSIONS } from "../constants.js";
+import { BUILTIN_MODULES, RESOLVER_EXTENSIONS, REACT_NATIVE_PLATFORM_EXTENSIONS, OUTPUT_DIRECTORIES, SOURCE_EXTENSIONS } from "../constants.js";
 import { resolveSourcePath } from "./source-path.js";
 
 const existsAsFile = (filePath: string): boolean => {
@@ -11,6 +11,42 @@ const existsAsFile = (filePath: string): boolean => {
   } catch {
     return false;
   }
+};
+
+const trySourceFallback = (resolvedPath: string): string | undefined => {
+  const segments = resolvedPath.split(sep);
+
+  const isOutputDirectory = (segment: string): boolean => OUTPUT_DIRECTORIES.includes(segment);
+
+  let lastOutputPosition = -1;
+  for (let index = segments.length - 1; index >= 0; index--) {
+    if (isOutputDirectory(segments[index])) {
+      lastOutputPosition = index;
+      break;
+    }
+  }
+  if (lastOutputPosition === -1) return undefined;
+
+  let firstOutputPosition = lastOutputPosition;
+  while (firstOutputPosition > 0 && isOutputDirectory(segments[firstOutputPosition - 1])) {
+    firstOutputPosition--;
+  }
+
+  const prefix = segments.slice(0, firstOutputPosition).join(sep);
+  const suffix = segments.slice(lastOutputPosition + 1).join(sep);
+  if (!suffix) return undefined;
+
+  const fileBaseName = basename(suffix);
+  const fileExtension = extname(fileBaseName);
+  const stemmedSuffix = fileExtension
+    ? suffix.slice(0, suffix.length - fileExtension.length)
+    : suffix;
+
+  for (const sourceExtension of SOURCE_EXTENSIONS) {
+    const sourceCandidate = join(prefix, "src", `${stemmedSuffix}.${sourceExtension}`);
+    if (existsAsFile(sourceCandidate)) return sourceCandidate;
+  }
+  return undefined;
 };
 
 const resolvePathWithExtensionFallback = (candidatePath: string): string => {
@@ -364,11 +400,13 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
             const exportKey = `./${subpath}`;
             const exportValue = workspacePackageJson.exports[exportKey];
             if (typeof exportValue === "string") {
-              resolvedEntryPath = resolvePathWithExtensionFallback(resolve(workspaceDirectory, exportValue));
+              const candidatePath = resolvePathWithExtensionFallback(resolve(workspaceDirectory, exportValue));
+              resolvedEntryPath = existsAsFile(candidatePath) ? candidatePath : trySourceFallback(candidatePath);
             } else if (typeof exportValue === "object" && exportValue !== null) {
               const conditionValue = exportValue.import ?? exportValue.require ?? exportValue.default ?? exportValue.types;
               if (typeof conditionValue === "string") {
-                resolvedEntryPath = resolvePathWithExtensionFallback(resolve(workspaceDirectory, conditionValue));
+                const candidatePath = resolvePathWithExtensionFallback(resolve(workspaceDirectory, conditionValue));
+                resolvedEntryPath = existsAsFile(candidatePath) ? candidatePath : trySourceFallback(candidatePath);
               }
             }
 
@@ -391,7 +429,8 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
                   const matchedSegment = exportKey.slice(wildcardPrefix.length, exportKey.length - wildcardSuffix.length || undefined);
                   const expandedTarget = wildcardTargetValue.replace("*", matchedSegment);
                   const candidateWildcardPath = resolve(workspaceDirectory, expandedTarget);
-                  resolvedEntryPath = resolvePathWithExtensionFallback(candidateWildcardPath);
+                  const candidatePath = resolvePathWithExtensionFallback(candidateWildcardPath);
+                  resolvedEntryPath = existsAsFile(candidatePath) ? candidatePath : trySourceFallback(candidatePath);
                   break;
                 }
               }
@@ -399,15 +438,19 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
           }
 
           if (subpath && !resolvedEntryPath) {
-            const directSubpath = resolve(workspaceDirectory, subpath);
-            for (const candidateExtension of RESOLVER_EXTENSIONS) {
-              const candidate = directSubpath + candidateExtension;
-              if (existsSync(candidate)) {
-                resolvedEntryPath = candidate;
-                break;
+            const subpathCandidates = [
+              resolve(workspaceDirectory, subpath),
+              resolve(workspaceDirectory, "src", subpath),
+            ];
+            for (const directSubpath of subpathCandidates) {
+              for (const candidateExtension of RESOLVER_EXTENSIONS) {
+                const candidate = directSubpath + candidateExtension;
+                if (existsSync(candidate)) {
+                  resolvedEntryPath = candidate;
+                  break;
+                }
               }
-            }
-            if (!resolvedEntryPath) {
+              if (resolvedEntryPath) break;
               for (const candidateExtension of RESOLVER_EXTENSIONS) {
                 const indexCandidate = join(directSubpath, `index${candidateExtension}`);
                 if (existsSync(indexCandidate)) {
@@ -415,6 +458,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
                   break;
                 }
               }
+              if (resolvedEntryPath) break;
             }
           }
 
@@ -442,6 +486,16 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
             if (existsSync(finalPath)) {
               const resolvedResult: ResolvedImport = {
                 resolvedPath: finalPath,
+                isExternal: false,
+                packageName: undefined,
+              };
+              resolveResultCache.set(cacheKey, resolvedResult);
+              return resolvedResult;
+            }
+            const sourceFallbackPath = trySourceFallback(resolvedEntryPath);
+            if (sourceFallbackPath) {
+              const resolvedResult: ResolvedImport = {
+                resolvedPath: sourceFallbackPath,
                 isExternal: false,
                 packageName: undefined,
               };

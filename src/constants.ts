@@ -27,6 +27,10 @@ export const HIDDEN_DIRECTORY_ALLOWLIST = [
   ".server",
 ];
 
+export const OUTPUT_DIRECTORIES = ["dist", "build", "out", "esm", "cjs"];
+
+export const SOURCE_EXTENSIONS = ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
+
 export const DEFAULT_IGNORE_PATTERNS = [
   "**/node_modules/**",
   "**/dist/**",

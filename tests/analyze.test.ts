@@ -2469,6 +2469,29 @@ describe("ci-yaml-non-run-values", () => {
   });
 });
 
+describe("workspace-dist-to-src", () => {
+  it("should resolve workspace deep imports through export maps via dist→src fallback", async () => {
+    const result = await analyzeFixture("workspace-dist-to-src");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-dist-to-src");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("packages/core/src/visualdebug.ts"),
+      `packages/core/src/visualdebug.ts should NOT be unused (imported via @test/core/visualdebug), got: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("packages/core/src/index.ts"),
+      `packages/core/src/index.ts should NOT be unused (imported via @test/core), got: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("packages/core/src/orphan.ts"),
+      `packages/core/src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("bun-test-runner", () => {
   it("should detect bun test scripts and treat test files as entry points (matching fallow)", async () => {
     const result = await analyzeFixture("bun-test-runner");
