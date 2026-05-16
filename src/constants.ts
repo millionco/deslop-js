@@ -7,6 +7,24 @@ export const DEFAULT_EXTENSIONS = [
   ".mjs",
   ".cts",
   ".cjs",
+  ".mdx",
+  ".astro",
+  ".graphql",
+  ".gql",
+  ".css",
+  ".scss",
+  ".vue",
+  ".svelte",
+];
+
+export const HIDDEN_DIRECTORY_ALLOWLIST = [
+  ".storybook",
+  ".vitepress",
+  ".well-known",
+  ".changeset",
+  ".github",
+  ".client",
+  ".server",
 ];
 
 export const DEFAULT_IGNORE_PATTERNS = [
@@ -15,10 +33,18 @@ export const DEFAULT_IGNORE_PATTERNS = [
   "**/build/**",
   "**/.git/**",
   "**/coverage/**",
-  "**/__tests__/**",
-  "**/*.test.*",
-  "**/*.spec.*",
   "**/*.d.ts",
+  "**/*.min.js",
+  "**/*.min.mjs",
+  "**/mockServiceWorker.js",
+];
+
+export const SCRIPT_FILE_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|tsc|npx|bun|esr|esno|jiti|babel-node)\s+(?:(?:-[\w-]+(?:\s+[\w./@-]+)?\s+)|(?:[\w/-]+\s+))*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:\s|$)/;
+
+export const SCRIPT_CONFIG_FILE_PATTERN = /--config\s+([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))/;
+
+export const SCRIPT_ENTRY_PATTERNS = [
+  "bin/*.{ts,tsx,js,jsx,mts,mjs,cjs}",
 ];
 
 export const DEFAULT_ENTRY_PATTERNS = [
@@ -28,23 +54,64 @@ export const DEFAULT_ENTRY_PATTERNS = [
   "main.{ts,tsx,js,jsx}",
 ];
 
-export const CONFIG_FILE_PATTERNS: RegExp[] = [
-  /\.config\.[jt]sx?$/,
-  /\.eslintrc/,
-  /\.prettierrc/,
-  /\.babelrc/,
-  /jest\.config/,
-  /vite\.config/,
-  /vitest\.config/,
-  /webpack\.config/,
-  /rollup\.config/,
-  /tsconfig.*\.json$/,
-  /next\.config/,
-  /tailwind\.config/,
-  /postcss\.config/,
-  /astro\.config/,
-  /svelte\.config/,
-  /nuxt\.config/,
+export const CONFIG_FILE_PREFIXES = [
+  "babel.config.",
+  "rollup.config.",
+  "webpack.config.",
+  "postcss.config.",
+  "stencil.config.",
+  "remotion.config.",
+  "metro.config.",
+  "tsup.config.",
+  "tsdown.config.",
+  "unbuild.config.",
+  "esbuild.config.",
+  "swc.config.",
+  "turbo.",
+  "jest.config.",
+  "jest.setup.",
+  "vitest.config.",
+  "vitest.ci.config.",
+  "vitest.setup.",
+  "vitest.workspace.",
+  "playwright.config.",
+  "cypress.config.",
+  "karma.conf.",
+  "eslint.config.",
+  "prettier.config.",
+  "stylelint.config.",
+  "lint-staged.config.",
+  "commitlint.config.",
+  "next.config.",
+  "next-sitemap.config.",
+  "nuxt.config.",
+  "astro.config.",
+  "sanity.config.",
+  "sanity.cli.",
+  "vite.config.",
+  "tailwind.config.",
+  "drizzle.config.",
+  "knexfile.",
+  "sentry.client.config.",
+  "sentry.server.config.",
+  "sentry.edge.config.",
+  "react-router.config.",
+  "typedoc.",
+  "knip.config.",
+  "fallow.config.",
+  "i18next-parser.config.",
+  "codegen.config.",
+  "graphql.config.",
+  "npmpackagejsonlint.config.",
+  "release-it.",
+  "release.config.",
+  "contentlayer.config.",
+  "next-env.d.",
+  "env.d.",
+  "vite-env.d.",
+  "svelte.config.",
+  "trigger.config.",
+  "lage.config.",
 ];
 
 export const ALWAYS_USED_PACKAGES = new Set([
@@ -104,6 +171,15 @@ export const BUILTIN_MODULES = new Set([
   "zlib",
 ]);
 
+export const PLATFORM_SUFFIXES = [".web", ".native", ".ios", ".android", ".desktop", ".windows", ".macos", ".any"];
+
+export const REACT_NATIVE_PLATFORM_EXTENSIONS = [
+  ".web.ts", ".web.tsx", ".web.js", ".web.jsx",
+  ".native.ts", ".native.tsx", ".native.js", ".native.jsx",
+  ".ios.ts", ".ios.tsx", ".ios.js", ".ios.jsx",
+  ".android.ts", ".android.tsx", ".android.js", ".android.jsx",
+];
+
 export const RESOLVER_EXTENSIONS = [
   ...DEFAULT_EXTENSIONS,
   ".json",
@@ -114,4 +190,8 @@ export const RESOLVER_EXTENSIONS = [
   ".svg",
   ".png",
   ".jpg",
+  ".graphql",
+  ".gql",
 ];
+
+export const SHALLOW_WORKSPACE_MAX_DEPTH = 2;

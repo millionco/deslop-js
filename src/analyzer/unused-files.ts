@@ -1,5 +1,9 @@
 import type { ModuleGraph, UnusedFile, ModuleNode } from "../types.js";
 
+const isHtmlFile = (filePath: string): boolean => {
+  return filePath.endsWith(".html");
+};
+
 export const findUnusedFiles = (graph: ModuleGraph): UnusedFile[] => {
   const unusedFiles: UnusedFile[] = [];
 
@@ -8,8 +12,9 @@ export const findUnusedFiles = (graph: ModuleGraph): UnusedFile[] => {
     if (module.isEntryPoint) continue;
     if (module.isDeclarationFile) continue;
     if (module.isConfigFile) continue;
+    if (isHtmlFile(module.fileId.path)) continue;
     if (isBarrelWithReachableSources(module, graph)) continue;
-    if (hasReachableImporter(module.fileId.index, graph)) continue;
+    if (hasReachableDirectImporter(module.fileId.index, graph)) continue;
 
     unusedFiles.push({ path: module.fileId.path });
   }
@@ -39,15 +44,15 @@ const isBarrelWithReachableSources = (
   return false;
 };
 
-const hasReachableImporter = (
+const hasReachableDirectImporter = (
   targetModuleIndex: number,
   graph: ModuleGraph,
 ): boolean => {
-  const importerIndices = graph.reverseEdges.get(targetModuleIndex);
-  if (!importerIndices) return false;
-
-  return importerIndices.some((importerIndex) => {
-    const importerModule = graph.modules[importerIndex];
-    return importerModule?.isReachable;
-  });
+  for (const edge of graph.edges) {
+    if (edge.target !== targetModuleIndex) continue;
+    if (edge.isReExportEdge) continue;
+    const importerModule = graph.modules[edge.source];
+    if (importerModule?.isReachable) return true;
+  }
+  return false;
 };

@@ -4,12 +4,17 @@ import type { ModuleGraph, UnusedDependency, DeslopConfig } from "../types.js";
 import { ALWAYS_USED_PACKAGES } from "../constants.js";
 import { extractPackageName } from "../utils/package-name.js";
 
+interface PackageJsonDependencies {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+}
+
 export const findUnusedDependencies = (
   graph: ModuleGraph,
   config: DeslopConfig,
 ): UnusedDependency[] => {
   const packageJsonPath = resolve(config.rootDir, "package.json");
-  let packageJson: Record<string, unknown>;
+  let packageJson: PackageJsonDependencies;
 
   try {
     const content = readFileSync(packageJsonPath, "utf-8");
@@ -18,8 +23,8 @@ export const findUnusedDependencies = (
     return [];
   }
 
-  const dependencies = (packageJson.dependencies ?? {}) as Record<string, string>;
-  const devDependencies = (packageJson.devDependencies ?? {}) as Record<string, string>;
+  const dependencies = packageJson.dependencies ?? {};
+  const devDependencies = packageJson.devDependencies ?? {};
 
   const declaredDependencies = new Map<string, boolean>();
   for (const dependencyName of Object.keys(dependencies)) {
