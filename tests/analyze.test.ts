@@ -892,7 +892,7 @@ describe("source-path-fallback", () => {
     );
   });
 
-  it("should resolve dist/cli.js to src/cli/index.ts via directory fallback", async () => {
+  it("should resolve dist/cli.js to src/cli/index.ts via tsconfig outDir", async () => {
     const result = await analyzeFixture("source-path-fallback");
     const fixtureDir = resolve(FIXTURES_DIR, "source-path-fallback");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -910,6 +910,26 @@ describe("source-path-fallback", () => {
     const result = await analyzeFixture("source-path-fallback");
     const fixtureDir = resolve(FIXTURES_DIR, "source-path-fallback");
     const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("heuristic-no-directory-fallback", () => {
+  it("should not resolve dist/cli.js to src/cli/index.ts without tsconfig outDir", async () => {
+    const result = await analyzeFixture("heuristic-no-directory-fallback");
+    const fixtureDir = resolve(FIXTURES_DIR, "heuristic-no-directory-fallback");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/cli/index.ts"),
+      `src/cli/index.ts should be unused (heuristic should not do directory fallback), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/index.ts"),
+      `src/index.ts should be resolved from dist/index.js via heuristic, got: ${unusedFilePaths}`,
+    );
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
