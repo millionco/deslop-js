@@ -2028,6 +2028,28 @@ it("should activate tooling plugins from optionalDependencies", async () => {
   );
 });
 
+it("should extract entry points from tsdown/tsup config files", async () => {
+  const result = await analyzeFixture("tsdown-config-entry");
+  const fixtureDir = resolve(FIXTURES_DIR, "tsdown-config-entry");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/main.ts"),
+    `src/main.ts should be reachable (entry in tsdown.config.ts), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/preload.ts"),
+    `src/preload.ts should be reachable (entry in tsdown.config.ts), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/utils.ts"),
+    `src/utils.ts should be reachable (imported by src/main.ts), got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/unused.ts"),
+    `src/unused.ts should be flagged as unused, got: ${unusedFilePaths}`,
+  );
+});
+
 it("should treat files referenced via vi.mock/jest.mock as reachable (test imports create edges)", async () => {
   const result = await analyzeFixture("test-mock-imports");
   const fixtureDir = resolve(FIXTURES_DIR, "test-mock-imports");
