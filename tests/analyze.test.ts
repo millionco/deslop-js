@@ -1097,6 +1097,30 @@ describe("jest-mocks", () => {
   });
 });
 
+describe("jest-test-match", () => {
+  it("should use custom testMatch patterns from jest.config.ts instead of defaults", async () => {
+    const result = await analyzeFixture("jest-test-match");
+    const fixtureDir = resolve(FIXTURES_DIR, "jest-test-match");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/utils.test.ts"),
+      `src/utils.test.ts should be reachable via custom testMatch, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/__tests__/app.test.ts"),
+      `src/__tests__/app.test.ts should be reachable via custom testMatch, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("tests/outside.test.ts"),
+      `tests/outside.test.ts should be unused (outside testMatch scope), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("require-context", () => {
   it("should resolve require.context patterns with recursive flag and regex filter (matching fallow)", async () => {
     const result = await analyzeFixture("require-context");
