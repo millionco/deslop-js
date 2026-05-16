@@ -166,6 +166,13 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
     htmlScriptEntries.push(...extractHtmlScriptEntries(workspacePackage.directory));
   }
 
+  const allDiscoveredEntries = [...scriptEntries, ...webpackEntries, ...viteEntries];
+  for (const entryPath of allDiscoveredEntries) {
+    if (entryPath.endsWith(".html") && existsSync(entryPath)) {
+      htmlScriptEntries.push(...extractScriptTagsFromHtmlFile(entryPath));
+    }
+  }
+
   const angularEntries = extractAngularEntryPoints(absoluteRoot);
   for (const workspacePackage of entryEligiblePackages) {
     angularEntries.push(...extractAngularEntryPoints(workspacePackage.directory));
@@ -343,10 +350,10 @@ const SCRIPT_MULTIPLEXERS = new Set([
 ]);
 
 const NON_ENTRY_BINARIES = new Set([
-  "prettier", "eslint", "tslint", "stylelint", "biome",
+  "prettier", "eslint", "tslint", "stylelint", "biome", "oxlint", "oxfmt",
   "tsc", "tsup", "esbuild", "rollup", "webpack",
   "rimraf", "del-cli", "shx", "cpy-cli", "cpx",
-  "echo", "cat", "mkdir", "rm", "cp", "mv", "ls", "pwd",
+  "echo", "cat", "mkdir", "rm", "cp", "mv", "ls", "pwd", "test",
   "dotenv", "dotenv-flow", "cross-env", "env-cmd",
   "husky", "lint-staged", "commitlint",
   "changeset", "changesets",
@@ -356,6 +363,8 @@ const NON_ENTRY_BINARIES = new Set([
   "pnpm", "npm", "yarn", "ni", "nr", "nun",
   "next", "nuxt", "astro", "vite", "svelte-kit",
   "prisma", "drizzle-kit",
+  "formatjs", "i18next-parser", "lingui",
+  "storybook", "chromatic", "msw",
 ]);
 
 const looksLikeFilePath = (token: string): boolean => {
@@ -394,7 +403,7 @@ const extractScriptFileArguments = (scriptCommand: string, directory: string): s
     if (effectiveBinaryName && NON_ENTRY_BINARIES.has(effectiveBinaryName)) continue;
 
     for (let tokenIndex = 1; tokenIndex < tokens.length; tokenIndex++) {
-      const token = tokens[tokenIndex];
+      const token = tokens[tokenIndex].replace(/^['"]|['"]$/g, "");
 
       if (token === "--config" || token === "-c") {
         if (tokenIndex + 1 < tokens.length && !tokens[tokenIndex + 1].startsWith("-")) {
@@ -672,12 +681,12 @@ const HTML_SCRIPT_SRC_PATTERN = /<script[^>]+src=["']([^"']+\.(?:ts|tsx|js|jsx|m
 
 const extractHtmlScriptEntries = (directory: string): string[] => {
   const entries: string[] = [];
-  const htmlFiles = fg.sync(["index.html", "**/index.html", "*.html"], {
+  const htmlFiles = fg.sync(["index.html", "*.html"], {
     cwd: directory,
     absolute: true,
     onlyFiles: true,
     ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
-    deep: 3,
+    deep: 1,
   });
 
   for (const htmlPath of htmlFiles) {
@@ -697,6 +706,25 @@ const extractHtmlScriptEntries = (directory: string): string[] => {
     }
   }
 
+  return entries;
+};
+
+const extractScriptTagsFromHtmlFile = (htmlFilePath: string): string[] => {
+  const entries: string[] = [];
+  try {
+    const content = readFileSync(htmlFilePath, "utf-8");
+    let scriptMatch: RegExpExecArray | null;
+    HTML_SCRIPT_SRC_PATTERN.lastIndex = 0;
+    while ((scriptMatch = HTML_SCRIPT_SRC_PATTERN.exec(content)) !== null) {
+      const scriptSrc = scriptMatch[1].replace(/^\//, "");
+      const htmlDirectory = dirname(htmlFilePath);
+      const absoluteScriptPath = resolve(htmlDirectory, scriptSrc);
+      if (existsSync(absoluteScriptPath)) {
+        entries.push(absoluteScriptPath);
+      }
+    }
+  } catch {
+  }
   return entries;
 };
 
@@ -950,13 +978,10 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     enablers: ["vitest", "@vitest/runner", "vite-plus"],
     configFileActivators: [
       "vitest.config.ts", "vitest.config.js", "vitest.config.mts", "vitest.config.mjs",
-      "vite.config.ts", "vite.config.js", "vite.config.mts", "vite.config.mjs",
     ],
     entryPatterns: [
       "**/*.test.{ts,tsx,js,jsx,mts,mjs}",
       "**/*.spec.{ts,tsx,js,jsx,mts,mjs}",
-      "**/*-spec.{ts,tsx,js,jsx,mts,mjs}",
-      "**/*_spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
       "**/__e2e__/**/*.{ts,tsx,js,jsx,mts,mjs}",
       "**/*.bench.{ts,tsx,js,jsx}",
@@ -990,8 +1015,6 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     entryPatterns: [
       "**/*.test.{ts,tsx,js,jsx,mts,mjs}",
       "**/*.spec.{ts,tsx,js,jsx,mts,mjs}",
-      "**/*-spec.{ts,tsx,js,jsx,mts,mjs}",
-      "**/*_spec.{ts,tsx,js,jsx,mts,mjs}",
       "**/__tests__/**/*.{ts,tsx,js,jsx,mts,mjs}",
     ],
     fixturePatterns: [
@@ -1052,20 +1075,6 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
       "cypress.config.{ts,js}",
       "cypress.config.*.{ts,js}",
     ],
-  },
-  {
-    enablers: ["bun:test"],
-    configFileActivators: [],
-    entryPatterns: [
-      "**/*.test.{ts,tsx,js,jsx}",
-      "**/*.spec.{ts,tsx,js,jsx}",
-      "**/__tests__/**/*.{ts,tsx,js,jsx}",
-    ],
-    fixturePatterns: [
-      "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
-      "**/fixtures/**/*.{ts,tsx,js,jsx,json}",
-    ],
-    alwaysUsed: [],
   },
 ];
 
@@ -1601,20 +1610,7 @@ const detectNodeTestRunner = (directory: string): boolean => {
   }
 };
 
-const detectBunTestRunner = (directory: string): boolean => {
-  try {
-    const packageJsonPath = join(directory, "package.json");
-    if (!existsSync(packageJsonPath)) return false;
-    const content = readFileSync(packageJsonPath, "utf-8");
-    const packageJson = JSON.parse(content);
-    const scripts = packageJson.scripts ?? {};
-    return Object.values(scripts).some(
-      (scriptValue) => typeof scriptValue === "string" && /\bbun\s+test\b/.test(scriptValue)
-    );
-  } catch {
-    return false;
-  }
-};
+
 
 interface TestRunnerDiscoveryResult {
   entryFiles: string[];
@@ -1651,7 +1647,6 @@ const discoverTestRunnerEntryPoints = (
 
     const isRunnerEnabled = (runner: TestRunnerDefinition, dependencies: Record<string, string>, checkDirectory: string): boolean => {
       const hasDependency = runner.enablers.some((enabler) => {
-        if (enabler === "bun:test") return detectBunTestRunner(checkDirectory);
         return enabler in dependencies;
       });
       if (hasDependency) return true;
