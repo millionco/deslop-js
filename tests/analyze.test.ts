@@ -977,8 +977,8 @@ describe("workspace-explicit-entries", () => {
       `packages/ui/src/index.ts should be unused (not imported by main entry), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("packages/utils/src/index.ts"),
-      `packages/utils/src/index.ts should be unused (no imports), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("packages/utils/src/index.ts"),
+      `packages/utils/src/index.ts should be reachable (default index fallback for workspace without main), got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("packages/utils/src/orphan.ts"),
@@ -1005,8 +1005,8 @@ describe("workspace-default-fallback", () => {
       `packages/lib-a/src/orphan.ts should be unused, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("packages/lib-b/src/index.ts"),
-      `packages/lib-b/src/index.ts should be unused (no entry fields in package.json, no fallback), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("packages/lib-b/src/index.ts"),
+      `packages/lib-b/src/index.ts should be reachable (default index fallback for package without main), got: ${unusedFilePaths}`,
     );
   });
 });
@@ -2220,6 +2220,26 @@ describe("vitest-custom-include", () => {
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("workspace-no-main-field", () => {
+  it("should fall back to index.js for workspace packages without a main field", async () => {
+    const result = await analyzeFixture("workspace-no-main-field");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-no-main-field");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/lib-a/index.js"),
+      `index.js should NOT be unused (default entry for package without main), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("packages/lib-a/helper.js"),
+      `helper.js should NOT be unused (imported by index.js), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("packages/lib-a/orphan.js"),
+      `orphan.js should be unused (not imported by anything), got: ${unusedFilePaths}`,
     );
   });
 });
