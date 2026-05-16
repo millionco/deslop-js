@@ -49,7 +49,7 @@ export const markReachable = (graph: ModuleGraph): void => {
   }
 
   for (const module of graph.modules) {
-    if (module.isEntryPoint && !module.isConfigFile) {
+    if (module.isEntryPoint) {
       const moduleIndex = module.fileId.index;
       if (moduleIndex < totalModules) {
         visited[moduleIndex] = 1;

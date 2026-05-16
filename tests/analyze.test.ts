@@ -2301,7 +2301,7 @@ describe("config-always-used", () => {
 });
 
 describe("config-file-imports", () => {
-  it("should report config-only imports as unused but keep shared imports reachable", async () => {
+  it("should propagate reachability from config entry points when plugin activates", async () => {
     const result = await analyzeFixture("config-file-imports");
     const fixtureDir = resolve(FIXTURES_DIR, "config-file-imports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -2310,8 +2310,8 @@ describe("config-file-imports", () => {
       `vite.config.ts should be excluded (config file), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("my-vite-plugin.ts"),
-      `my-vite-plugin.ts should be unused (only imported from config), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("my-vite-plugin.ts"),
+      `my-vite-plugin.ts should be reachable (config file is entry point when vite plugin activates), got: ${unusedFilePaths}`,
     );
     assert.ok(
       !unusedFilePaths.includes("src/shared-util.ts"),

@@ -2,7 +2,6 @@
   "name": "config-always-used",
   "main": "src/index.ts",
   "devDependencies": {
-    "vitest": "^1.0.0",
-    "vite": "^5.0.0"
+    "vitest": "^1.0.0"
   }
 }
