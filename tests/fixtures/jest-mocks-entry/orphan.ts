@@ -1,1 +1,1 @@
-export const unused = () => "orphan";
+export const unused = true;

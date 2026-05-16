@@ -1,6 +1,7 @@
 {
-  "name": "jest-mocks-test",
-  "dependencies": {},
+  "name": "jest-mocks-entry",
+  "version": "1.0.0",
+  "main": "src/index.ts",
   "devDependencies": {
     "jest": "^29.0.0"
   }

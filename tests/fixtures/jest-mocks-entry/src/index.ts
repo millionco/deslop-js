@@ -1,1 +1,1 @@
-export const main = () => "app";
+export const greet = (name: string) => `Hello, ${name}`;
