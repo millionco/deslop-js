@@ -22,12 +22,6 @@ export const resolveSourcePath = (distPath: string, directory: string): string |
         return sourceCandidate;
       }
     }
-    for (const sourceExtension of SOURCE_EXTENSIONS) {
-      const indexCandidate = resolve(directory, withoutExtension, "index" + sourceExtension);
-      if (existsSync(indexCandidate)) {
-        return indexCandidate;
-      }
-    }
   }
 
   const isOutputDirEntry = OUTPUT_DIR_PREFIXES.some((prefix) => relativeToDist.startsWith(prefix));
