@@ -549,8 +549,51 @@ const extractScriptEntries = (directory: string): string[] => {
   return entries;
 };
 
-const CI_FILE_PATH_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|bun|npx|esr|esno|jiti)\s+(?:(?:-[\w-]+(?:\s+[\w./@-]+)?\s+)|(?:[\w/-]+\s+))*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:\s|$)/;
-const CI_INLINE_FILE_PATTERN = /(?:^|\s)((?:\.\/)?[\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:\s|$)/g;
+const isYamlMapping = (line: string): boolean => {
+  const firstWord = line.split(/\s/)[0];
+  if (!firstWord) return false;
+  return firstWord.endsWith(":") && !firstWord.startsWith("http") && !firstWord.startsWith("ftp");
+};
+
+const extractCiRunCommands = (content: string): string[] => {
+  const commands: string[] = [];
+  let inMultilineRun = false;
+  let multilineIndent = 0;
+
+  for (const line of content.split("\n")) {
+    const trimmedLine = line.trim();
+    if (trimmedLine === "" || trimmedLine.startsWith("#")) continue;
+
+    if (inMultilineRun) {
+      const indent = line.length - line.trimStart().length;
+      if (indent > multilineIndent && trimmedLine !== "") {
+        commands.push(trimmedLine);
+        continue;
+      }
+      inMultilineRun = false;
+    }
+
+    const runMatch = trimmedLine.match(/^(?:-\s+)?run:\s*(.*)$/);
+    if (runMatch) {
+      const runValue = runMatch[1].trim();
+      if (runValue === "|" || runValue === "|-" || runValue === "|+") {
+        inMultilineRun = true;
+        multilineIndent = line.length - line.trimStart().length;
+      } else if (runValue !== "") {
+        commands.push(runValue);
+      }
+      continue;
+    }
+
+    if (trimmedLine.startsWith("- ")) {
+      const listItem = trimmedLine.slice(2).trim();
+      if (listItem !== "" && !listItem.startsWith("{") && !listItem.startsWith("[") && !isYamlMapping(listItem)) {
+        commands.push(listItem);
+      }
+    }
+  }
+  return commands;
+};
 
 const extractCiWorkflowEntries = (rootDir: string): string[] => {
   const entries: string[] = [];
@@ -566,26 +609,20 @@ const extractCiWorkflowEntries = (rootDir: string): string[] => {
   for (const workflowFile of workflowFiles) {
     try {
       const content = readFileSync(workflowFile, "utf-8");
-      const contentLines = content.split("\n");
-      for (const line of contentLines) {
-        const trimmedLine = line.trim();
-        if (trimmedLine.startsWith("#")) continue;
-        const scriptMatch = trimmedLine.match(SCRIPT_FILE_PATTERN);
+      const runCommands = extractCiRunCommands(content);
+      for (const command of runCommands) {
+        const scriptMatch = command.match(SCRIPT_FILE_PATTERN);
         if (scriptMatch?.[1]) {
           const scriptFilePath = resolve(rootDir, scriptMatch[1]);
           if (existsSync(scriptFilePath)) {
             entries.push(scriptFilePath);
           }
         }
-        CI_INLINE_FILE_PATTERN.lastIndex = 0;
-        let inlineMatch: RegExpExecArray | null;
-        while ((inlineMatch = CI_INLINE_FILE_PATTERN.exec(trimmedLine)) !== null) {
-          const candidatePath = inlineMatch[1];
-          if (candidatePath.startsWith("./") || candidatePath.includes("/")) {
-            const absoluteCandidatePath = resolve(rootDir, candidatePath);
-            if (existsSync(absoluteCandidatePath)) {
-              entries.push(absoluteCandidatePath);
-            }
+        const configMatch = command.match(SCRIPT_CONFIG_FILE_PATTERN);
+        if (configMatch?.[1]) {
+          const configFilePath = resolve(rootDir, configMatch[1]);
+          if (existsSync(configFilePath)) {
+            entries.push(configFilePath);
           }
         }
       }

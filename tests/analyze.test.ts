@@ -2450,3 +2450,21 @@ describe("barrel-file-types", () => {
     );
   });
 });
+
+describe("ci-yaml-non-run-values", () => {
+  it("should only extract entries from run: blocks, not arbitrary YAML values (matching fallow)", async () => {
+    const result = await analyzeFixture("ci-yaml-non-run-values");
+    const fixtureDir = resolve(FIXTURES_DIR, "ci-yaml-non-run-values");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("scripts/deploy.mjs"),
+      `scripts/deploy.mjs should NOT be unused (referenced in run: block), got: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes(".github/changelog/changelog.js"),
+      `.github/changelog/changelog.js SHOULD be unused (only referenced in YAML with: block, not run:), got: ${unusedFilePaths}`,
+    );
+  });
+});
