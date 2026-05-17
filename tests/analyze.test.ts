@@ -3331,4 +3331,278 @@ describe("circular-deps-none", () => {
   });
 });
 
+describe("re-export-default-as-named", () => {
+  it("should track default-as-named re-exports and detect unused files", async () => {
+    const result = await analyzeFixture("re-export-default-as-named");
+    const fixtureDir = resolve(FIXTURES_DIR, "re-export-default-as-named");
+    const unusedFiles = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFiles.includes("widget.ts"),
+      "widget.ts should be reachable via re-export { default as Widget }",
+    );
+    assert.ok(
+      !unusedFiles.includes("gadget.ts"),
+      "gadget.ts should be reachable via re-export { default as Gadget }",
+    );
+    assert.ok(
+      !unusedFiles.includes("index.ts"),
+      "index.ts should be reachable as entry",
+    );
+    assert.ok(
+      unusedFiles.includes("consumer.ts"),
+      "consumer.ts should be unused (not an entry point, not imported by entry)",
+    );
+  });
+
+  it("should detect unused exports in re-exported modules", async () => {
+    const result = await analyzeFixture("re-export-default-as-named");
+    const exportNames = unusedExportNames(result);
+    assert.ok(
+      exportNames.includes("widgetHelper"),
+      "widgetHelper should be unused (not re-exported or consumed)",
+    );
+    assert.ok(
+      exportNames.includes("gadgetHelper"),
+      "gadgetHelper should be unused (not re-exported or consumed)",
+    );
+  });
+});
+
+describe("mixed-import-patterns", () => {
+  it("should handle combined default, named, and namespace imports", async () => {
+    const result = await analyzeFixture("mixed-import-patterns");
+    const fixtureDir = resolve(FIXTURES_DIR, "mixed-import-patterns");
+    const unusedFiles = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFiles.includes("orphan.ts"),
+      "orphan.ts should be unused (not imported)",
+    );
+    assert.ok(
+      !unusedFiles.includes("lib.ts"),
+      "lib.ts should be reachable via mixed import",
+    );
+    assert.ok(
+      !unusedFiles.includes("utils.ts"),
+      "utils.ts should be reachable via namespace import",
+    );
+  });
+
+  it("should detect unused exports across import patterns", async () => {
+    const result = await analyzeFixture("mixed-import-patterns");
+    const exportNames = unusedExportNames(result);
+    assert.ok(
+      exportNames.includes("unused"),
+      "unused export from lib.ts should be detected",
+    );
+    assert.ok(
+      exportNames.includes("unusedUtil"),
+      "unusedUtil export from utils.ts should be detected",
+    );
+  });
+});
+
+describe("namespace-chain-reexport", () => {
+  it("should track namespace import that is re-exported", async () => {
+    const result = await analyzeFixture("namespace-chain-reexport");
+    const fixtureDir = resolve(FIXTURES_DIR, "namespace-chain-reexport");
+    const unusedFiles = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFiles.includes("unused-module.ts"),
+      "unused-module.ts should be unused",
+    );
+    assert.ok(
+      !unusedFiles.includes("helpers.ts"),
+      "helpers.ts should be reachable via namespace re-export chain",
+    );
+    assert.ok(
+      unusedFiles.includes("consumer.ts"),
+      "consumer.ts should be unused (not an entry point)",
+    );
+  });
+});
+
+describe("type-only-reexport-filtering", () => {
+  it("should not report type-only re-exports as unused by default", async () => {
+    const result = await analyzeFixture("type-only-reexport-filtering");
+    const fixtureDir = resolve(FIXTURES_DIR, "type-only-reexport-filtering");
+    const unusedFiles = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFiles.includes("types.ts"),
+      "types.ts should be reachable via type-only re-export",
+    );
+    assert.ok(
+      !unusedFiles.includes("user.ts"),
+      "user.ts should be reachable via named re-export",
+    );
+    assert.ok(
+      unusedFiles.includes("consumer.ts"),
+      "consumer.ts should be unused (not an entry point)",
+    );
+  });
+
+  it("should detect unused exports even with type re-exports", async () => {
+    const result = await analyzeFixture("type-only-reexport-filtering");
+    const exportNames = unusedExportNames(result);
+    assert.ok(
+      exportNames.includes("deleteUser"),
+      "deleteUser should be unused (not re-exported or imported)",
+    );
+  });
+});
+
+describe("circular-deps-with-unused", () => {
+  it("should detect circular dependency between module-a and module-b", async () => {
+    const result = await analyzeFixture("circular-deps-with-unused");
+    assert.ok(
+      result.circularDependencies.length > 0,
+      "should find circular dependency between module-a and module-b",
+    );
+  });
+
+  it("should detect unused files alongside circular deps", async () => {
+    const result = await analyzeFixture("circular-deps-with-unused");
+    const fixtureDir = resolve(FIXTURES_DIR, "circular-deps-with-unused");
+    const unusedFiles = relativePaths(result, fixtureDir);
+    assert.ok(
+      unusedFiles.includes("orphan.ts"),
+      "orphan.ts should be unused despite circular deps in other files",
+    );
+  });
+
+  it("should detect unused exports in circular dependency modules", async () => {
+    const result = await analyzeFixture("circular-deps-with-unused");
+    const exportNames = unusedExportNames(result);
+    assert.ok(
+      exportNames.includes("unusedFromA"),
+      "unusedFromA should be detected as unused despite circular dep",
+    );
+    assert.ok(
+      exportNames.includes("unusedFromB"),
+      "unusedFromB should be detected as unused despite circular dep",
+    );
+  });
+});
+
+describe("deep-nested-re-export", () => {
+  it("should propagate usage through 4-level re-export chain", async () => {
+    const result = await analyzeFixture("deep-nested-re-export");
+    const fixtureDir = resolve(FIXTURES_DIR, "deep-nested-re-export");
+    const unusedFiles = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFiles.includes("level-3.ts"),
+      "level-3.ts should be reachable through deep re-export chain",
+    );
+    assert.ok(
+      !unusedFiles.includes("level-2.ts"),
+      "level-2.ts should be reachable through re-export chain",
+    );
+    assert.ok(
+      !unusedFiles.includes("level-1.ts"),
+      "level-1.ts should be reachable through re-export chain",
+    );
+    assert.ok(
+      unusedFiles.includes("consumer.ts"),
+      "consumer.ts should be unused (not an entry point)",
+    );
+  });
+
+  it("should detect exports that are not propagated through the chain", async () => {
+    const result = await analyzeFixture("deep-nested-re-export");
+    const exportNames = unusedExportNames(result);
+    assert.ok(
+      exportNames.includes("delta"),
+      "delta should be unused (not re-exported past level-2)",
+    );
+    assert.ok(
+      exportNames.includes("gamma"),
+      "gamma should be unused (not re-exported past level-1 to index)",
+    );
+  });
+});
+
+describe("export-enum-member", () => {
+  it("should detect unused enum exports", async () => {
+    const result = await analyzeFixture("export-enum-member");
+    const exportNames = unusedExportNames(result);
+    assert.ok(
+      exportNames.includes("UnusedEnum"),
+      "UnusedEnum should be detected as unused",
+    );
+    assert.ok(
+      !exportNames.includes("Status"),
+      "Status should NOT be detected as unused (it is imported)",
+    );
+  });
+});
+
+describe("aliased-named-exports", () => {
+  it("should track aliased re-exports correctly", async () => {
+    const result = await analyzeFixture("aliased-named-exports");
+    const fixtureDir = resolve(FIXTURES_DIR, "aliased-named-exports");
+    const unusedFiles = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFiles.includes("greetings.ts"),
+      "greetings.ts should be reachable via aliased re-export",
+    );
+  });
+
+  it("should detect unused exports with aliased names", async () => {
+    const result = await analyzeFixture("aliased-named-exports");
+    const exportNames = unusedExportNames(result);
+    assert.ok(
+      exportNames.includes("unusedGreeting"),
+      "unusedGreeting should be unused (not re-exported)",
+    );
+  });
+});
+
+describe("side-effect-only-module", () => {
+  it("should keep side-effect imported files as reachable", async () => {
+    const result = await analyzeFixture("side-effect-only-module");
+    const fixtureDir = resolve(FIXTURES_DIR, "side-effect-only-module");
+    const unusedFiles = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFiles.includes("polyfill.ts"),
+      "polyfill.ts should be reachable via side-effect import",
+    );
+    assert.ok(
+      !unusedFiles.includes("register.ts"),
+      "register.ts should be reachable via side-effect import",
+    );
+    assert.ok(
+      unusedFiles.includes("orphan.ts"),
+      "orphan.ts should be unused",
+    );
+  });
+});
+
+describe("re-export-star-with-named", () => {
+  it("should handle mixed star and named re-exports", async () => {
+    const result = await analyzeFixture("re-export-star-with-named");
+    const fixtureDir = resolve(FIXTURES_DIR, "re-export-star-with-named");
+    const unusedFiles = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFiles.includes("utils.ts"),
+      "utils.ts should be reachable via star re-export",
+    );
+    assert.ok(
+      !unusedFiles.includes("special.ts"),
+      "special.ts should be reachable via named re-export",
+    );
+    assert.ok(
+      unusedFiles.includes("consumer.ts"),
+      "consumer.ts should be unused (not an entry point)",
+    );
+  });
+
+  it("should detect unused exports from modules included via star", async () => {
+    const result = await analyzeFixture("re-export-star-with-named");
+    const exportNames = unusedExportNames(result);
+    assert.ok(
+      exportNames.includes("notReExported"),
+      "notReExported should be unused (not consumed via star or named re-export)",
+    );
+  });
+});
+
 
