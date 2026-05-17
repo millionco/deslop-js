@@ -27,9 +27,6 @@
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
   "types": "dist/index.d.mts",
-  "bin": {
-    "deslop-js": "dist/cli.mjs"
-  },
   "exports": {
     "./package.json": "./package.json",
     ".": {

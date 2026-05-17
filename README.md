@@ -14,57 +14,76 @@ npm install deslop-js
 ## Usage
 
 ```ts
-import { analyze } from "deslop-js";
+import { analyze, defineConfig } from "deslop-js";
 
-const result = await analyze({ cwd: "./my-project" });
+const config = defineConfig({ rootDir: "./my-project" });
+const result = await analyze(config);
+
+result.unusedFiles;        // files not reachable from any entry point
+result.unusedExports;      // exported symbols never imported
+result.unusedDependencies; // package.json deps not imported anywhere
+result.circularDependencies; // import cycles
 ```
 
-### CLI
+### Options
 
-```bash
-npx deslop-js
+`defineConfig` accepts a required `rootDir` and optional overrides:
+
+```ts
+const config = defineConfig({
+  rootDir: "./my-project",
+  entryPatterns: ["src/main.ts"],
+  ignorePatterns: ["**/*.test.ts"],
+  tsConfigPath: "./tsconfig.json",
+  reportTypes: true,
+  includeEntryExports: true,
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `rootDir` | `string` | required | Project root directory |
+| `entryPatterns` | `string[]` | auto-detected | Entry point glob patterns |
+| `ignorePatterns` | `string[]` | `[]` | Glob patterns to exclude from analysis |
+| `includeExtensions` | `string[]` | `[".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".cjs", ".cts"]` | File extensions to scan |
+| `tsConfigPath` | `string \| undefined` | `undefined` | Path to tsconfig.json for path alias resolution |
+| `reportTypes` | `boolean` | `false` | Include type-only exports in results |
+| `includeEntryExports` | `boolean` | `false` | Report unused exports from entry files |
+
+### Result
+
+```ts
+interface AnalysisResult {
+  unusedFiles: { path: string }[];
+  unusedExports: {
+    path: string;
+    name: string;
+    line: number;
+    column: number;
+    isTypeOnly: boolean;
+  }[];
+  unusedDependencies: {
+    name: string;
+    isDevDependency: boolean;
+  }[];
+  circularDependencies: {
+    files: string[];
+  }[];
+  totalFiles: number;
+  totalExports: number;
+  analysisTimeMs: number;
+}
 ```
 
 ## Development
 
-This is a pnpm monorepo using [vite-plus](https://github.com/nicolo-ribaudo/vite-plus) for building and [changesets](https://github.com/changesets/changesets) for versioning.
-
-### Setup
-
 ```bash
 pnpm install
-```
-
-### Build
-
-```bash
 pnpm build
-```
-
-### Test
-
-```bash
 pnpm test
-```
-
-### Lint & Format
-
-```bash
 pnpm lint
 pnpm format
 ```
-
-### Release
-
-```bash
-pnpm changeset       # create a changeset
-pnpm version         # bump versions
-pnpm release         # build + publish
-```
-
-## Contributing
-
-Pull requests are welcome! Please run `pnpm check` before submitting.
 
 ## License
 

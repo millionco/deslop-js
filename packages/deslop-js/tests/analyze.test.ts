@@ -1,7 +1,7 @@
 import { describe, it, test } from "node:test";
 import assert from "node:assert/strict";
 import { resolve, relative } from "node:path";
-import { analyze, createConfig } from "../src/index.js";
+import { analyze, defineConfig } from "../src/index.js";
 import type { AnalysisResult } from "../src/types.js";
 
 const FIXTURES_DIR = resolve(import.meta.dirname, "fixtures");
@@ -11,7 +11,7 @@ const analyzeFixture = async (
   overrides: Record<string, unknown> = {},
 ): Promise<AnalysisResult> => {
   const fixtureDir = resolve(FIXTURES_DIR, fixtureName);
-  const config = createConfig({
+  const config = defineConfig({
     rootDir: fixtureDir,
     ...overrides,
   });
