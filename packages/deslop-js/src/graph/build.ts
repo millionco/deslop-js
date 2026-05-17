@@ -6,7 +6,6 @@ import type {
   ModuleNode,
   Edge,
   ImportedSymbol,
-  ImportInfo,
   ReExportMapping,
 } from "../types.js";
 import type { ParsedModule } from "../scanner/parse.js";

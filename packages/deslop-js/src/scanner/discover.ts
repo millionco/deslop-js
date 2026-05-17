@@ -403,7 +403,7 @@ const NON_ENTRY_BINARIES = new Set([
   "husky", "lint-staged", "commitlint",
   "changeset", "changesets",
   "typedoc", "api-extractor",
-  "madge", "depcheck", "knip", "fallow",
+  "madge", "depcheck", "deslop",
   "sort-package-json",
   "pnpm", "npm", "yarn", "ni", "nr", "nun",
   "next", "nuxt", "astro", "vite", "svelte-kit",

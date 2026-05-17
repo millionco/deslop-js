@@ -768,7 +768,7 @@ describe("config-files-cjs-mjs", () => {
     );
     assert.ok(
       unusedFilePaths.includes("lage.config.cjs"),
-      "lage.config.cjs should be unused (not in fallow's config file list)",
+      "lage.config.cjs should be unused (not in the config file list)",
     );
   });
 
@@ -951,7 +951,7 @@ describe("electron-file-entries", () => {
 });
 
 describe("ava-project", () => {
-  it("should detect ava test files as entry points (matching fallow)", async () => {
+  it("should detect ava test files as entry points", async () => {
     const result = await analyzeFixture("ava-project");
     const fixtureDir = resolve(FIXTURES_DIR, "ava-project");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -1105,7 +1105,7 @@ describe("workspace-default-fallback", () => {
 });
 
 describe("workspace-wildcard-exports", () => {
-  it("should expand wildcard exports as entry points and resolve via imports (matching fallow)", async () => {
+  it("should expand wildcard exports as entry points and resolve via imports", async () => {
     const result = await analyzeFixture("workspace-wildcard-exports");
     const fixtureDir = resolve(FIXTURES_DIR, "workspace-wildcard-exports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -1119,7 +1119,7 @@ describe("workspace-wildcard-exports", () => {
     );
     assert.ok(
       !unusedFilePaths.includes("packages/ui/src/orphan.ts"),
-      `orphan.ts should be reachable — wildcard export src/* expands it as entry point (matching fallow), got: ${unusedFilePaths}`,
+      `orphan.ts should be reachable — wildcard export src/* expands it as entry point, got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("packages/ui/internal/hidden.ts"),
@@ -1129,17 +1129,17 @@ describe("workspace-wildcard-exports", () => {
 });
 
 describe("wildcard-subpath-exports", () => {
-  it("should expand wildcard exports as entry points (matching fallow)", async () => {
+  it("should expand wildcard exports as entry points", async () => {
     const result = await analyzeFixture("wildcard-subpath-exports");
     const fixtureDir = resolve(FIXTURES_DIR, "wildcard-subpath-exports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/templates/welcome.tsx"),
-      `welcome.tsx should be reachable — wildcard exports are expanded as entries (matching fallow), got: ${unusedFilePaths}`,
+      `welcome.tsx should be reachable — wildcard exports are expanded as entries, got: ${unusedFilePaths}`,
     );
     assert.ok(
       !unusedFilePaths.includes("src/templates/goodbye.tsx"),
-      `goodbye.tsx should be reachable — wildcard exports are expanded as entries (matching fallow), got: ${unusedFilePaths}`,
+      `goodbye.tsx should be reachable — wildcard exports are expanded as entries, got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
@@ -1149,7 +1149,7 @@ describe("wildcard-subpath-exports", () => {
 });
 
 describe("import-meta-glob", () => {
-  it("should resolve import.meta.glob patterns including array syntax (matching fallow)", async () => {
+  it("should resolve import.meta.glob patterns including array syntax", async () => {
     const result = await analyzeFixture("import-meta-glob");
     const fixtureDir = resolve(FIXTURES_DIR, "import-meta-glob");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -1173,7 +1173,7 @@ describe("import-meta-glob", () => {
 });
 
 describe("jest-mocks", () => {
-  it("should treat __mocks__ files as test entry points when jest is present (matching fallow)", async () => {
+  it("should treat __mocks__ files as test entry points when jest is present", async () => {
     const result = await analyzeFixture("jest-mocks");
     const fixtureDir = resolve(FIXTURES_DIR, "jest-mocks");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -1217,7 +1217,7 @@ describe("jest-test-match", () => {
 });
 
 describe("require-context", () => {
-  it("should resolve require.context patterns with recursive flag and regex filter (matching fallow)", async () => {
+  it("should resolve require.context patterns with recursive flag and regex filter", async () => {
     const result = await analyzeFixture("require-context");
     const fixtureDir = resolve(FIXTURES_DIR, "require-context");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -1515,7 +1515,7 @@ describe("standalone-subproject-excluded", () => {
     const unusedFilePaths = relativePaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.some((filePath: string) => filePath.startsWith("docs/")),
-      `docs/ files should still be scanned (matching fallow behavior), got: ${unusedFilePaths}`,
+      `docs/ files should still be scanned, got: ${unusedFilePaths}`,
     );
   });
 
@@ -1868,7 +1868,7 @@ test("should exclude multi-segment config files (e.g. cypress.config.contract.js
   );
 });
 
-test("should treat jest __mocks__ files as entry points (matching fallow)", async () => {
+test("should treat jest __mocks__ files as entry points", async () => {
   const result = await analyzeFixture("jest-module-mapper");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
@@ -2624,7 +2624,7 @@ describe("css-export-map", () => {
 });
 
 describe("playwright-pw-extension", () => {
-  it("should NOT treat .pw.ts files as test entries (fallow considers them unused)", async () => {
+  it("should NOT treat .pw.ts files as test entries", async () => {
     const result = await analyzeFixture("playwright-pw-extension");
     const fixtureDir = resolve(FIXTURES_DIR, "playwright-pw-extension");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -2692,7 +2692,7 @@ describe("cross-env-wrapper", () => {
 });
 
 describe("jest-mocks-entry", () => {
-  it("should treat __mocks__ files as entry points in jest projects (matching fallow)", async () => {
+  it("should treat __mocks__ files as entry points in jest projects", async () => {
     const result = await analyzeFixture("jest-mocks-entry");
     const fixtureDir = resolve(FIXTURES_DIR, "jest-mocks-entry");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -2756,7 +2756,7 @@ describe("vitest-coverage-include", () => {
 });
 
 describe("declaration-file-imports", () => {
-  it("should follow imports from .d.ts files to mark dependencies as reachable (matching fallow)", async () => {
+  it("should follow imports from .d.ts files to mark dependencies as reachable", async () => {
     const result = await analyzeFixture("declaration-file-imports");
     const fixtureDir = resolve(FIXTURES_DIR, "declaration-file-imports");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -2776,7 +2776,7 @@ describe("declaration-file-imports", () => {
 });
 
 describe("astro-middleware", () => {
-  it("should treat src/middleware.ts as an Astro entry point (matching fallow)", async () => {
+  it("should treat src/middleware.ts as an Astro entry point", async () => {
     const result = await analyzeFixture("astro-middleware");
     const fixtureDir = resolve(FIXTURES_DIR, "astro-middleware");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -2792,7 +2792,7 @@ describe("astro-middleware", () => {
 });
 
 describe("nextjs-middleware", () => {
-  it("should treat middleware, proxy, and instrumentation as Next.js entry points (matching fallow)", async () => {
+  it("should treat middleware, proxy, and instrumentation as Next.js entry points", async () => {
     const result = await analyzeFixture("nextjs-middleware");
     const fixtureDir = resolve(FIXTURES_DIR, "nextjs-middleware");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -2820,7 +2820,7 @@ describe("nextjs-middleware", () => {
 });
 
 describe("barrel-file-types", () => {
-  it("should exempt star-re-export barrels but not named-re-export barrels (matching fallow)", async () => {
+  it("should exempt star-re-export barrels but not named-re-export barrels", async () => {
     const result = await analyzeFixture("barrel-file-types");
     const fixtureDir = resolve(FIXTURES_DIR, "barrel-file-types");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -2832,7 +2832,7 @@ describe("barrel-file-types", () => {
 
     assert.ok(
       unusedFilePaths.includes("src/named-barrel.ts"),
-      `src/named-barrel.ts SHOULD be unused (named re-export barrel — fallow reports these), got: ${unusedFilePaths}`,
+      `src/named-barrel.ts SHOULD be unused (named re-export barrel is reported as unused), got: ${unusedFilePaths}`,
     );
 
     assert.ok(
@@ -2843,7 +2843,7 @@ describe("barrel-file-types", () => {
 });
 
 describe("ci-yaml-non-run-values", () => {
-  it("should only extract entries from run: blocks, not arbitrary YAML values (matching fallow)", async () => {
+  it("should only extract entries from run: blocks, not arbitrary YAML values", async () => {
     const result = await analyzeFixture("ci-yaml-non-run-values");
     const fixtureDir = resolve(FIXTURES_DIR, "ci-yaml-non-run-values");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -2973,7 +2973,7 @@ describe("polyrepo-workspace", () => {
 });
 
 describe("build-output-root-fallback", () => {
-  it("should only resolve build output to src/ directory, not root-level fallback (matching fallow)", async () => {
+  it("should only resolve build output to src/ directory, not root-level fallback", async () => {
     const result = await analyzeFixture("build-output-root-fallback");
     const fixtureDir = resolve(FIXTURES_DIR, "build-output-root-fallback");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -3090,7 +3090,7 @@ describe("extensionless-script-entry", () => {
 });
 
 describe("rspack-project", () => {
-  it("should treat rspack config files as always-used entry points (matching fallow)", async () => {
+  it("should treat rspack config files as always-used entry points", async () => {
     const result = await analyzeFixture("rspack-project");
     const fixtureDir = resolve(FIXTURES_DIR, "rspack-project");
     const unusedFilePaths = relativePaths(result, fixtureDir);
@@ -3118,7 +3118,7 @@ describe("rspack-project", () => {
 });
 
 describe("astro-content-config", () => {
-  it("should treat astro content config files as always-used (matching fallow)", async () => {
+  it("should treat astro content config files as always-used", async () => {
     const result = await analyzeFixture("astro-content-config");
     const fixtureDir = resolve(FIXTURES_DIR, "astro-content-config");
     const unusedFilePaths = relativePaths(result, fixtureDir);

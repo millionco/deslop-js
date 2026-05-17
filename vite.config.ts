@@ -5,7 +5,7 @@ export default defineConfig({
     "*.{js,ts,tsx}": "vp check --fix",
   },
   lint: {
-    ignorePatterns: ["dist", "build"],
+    ignorePatterns: ["dist", "build", "**/tests/fixtures/**"],
     plugins: ["typescript"],
     rules: {
       "@typescript-eslint/ban-ts-comment": "error",

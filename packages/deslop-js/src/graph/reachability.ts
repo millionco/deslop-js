@@ -76,7 +76,7 @@ export const markReachable = (graph: ModuleGraph): void => {
 
   let headPointer = 0;
   while (headPointer < queue.length) {
-    const { moduleIndex: currentIndex, demandedSymbols } = queue[headPointer++];
+    const { moduleIndex: currentIndex } = queue[headPointer++];
     const outgoingEdges = outgoingEdgesMap.get(currentIndex);
     if (!outgoingEdges) continue;
 
