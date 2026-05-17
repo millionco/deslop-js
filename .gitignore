@@ -1,3 +1,10 @@
-node_modules/
-dist/
-*.tsbuildinfo
+node_modules
+.turbo
+.DS_Store
+.env
+dist
+**/*.tgz
+coverage
+test-results
+.cursor
+.claude
