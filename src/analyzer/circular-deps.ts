@@ -1,5 +1,5 @@
 import type { ModuleGraph, CircularDependency } from "../types.js";
-import { MAX_CYCLES_PER_SCC } from "../constants.js";
+import { MAX_CYCLES_PER_SCC, MAX_TOTAL_CYCLES, MAX_SCC_SIZE_FOR_ENUMERATION } from "../constants.js";
 
 const UNDEFINED_INDEX = -1;
 
@@ -17,7 +17,7 @@ interface DfsFrame {
 }
 
 const buildAdjacencyList = (graph: ModuleGraph): number[][] => {
-  const adjacencyList: number[][] = Array.from({ length: graph.modules.length }, () => []);
+  const targetSets: Set<number>[] = Array.from({ length: graph.modules.length }, () => new Set());
 
   for (const edge of graph.edges) {
     const isTypeOnlyEdge = edge.importedSymbols.every(
@@ -28,14 +28,11 @@ const buildAdjacencyList = (graph: ModuleGraph): number[][] => {
     }
 
     if (edge.target < graph.modules.length) {
-      const existingTargets = adjacencyList[edge.source];
-      if (!existingTargets.includes(edge.target)) {
-        existingTargets.push(edge.target);
-      }
+      targetSets[edge.source].add(edge.target);
     }
   }
 
-  return adjacencyList;
+  return targetSets.map((targets) => [...targets]);
 };
 
 const findStronglyConnectedComponents = (
@@ -216,7 +213,19 @@ export const findCircularDependencies = (
   const allCycles: number[][] = [];
   const seenKeys = new Set<string>();
 
-  for (const component of components) {
+  const sortedComponents = [...components].sort(
+    (componentA, componentB) => componentA.length - componentB.length,
+  );
+
+  for (const component of sortedComponents) {
+    if (allCycles.length >= MAX_TOTAL_CYCLES) {
+      break;
+    }
+
+    if (component.length > MAX_SCC_SIZE_FOR_ENUMERATION) {
+      continue;
+    }
+
     const elementaryCycles = enumerateElementaryCycles(
       component,
       adjacencyList,
@@ -228,6 +237,9 @@ export const findCircularDependencies = (
       if (!seenKeys.has(key)) {
         seenKeys.add(key);
         allCycles.push(cycle);
+      }
+      if (allCycles.length >= MAX_TOTAL_CYCLES) {
+        break;
       }
     }
   }

@@ -5,10 +5,35 @@ import type { DeslopConfig } from "../types.js";
 import { BUILTIN_MODULES, RESOLVER_EXTENSIONS, REACT_NATIVE_PLATFORM_EXTENSIONS, OUTPUT_DIRECTORIES, SOURCE_EXTENSIONS } from "../constants.js";
 import { resolveSourcePath } from "./source-path.js";
 
+const fileExistsCache = new Map<string, boolean>();
+const pathExistsCache = new Map<string, boolean>();
+const fileContentCache = new Map<string, string>();
+
+const cachedReadFileSync = (filePath: string): string => {
+  const cached = fileContentCache.get(filePath);
+  if (cached !== undefined) return cached;
+  const content = readFileSync(filePath, "utf-8");
+  fileContentCache.set(filePath, content);
+  return content;
+};
+
+const cachedExistsSync = (targetPath: string): boolean => {
+  const cached = pathExistsCache.get(targetPath);
+  if (cached !== undefined) return cached;
+  const result = existsSync(targetPath);
+  pathExistsCache.set(targetPath, result);
+  return result;
+};
+
 const existsAsFile = (filePath: string): boolean => {
+  const cached = fileExistsCache.get(filePath);
+  if (cached !== undefined) return cached;
   try {
-    return existsSync(filePath) && statSync(filePath).isFile();
+    const result = cachedExistsSync(filePath) && statSync(filePath).isFile();
+    fileExistsCache.set(filePath, result);
+    return result;
   } catch {
+    fileExistsCache.set(filePath, false);
     return false;
   }
 };
@@ -92,7 +117,7 @@ const findNearestTsconfig = (fromDir: string, rootDir: string): string | undefin
   while (currentDirectory.length >= normalizedRoot.length) {
     for (const tsconfigFilename of TSCONFIG_FILENAMES) {
       const tsconfigCandidate = join(currentDirectory, tsconfigFilename);
-      if (existsSync(tsconfigCandidate)) {
+      if (cachedExistsSync(tsconfigCandidate)) {
         return tsconfigCandidate;
       }
     }
@@ -135,7 +160,7 @@ const resolveScssPartial = (specifier: string, fromDirectory: string): string | 
   candidates.push(join(basePath, `_index.sass`));
 
   for (const candidate of candidates) {
-    if (existsSync(candidate)) {
+    if (cachedExistsSync(candidate)) {
       return candidate;
     }
   }
@@ -207,7 +232,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
     ];
     for (const candidate of tsconfigCandidates) {
       const candidatePath = resolve(config.rootDir, candidate);
-      if (existsSync(candidatePath)) {
+      if (cachedExistsSync(candidatePath)) {
         rootTsconfigPath = candidatePath;
         break;
       }
@@ -235,7 +260,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
     if (cached !== undefined) return cached;
 
     try {
-      const tsconfigContent = readFileSync(tsconfigFile, "utf-8");
+      const tsconfigContent = cachedReadFileSync(tsconfigFile);
       const cleanedContent = stripJsonComments(tsconfigContent);
       const tsconfigJson = JSON.parse(cleanedContent);
       const baseUrl = tsconfigJson.compilerOptions?.baseUrl;
@@ -252,7 +277,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
 
   const hasNextJsDependency = (() => {
     try {
-      const rootPackageJson = JSON.parse(readFileSync(resolve(config.rootDir, "package.json"), "utf-8"));
+      const rootPackageJson = JSON.parse(cachedReadFileSync(resolve(config.rootDir, "package.json")));
       const allDeps = { ...rootPackageJson.dependencies, ...rootPackageJson.devDependencies };
       return "next" in allDeps;
     } catch {
@@ -267,7 +292,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
     const aliasMap = new Map<string, string[]>();
     const tsconfigDir = dirname(tsconfigFile);
     try {
-      const tsconfigContent = readFileSync(tsconfigFile, "utf-8").trim();
+      const tsconfigContent = cachedReadFileSync(tsconfigFile).trim();
       if (tsconfigContent.length > 0) {
         const cleanedContent = stripJsonComments(tsconfigContent);
         const tsconfigJson = JSON.parse(cleanedContent);
@@ -290,7 +315,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
 
     if (aliasMap.size === 0 && hasNextJsDependency) {
       const srcDirectory = resolve(tsconfigDir, "src");
-      if (existsSync(srcDirectory)) {
+      if (cachedExistsSync(srcDirectory)) {
         aliasMap.set("@/*", [resolve(tsconfigDir, "src/*")]);
       } else {
         aliasMap.set("@/*", [resolve(tsconfigDir, "*")]);
@@ -314,11 +339,11 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
             const candidate = targetPattern.replace("*", "");
             if (existsAsFile(candidate)) return candidate;
             for (const ext of RESOLVER_EXTENSIONS) {
-              if (existsSync(candidate + ext)) return candidate + ext;
+              if (cachedExistsSync(candidate + ext)) return candidate + ext;
             }
             const indexCandidate = join(candidate, "index");
             for (const ext of RESOLVER_EXTENSIONS) {
-              if (existsSync(indexCandidate + ext)) return indexCandidate + ext;
+              if (cachedExistsSync(indexCandidate + ext)) return indexCandidate + ext;
             }
           }
         }
@@ -334,17 +359,17 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
         const resolvedTarget = targetPattern.replace("*", matchedWildcard);
         if (existsAsFile(resolvedTarget)) return resolvedTarget;
         for (const ext of RESOLVER_EXTENSIONS) {
-          if (existsSync(resolvedTarget + ext)) return resolvedTarget + ext;
+          if (cachedExistsSync(resolvedTarget + ext)) return resolvedTarget + ext;
         }
         const strippedTarget = resolvedTarget.replace(/\.[cm]?js$/, "");
         if (strippedTarget !== resolvedTarget) {
           for (const ext of RESOLVER_EXTENSIONS) {
-            if (existsSync(strippedTarget + ext)) return strippedTarget + ext;
+            if (cachedExistsSync(strippedTarget + ext)) return strippedTarget + ext;
           }
         }
         const indexCandidate = join(resolvedTarget, "index");
         for (const ext of RESOLVER_EXTENSIONS) {
-          if (existsSync(indexCandidate + ext)) return indexCandidate + ext;
+          if (cachedExistsSync(indexCandidate + ext)) return indexCandidate + ext;
         }
       }
     }
@@ -393,7 +418,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
         const subpath = cleanedSpecifier.slice(packageName.length + 1);
         const workspacePackageJsonPath = join(workspaceDirectory, "package.json");
         try {
-          const workspacePackageContent = readFileSync(workspacePackageJsonPath, "utf-8");
+          const workspacePackageContent = cachedReadFileSync(workspacePackageJsonPath);
           const workspacePackageJson = JSON.parse(workspacePackageContent);
 
           let resolvedEntryPath: string | undefined;
@@ -446,7 +471,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
             for (const directSubpath of subpathCandidates) {
               for (const candidateExtension of RESOLVER_EXTENSIONS) {
                 const candidate = directSubpath + candidateExtension;
-                if (existsSync(candidate)) {
+                if (cachedExistsSync(candidate)) {
                   resolvedEntryPath = candidate;
                   break;
                 }
@@ -454,7 +479,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
               if (resolvedEntryPath) break;
               for (const candidateExtension of RESOLVER_EXTENSIONS) {
                 const indexCandidate = join(directSubpath, `index${candidateExtension}`);
-                if (existsSync(indexCandidate)) {
+                if (cachedExistsSync(indexCandidate)) {
                   resolvedEntryPath = indexCandidate;
                   break;
                 }
@@ -484,7 +509,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
           if (resolvedEntryPath) {
             const sourcePath = resolveSourcePath(resolvedEntryPath, workspaceDirectory);
             const finalPath = sourcePath ?? resolvedEntryPath;
-            if (existsSync(finalPath)) {
+            if (cachedExistsSync(finalPath)) {
               const resolvedResult: ResolvedImport = {
                 resolvedPath: finalPath,
                 isExternal: false,
@@ -566,7 +591,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
           const baseUrlCandidate = resolve(baseUrlDirectory, cleanedSpecifier);
           for (const candidateExtension of RESOLVER_EXTENSIONS) {
             const fullCandidate = baseUrlCandidate + candidateExtension;
-            if (existsSync(fullCandidate)) {
+            if (cachedExistsSync(fullCandidate)) {
               const resolvedResult: ResolvedImport = {
                 resolvedPath: fullCandidate,
                 isExternal: false,
@@ -579,7 +604,7 @@ export const createModuleResolver = (config: DeslopConfig, workspacePackages: Wo
           const indexCandidate = join(baseUrlCandidate, "index");
           for (const candidateExtension of RESOLVER_EXTENSIONS) {
             const fullCandidate = indexCandidate + candidateExtension;
-            if (existsSync(fullCandidate)) {
+            if (cachedExistsSync(fullCandidate)) {
               const resolvedResult: ResolvedImport = {
                 resolvedPath: fullCandidate,
                 isExternal: false,
