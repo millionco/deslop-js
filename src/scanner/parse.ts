@@ -17,12 +17,14 @@ import type {
   Expression,
   ModuleDeclaration,
 } from "@oxc-project/types";
-import type { ImportInfo, ExportInfo, ImportedName } from "../types.js";
+import type { ImportInfo, ExportInfo, ImportedName, MemberAccess } from "../types.js";
 import { getLineFromOffset, getColumnFromOffset } from "../utils/line-column.js";
 
 export interface ParsedModule {
   imports: ImportInfo[];
   exports: ExportInfo[];
+  memberAccesses: MemberAccess[];
+  wholeObjectUses: string[];
 }
 
 const extractMdxImportsExports = (sourceText: string): string => {
@@ -136,7 +138,7 @@ const parseCssImports = (filePath: string): ParsedModule => {
     }
   }
 
-  return { imports, exports: [] };
+  return { imports, exports: [], memberAccesses: [], wholeObjectUses: [] };
 };
 
 const NON_JS_EXTENSIONS = [".graphql", ".gql"];
@@ -149,7 +151,7 @@ export const parseModule = (filePath: string): ParsedModule => {
 
   const isNonJsFile = NON_JS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   if (isNonJsFile) {
-    return { imports: [], exports: [] };
+    return { imports: [], exports: [], memberAccesses: [], wholeObjectUses: [] };
   }
 
   const sourceText = readFileSync(filePath, "utf-8");
@@ -189,12 +191,12 @@ export const parseModule = (filePath: string): ParsedModule => {
   }
 
   if (result.errors.length > 0) {
-    return { imports, exports };
+    return { imports, exports, memberAccesses: [], wholeObjectUses: [] };
   }
 
   const program = result.program;
   if (!program?.body) {
-    return { imports, exports };
+    return { imports, exports, memberAccesses: [], wholeObjectUses: [] };
   }
 
   for (const node of program.body) {
@@ -216,7 +218,137 @@ export const parseModule = (filePath: string): ParsedModule => {
 
   collectDynamicImports(program.body, sourceText, imports);
 
-  return { imports, exports };
+  const namespaceLocalNames = collectNamespaceLocalNames(imports);
+  const memberAccesses: MemberAccess[] = [];
+  const wholeObjectUses: string[] = [];
+  if (namespaceLocalNames.size > 0) {
+    collectMemberAccesses(program.body, namespaceLocalNames, memberAccesses, wholeObjectUses);
+  }
+
+  return { imports, exports, memberAccesses, wholeObjectUses };
+};
+
+const WHOLE_OBJECT_FUNCTION_NAMES = new Set([
+  "keys", "values", "entries", "assign", "freeze",
+  "getOwnPropertyNames", "getOwnPropertyDescriptors",
+]);
+
+const collectNamespaceLocalNames = (imports: ImportInfo[]): Set<string> => {
+  const namespaceNames = new Set<string>();
+  for (const importInfo of imports) {
+    for (const importedName of importInfo.importedNames) {
+      if (importedName.isNamespace && importedName.alias) {
+        namespaceNames.add(importedName.alias);
+      }
+    }
+  }
+  return namespaceNames;
+};
+
+const collectMemberAccesses = (
+  bodyNodes: Array<Statement | ModuleDeclaration>,
+  namespaceLocalNames: Set<string>,
+  memberAccesses: MemberAccess[],
+  wholeObjectUses: string[],
+): void => {
+  const walkForMemberAccesses = (node: WalkableNode): void => {
+    if (node.type === "MemberExpression" && !node.computed) {
+      const memberExpression = node as unknown as StaticMemberExpression;
+      if (
+        memberExpression.object.type === "Identifier" &&
+        namespaceLocalNames.has((memberExpression.object as { name: string }).name)
+      ) {
+        const objectName = (memberExpression.object as { name: string }).name;
+        const memberName = memberExpression.property.name;
+        if (memberName) {
+          memberAccesses.push({ objectName, memberName });
+        }
+      }
+    }
+
+    if (node.type === "MemberExpression" && Boolean(node.computed)) {
+      const computedExpression = node as unknown as {
+        object: Expression;
+        expression: Expression;
+      };
+      if (
+        computedExpression.object.type === "Identifier" &&
+        namespaceLocalNames.has((computedExpression.object as { name: string }).name)
+      ) {
+        const objectName = (computedExpression.object as { name: string }).name;
+        const expressionNode = (node as unknown as { expression: WalkableNode }).expression;
+        if (expressionNode?.type === "Literal") {
+          const literalValue = (expressionNode as unknown as StringLiteral).value;
+          if (typeof literalValue === "string") {
+            memberAccesses.push({ objectName, memberName: literalValue });
+          } else {
+            wholeObjectUses.push(objectName);
+          }
+        } else {
+          wholeObjectUses.push(objectName);
+        }
+      }
+    }
+
+    if (node.type === "SpreadElement") {
+      const spreadArgument = (node as unknown as { argument: WalkableNode }).argument;
+      if (
+        spreadArgument?.type === "Identifier" &&
+        namespaceLocalNames.has((spreadArgument as unknown as { name: string }).name)
+      ) {
+        wholeObjectUses.push((spreadArgument as unknown as { name: string }).name);
+      }
+    }
+
+    if (node.type === "ForInStatement") {
+      const forInRight = (node as unknown as { right: WalkableNode }).right;
+      if (
+        forInRight?.type === "Identifier" &&
+        namespaceLocalNames.has((forInRight as unknown as { name: string }).name)
+      ) {
+        wholeObjectUses.push((forInRight as unknown as { name: string }).name);
+      }
+    }
+
+    if (node.type === "CallExpression") {
+      const callExpression = node as unknown as CallExpression;
+      if (
+        callExpression.callee.type === "MemberExpression" &&
+        !callExpression.callee.computed
+      ) {
+        const calleeMember = callExpression.callee as StaticMemberExpression;
+        if (
+          calleeMember.object.type === "Identifier" &&
+          (calleeMember.object as { name: string }).name === "Object" &&
+          WHOLE_OBJECT_FUNCTION_NAMES.has(calleeMember.property.name)
+        ) {
+          const firstArgument = callExpression.arguments[0];
+          if (
+            firstArgument &&
+            firstArgument.type !== "SpreadElement" &&
+            firstArgument.type === "Identifier" &&
+            namespaceLocalNames.has((firstArgument as { name: string }).name)
+          ) {
+            wholeObjectUses.push((firstArgument as { name: string }).name);
+          }
+        }
+      }
+    }
+
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) {
+        for (const element of value) {
+          if (isWalkableNode(element)) walkForMemberAccesses(element);
+        }
+      } else if (isWalkableNode(value)) {
+        walkForMemberAccesses(value);
+      }
+    }
+  };
+
+  for (const topLevelNode of bodyNodes) {
+    if (isWalkableNode(topLevelNode)) walkForMemberAccesses(topLevelNode);
+  }
 };
 
 const extractImportDeclaration = (

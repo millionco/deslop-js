@@ -31,6 +31,8 @@ export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
     fileId: input.fileId,
     imports: input.parsed.imports,
     exports: input.parsed.exports,
+    memberAccesses: input.parsed.memberAccesses,
+    wholeObjectUses: input.parsed.wholeObjectUses,
     isEntryPoint: input.isEntryPoint,
     isTestEntry: input.isTestEntry,
     isReachable: false,

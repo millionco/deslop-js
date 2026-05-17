@@ -35,10 +35,17 @@ export interface ExportInfo {
   column: number;
 }
 
+export interface MemberAccess {
+  objectName: string;
+  memberName: string;
+}
+
 export interface ModuleNode {
   fileId: FileId;
   imports: ImportInfo[];
   exports: ExportInfo[];
+  memberAccesses: MemberAccess[];
+  wholeObjectUses: string[];
   isEntryPoint: boolean;
   isTestEntry: boolean;
   isReachable: boolean;
