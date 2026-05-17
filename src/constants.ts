@@ -198,3 +198,5 @@ export const RESOLVER_EXTENSIONS = [
 ];
 
 export const SHALLOW_WORKSPACE_MAX_DEPTH = 2;
+
+export const MAX_CYCLES_PER_SCC = 20;
