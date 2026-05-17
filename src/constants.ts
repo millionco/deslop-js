@@ -200,3 +200,7 @@ export const RESOLVER_EXTENSIONS = [
 export const SHALLOW_WORKSPACE_MAX_DEPTH = 2;
 
 export const MAX_CYCLES_PER_SCC = 20;
+
+export const MAX_TOTAL_CYCLES = 200;
+
+export const MAX_SCC_SIZE_FOR_ENUMERATION = 50;
