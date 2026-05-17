@@ -1,4 +1,4 @@
-import type { ModuleGraph, ModuleNode, ExportInfo, UnusedExport, DeslopConfig } from "../types.js";
+import type { ModuleGraph, ModuleNode, ExportInfo, UnusedExport, DeslopConfig, MemberAccess } from "../types.js";
 
 export const findUnusedExports = (
   graph: ModuleGraph,
@@ -41,14 +41,17 @@ const buildUsageMap = (graph: ModuleGraph): Set<string> => {
     const targetModule = graph.modules[edge.target];
     if (!targetModule) continue;
 
+    const sourceModule = graph.modules[edge.source];
+
     for (const symbol of edge.importedSymbols) {
       if (symbol.isNamespace) {
-        markAllExportsUsedRecursive(
+        handleNamespaceImport(
+          sourceModule,
           targetModule,
+          symbol.localName,
           graph,
           sourceToTargetMap,
           usedExportKeys,
-          new Set(),
         );
       } else {
         const importName = symbol.isDefault ? "default" : symbol.importedName;
@@ -65,6 +68,73 @@ const buildUsageMap = (graph: ModuleGraph): Set<string> => {
   }
 
   return usedExportKeys;
+};
+
+const handleNamespaceImport = (
+  sourceModule: ModuleNode | undefined,
+  targetModule: ModuleNode,
+  namespaceLocalName: string,
+  graph: ModuleGraph,
+  sourceToTargets: Map<number, number[]>,
+  usedKeys: Set<string>,
+): void => {
+  if (!sourceModule) {
+    markAllExportsUsedRecursive(targetModule, graph, sourceToTargets, usedKeys, new Set());
+    return;
+  }
+
+  const isWholeObjectUse = sourceModule.wholeObjectUses.includes(namespaceLocalName);
+  if (isWholeObjectUse) {
+    markAllExportsUsedRecursive(targetModule, graph, sourceToTargets, usedKeys, new Set());
+    return;
+  }
+
+  const accessedMemberNames = extractAccessedMemberNames(
+    sourceModule.memberAccesses,
+    namespaceLocalName,
+  );
+
+  const isNamespaceReExported = sourceModule.exports.some(
+    (exportInfo) =>
+      exportInfo.reExportOriginalName === namespaceLocalName ||
+      (!exportInfo.isReExport && exportInfo.name === namespaceLocalName),
+  );
+
+  if (accessedMemberNames.length === 0 && !isNamespaceReExported) {
+    markAllExportsUsedRecursive(targetModule, graph, sourceToTargets, usedKeys, new Set());
+    return;
+  }
+
+  if (isNamespaceReExported && !sourceModule.isEntryPoint) {
+    markAllExportsUsedRecursive(targetModule, graph, sourceToTargets, usedKeys, new Set());
+    return;
+  }
+
+  for (const memberName of accessedMemberNames) {
+    markExportUsedRecursive(
+      targetModule.fileId.path,
+      memberName,
+      graph,
+      sourceToTargets,
+      usedKeys,
+      new Set(),
+    );
+  }
+};
+
+const extractAccessedMemberNames = (
+  memberAccesses: MemberAccess[],
+  objectName: string,
+): string[] => {
+  const memberNames: string[] = [];
+  const seenNames = new Set<string>();
+  for (const access of memberAccesses) {
+    if (access.objectName === objectName && !seenNames.has(access.memberName)) {
+      seenNames.add(access.memberName);
+      memberNames.push(access.memberName);
+    }
+  }
+  return memberNames;
 };
 
 const buildSourceToTargetsMap = (

@@ -136,13 +136,60 @@ describe("re-export-chains (3-level barrel chain)", () => {
 });
 
 describe("namespace-imports", () => {
-  it("should not flag any exports as unused (namespace import marks all used)", async () => {
+  it("should flag exports not accessed via namespace member access", async () => {
     const result = await analyzeFixture("namespace-imports");
-    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${unusedExportNames(result)}`);
+    const fixtureDir = resolve(FIXTURES_DIR, "namespace-imports");
+    const exportsByFile = unusedExportsByFile(result, fixtureDir);
+    assert.deepStrictEqual(exportsByFile["src/utils.ts"], ["bar", "baz"]);
   });
 
   it("should not flag any files as unused", async () => {
     const result = await analyzeFixture("namespace-imports");
+    assert.equal(result.unusedFiles.length, 0);
+  });
+});
+
+describe("namespace-partial-access", () => {
+  it("should flag only the exports not accessed via member access", async () => {
+    const result = await analyzeFixture("namespace-partial-access");
+    const fixtureDir = resolve(FIXTURES_DIR, "namespace-partial-access");
+    const exportsByFile = unusedExportsByFile(result, fixtureDir);
+    const unusedMathExports = (exportsByFile["src/math.ts"] ?? []).sort();
+    assert.deepStrictEqual(unusedMathExports, ["divide", "subtract"]);
+  });
+});
+
+describe("namespace-whole-object", () => {
+  it("should not flag any exports when Object.values is used on namespace", async () => {
+    const result = await analyzeFixture("namespace-whole-object");
+    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${unusedExportNames(result)}`);
+  });
+});
+
+describe("namespace-spread", () => {
+  it("should not flag any exports when namespace is spread into object", async () => {
+    const result = await analyzeFixture("namespace-spread");
+    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${unusedExportNames(result)}`);
+  });
+});
+
+describe("namespace-forin", () => {
+  it("should not flag any exports when namespace is used in for..in", async () => {
+    const result = await analyzeFixture("namespace-forin");
+    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${unusedExportNames(result)}`);
+  });
+});
+
+describe("namespace-barrel-reexport", () => {
+  it("should flag only the exports not accessed through barrel via namespace member access", async () => {
+    const result = await analyzeFixture("namespace-barrel-reexport");
+    const fixtureDir = resolve(FIXTURES_DIR, "namespace-barrel-reexport");
+    const exportsByFile = unusedExportsByFile(result, fixtureDir);
+    assert.deepStrictEqual(exportsByFile["src/lib/helpers.ts"], ["helperB", "helperC"]);
+  });
+
+  it("should not flag any files as unused", async () => {
+    const result = await analyzeFixture("namespace-barrel-reexport");
     assert.equal(result.unusedFiles.length, 0);
   });
 });
@@ -866,11 +913,59 @@ describe("electron-project", () => {
     );
     assert.ok(
       unusedFilePaths.includes("src/preload.ts"),
-      `src/preload.ts should be unused (file, not inside src/preload/ dir), got: ${unusedFilePaths}`,
+      `src/preload.ts (file, not inside src/preload/ dir) should be unused, got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("electron-file-entries", () => {
+  it("should detect vite src/main.ts entry and electron src/preload/ dir entries", async () => {
+    const result = await analyzeFixture("electron-file-entries");
+    const fixtureDir = resolve(FIXTURES_DIR, "electron-file-entries");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/main.ts"),
+      `src/main.ts should be entry via vite plugin, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/app.ts"),
+      `src/app.ts should be reachable from main.ts, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/preload/index.ts"),
+      `src/preload/index.ts should be entry via electron plugin src/preload/**/*.{ts,...}, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/preload/bridge.ts"),
+      `src/preload/bridge.ts should be reachable from preload/index.ts, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("ava-project", () => {
+  it("should detect ava test files as entry points (matching fallow)", async () => {
+    const result = await analyzeFixture("ava-project");
+    const fixtureDir = resolve(FIXTURES_DIR, "ava-project");
+    const unusedFilePaths = relativePaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("test/math.test.ts"),
+      `test/math.test.ts should be entry via ava plugin, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/math.ts"),
+      `src/math.ts should be reachable from test, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
     );
   });
 });
@@ -1855,6 +1950,82 @@ it("should resolve React Native platform extensions (.web.ts, .native.ts) when r
   assert.ok(
     unusedFilePaths.includes("src/orphan.ts"),
     `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should resolve React Native .ios.tsx and .android.tsx platform variants as reachable", async () => {
+  const result = await analyzeFixture("react-native-platform");
+  const fixtureDir = resolve(FIXTURES_DIR, "react-native-platform");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/button.tsx"),
+    `button.tsx should be reachable as the default platform variant, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/button.ios.tsx"),
+    `button.ios.tsx should be reachable as iOS platform variant, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/button.android.tsx"),
+    `button.android.tsx should be reachable as Android platform variant, got unused: ${unusedFilePaths}`,
+  );
+});
+
+it("should detect react-app-rewired as CRA variant and use src/index as entry", async () => {
+  const result = await analyzeFixture("react-app-rewired");
+  const fixtureDir = resolve(FIXTURES_DIR, "react-app-rewired");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/index.tsx"),
+    `src/index.tsx should be reachable as CRA entry point, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/App.tsx"),
+    `src/App.tsx should be reachable from CRA entry, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/components/Header.tsx"),
+    `Header.tsx should be reachable from App import chain, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should resolve Storybook MDX imports from story files", async () => {
+  const result = await analyzeFixture("storybook-mdx-imports");
+  const fixtureDir = resolve(FIXTURES_DIR, "storybook-mdx-imports");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/components/Alert.story.tsx"),
+    `Alert.story.tsx should be reachable as storybook entry, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/components/Alert.mdx"),
+    `Alert.mdx should be reachable via story file import, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/components/orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should resolve deep workspace imports like @pkg/shared/hooks/assets", async () => {
+  const result = await analyzeFixture("deep-workspace-imports");
+  const fixtureDir = resolve(FIXTURES_DIR, "deep-workspace-imports");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("packages/shared/src/hooks/assets.ts"),
+    `hooks/assets.ts should be reachable via deep workspace import, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("packages/shared/src/components/button.ts"),
+    `components/button.ts should be reachable via deep workspace import, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("packages/shared/src/components/orphan.ts"),
+    `orphan.ts should be unused since it is not imported, got: ${unusedFilePaths}`,
   );
 });
 
@@ -3033,6 +3204,72 @@ describe("react-native-app", () => {
       `src/screens/orphan.tsx should be unused (react-native-app), got: ${unusedFilePaths}`,
     );
   });
+});
+
+it("should detect webpack.config.js entry points and mark imported files reachable", async () => {
+  const result = await analyzeFixture("webpack-entry-detection");
+  const fixtureDir = resolve(FIXTURES_DIR, "webpack-entry-detection");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/index.js"),
+    `src/index.js should be reachable as webpack entry, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/vendor.js"),
+    `src/vendor.js should be reachable as webpack entry, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/components/App.js"),
+    `App.js should be reachable via import from webpack entry, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/components/Vendor.js"),
+    `Vendor.js should be reachable via import from webpack entry, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.js"),
+    `orphan.js should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should not treat CSS files as entry points when wildcard export map expands to all files", async () => {
+  const result = await analyzeFixture("wildcard-exports-css");
+  const fixtureDir = resolve(FIXTURES_DIR, "wildcard-exports-css");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.includes("src/components/Button.css"),
+    `Button.css should be unused (CSS files should not become entry points via wildcard exports), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/components/Button.ts"),
+    `Button.ts should be reachable via export, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should detect Electron main/preload entries and mark imported files reachable", async () => {
+  const result = await analyzeFixture("electron-plugin-detection");
+  const fixtureDir = resolve(FIXTURES_DIR, "electron-plugin-detection");
+  const unusedFilePaths = relativePaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/main.ts"),
+    `src/main.ts should be reachable as Electron main entry, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/preload/index.ts"),
+    `src/preload/index.ts should be reachable as Electron preload entry, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/window.ts"),
+    `src/window.ts should be reachable via import from main, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
 });
 
 

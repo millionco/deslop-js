@@ -1,0 +1,9 @@
+{
+  "name": "electron-vite-fixture",
+  "main": "dist-electron/main.cjs",
+  "private": true,
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "vite": "^6.0.0"
+  }
+}

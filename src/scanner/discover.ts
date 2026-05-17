@@ -3,7 +3,7 @@ import { resolve, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { FileId, DeslopConfig, DiscoveredEntryPoints } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_EXTENSIONLESS_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, SHALLOW_WORKSPACE_MAX_DEPTH } from "../constants.js";
+import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_EXTENSIONLESS_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, SHALLOW_WORKSPACE_MAX_DEPTH, SOURCE_EXTENSIONS as IMPORTABLE_SOURCE_EXTENSIONS } from "../constants.js";
 import { discoverWorkspacePackagesWithExclusions, discoverFrameworkEntryPoints } from "./workspaces.js";
 import type { WorkspacePackage } from "./workspaces.js";
 import { resolveSourcePath } from "../resolver/source-path.js";
@@ -227,7 +227,7 @@ const findDefaultIndexEntry = (directory: string): string | undefined => {
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
 
 const COMMON_SOURCE_DIRECTORIES = ["src", "lib", "main", "app", "source"];
-const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist|build|out|esm|cjs)\/(?:(?:esm|cjs|es|lib|commonjs|module)\/)?/;
+const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist(?:-[a-z]+)?|build|out|esm|cjs)\/(?:(?:esm|cjs|es|lib|commonjs|module)\/)?/;
 
 const findSourceFile = (baseDir: string, relativePath: string): string | undefined => {
   const pathWithoutExtension = join(baseDir, relativePath).replace(/\.[cm]?js(x?)$/, "");
@@ -1222,6 +1222,11 @@ const extractTestSetupFiles = (directory: string): string[] => {
   return entries;
 };
 
+const IMPORTABLE_EXTENSION_SET = new Set(IMPORTABLE_SOURCE_EXTENSIONS.map((extension) => `.${extension}`));
+
+const isImportableSourceFile = (filePath: string): boolean =>
+  IMPORTABLE_EXTENSION_SET.has(filePath.slice(filePath.lastIndexOf(".")));
+
 const expandWildcardExportPattern = (
   pattern: string,
   rootDir: string,
@@ -1233,7 +1238,7 @@ const expandWildcardExportPattern = (
     onlyFiles: true,
     ignore: ["**/node_modules/**"],
   });
-  return matchedFiles;
+  return matchedFiles.filter(isImportableSourceFile);
 };
 
 const collectExportPaths = (
@@ -1337,6 +1342,20 @@ const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
     fixturePatterns: [],
     alwaysUsed: [
       ".mocharc.*",
+    ],
+  },
+  {
+    enablers: ["ava", "@ava/typescript"],
+    configFileActivators: ["ava.config.js", "ava.config.cjs", "ava.config.mjs"],
+    entryPatterns: [
+      "test/**/*.{ts,tsx,js,jsx}",
+      "tests/**/*.{ts,tsx,js,jsx}",
+      "**/*.test.{ts,tsx,js,jsx}",
+      "**/*.spec.{ts,tsx,js,jsx}",
+    ],
+    fixturePatterns: [],
+    alwaysUsed: [
+      "ava.config.{js,cjs,mjs}",
     ],
   },
   {
@@ -1713,7 +1732,11 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
   {
     enablers: ["vite", "rolldown-vite"],
     enablerPrefixes: ["@vitejs/"],
-    entryPatterns: [],
+    entryPatterns: [
+      "src/main.{ts,tsx,js,jsx}",
+      "src/index.{ts,tsx,js,jsx}",
+      "index.html",
+    ],
     alwaysUsed: ["vite.config.{ts,js,mts,mjs}"],
   },
   {
@@ -1925,11 +1948,11 @@ const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
     alwaysUsed: ["wrangler.toml", "wrangler.json", "wrangler.jsonc"],
   },
   {
-    enablers: ["electron", "electron-builder", "@electron-forge/cli", "electron-vite"],
+    enablers: ["electron", "electron-builder", "@electron-forge/cli", "electron-vite", "electron-webpack"],
     enablerPrefixes: ["@electron-forge/", "@electron/"],
     entryPatterns: [
-      "src/main/**/*.{ts,js}",
-      "src/preload/**/*.{ts,js}",
+      "src/main/**/*.{ts,tsx,js,jsx}",
+      "src/preload/**/*.{ts,tsx,js,jsx}",
       "electron/main.{ts,js}",
     ],
     alwaysUsed: [
