@@ -34,7 +34,7 @@ const detectReactNative = (rootDir: string, workspacePackages: Array<{ directory
   return false;
 };
 
-export type { AnalysisResult, DeslopConfig, UnusedFile, UnusedExport, UnusedDependency } from "./types.js";
+export type { AnalysisResult, DeslopConfig, UnusedFile, UnusedExport, UnusedDependency, CircularDependency } from "./types.js";
 
 export const createConfig = (
   options: Partial<DeslopConfig> & { rootDir: string },

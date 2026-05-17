@@ -3272,4 +3272,63 @@ it("should detect Electron main/preload entries and mark imported files reachabl
   );
 });
 
+describe("circular-deps-simple", () => {
+  it("should detect a simple A→B→A circular dependency", async () => {
+    const result = await analyzeFixture("circular-deps-simple");
+    assert.ok(result.circularDependencies.length > 0, "should find at least one cycle");
+    const cyclePaths = result.circularDependencies.map((cycle) =>
+      cycle.files.map((filePath) => {
+        const fixtureDir = resolve(FIXTURES_DIR, "circular-deps-simple");
+        return relative(fixtureDir, filePath);
+      }),
+    );
+    const hasCycle = cyclePaths.some(
+      (paths) => paths.includes("src/a.ts") && paths.includes("src/b.ts"),
+    );
+    assert.ok(hasCycle, `should find cycle between a.ts and b.ts, got: ${JSON.stringify(cyclePaths)}`);
+  });
+});
+
+describe("circular-deps-type-only", () => {
+  it("should not detect circular dependencies when imports are type-only", async () => {
+    const result = await analyzeFixture("circular-deps-type-only");
+    assert.equal(
+      result.circularDependencies.length,
+      0,
+      `type-only imports should not create cycles, got: ${JSON.stringify(result.circularDependencies)}`,
+    );
+  });
+});
+
+describe("circular-deps-chain", () => {
+  it("should detect A→B→C→A circular dependency chain", async () => {
+    const result = await analyzeFixture("circular-deps-chain");
+    assert.ok(result.circularDependencies.length > 0, "should find at least one cycle");
+    const cyclePaths = result.circularDependencies.map((cycle) =>
+      cycle.files.map((filePath) => {
+        const fixtureDir = resolve(FIXTURES_DIR, "circular-deps-chain");
+        return relative(fixtureDir, filePath);
+      }),
+    );
+    const hasThreeNodeCycle = cyclePaths.some(
+      (paths) =>
+        paths.length === 3 &&
+        paths.includes("src/a.ts") &&
+        paths.includes("src/b.ts") &&
+        paths.includes("src/c.ts"),
+    );
+    assert.ok(
+      hasThreeNodeCycle,
+      `should find 3-node cycle between a.ts, b.ts, c.ts, got: ${JSON.stringify(cyclePaths)}`,
+    );
+  });
+});
+
+describe("circular-deps-none", () => {
+  it("should not detect any circular dependencies in a linear dependency graph", async () => {
+    const result = await analyzeFixture("circular-deps-none");
+    assert.equal(result.circularDependencies.length, 0);
+  });
+});
+
 

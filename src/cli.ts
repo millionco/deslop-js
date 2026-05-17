@@ -132,10 +132,22 @@ const formatResults = (analysisResult: AnalysisResult, rootDir: string): string 
     outputLines.push("");
   }
 
+  if (analysisResult.circularDependencies.length > 0) {
+    outputLines.push(
+      `  Circular dependencies (${analysisResult.circularDependencies.length}):`,
+    );
+    for (const cycle of analysisResult.circularDependencies) {
+      const relativePaths = cycle.files.map((filePath) => relative(rootDir, filePath));
+      outputLines.push(`    ${relativePaths.join(" → ")} → ${relativePaths[0]}`);
+    }
+    outputLines.push("");
+  }
+
   const totalIssueCount =
     analysisResult.unusedFiles.length +
     analysisResult.unusedExports.length +
-    analysisResult.unusedDependencies.length;
+    analysisResult.unusedDependencies.length +
+    analysisResult.circularDependencies.length;
 
   if (totalIssueCount === 0) {
     outputLines.push("  No dead code found!\n");
@@ -182,7 +194,8 @@ const main = async (): Promise<void> => {
     const totalIssueCount =
       analysisResult.unusedFiles.length +
       analysisResult.unusedExports.length +
-      analysisResult.unusedDependencies.length;
+      analysisResult.unusedDependencies.length +
+      analysisResult.circularDependencies.length;
 
     const exitCode = totalIssueCount > 0 ? 1 : 0;
 

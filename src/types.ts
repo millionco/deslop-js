@@ -99,10 +99,15 @@ export interface UnusedDependency {
   isDevDependency: boolean;
 }
 
+export interface CircularDependency {
+  files: string[];
+}
+
 export interface AnalysisResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
   unusedDependencies: UnusedDependency[];
+  circularDependencies: CircularDependency[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
