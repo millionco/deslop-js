@@ -1,17 +1,17 @@
 import { resolve, dirname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import fg from "fast-glob";
-import type { DeslopConfig, AnalysisResult } from "./types.js";
-import { DEFAULT_ENTRY_PATTERNS, DEFAULT_EXTENSIONS, OUTPUT_DIRECTORIES } from "./constants.js";
-import { discoverFiles, discoverEntryPoints, discoverFrameworkIgnorePatterns } from "./scanner/discover.js";
-import { discoverWorkspacePackagesWithExclusions } from "./scanner/workspaces.js";
-import { parseModule } from "./scanner/parse.js";
-import { createModuleResolver } from "./resolver/resolve.js";
-import { buildModuleGraph } from "./graph/build.js";
-import type { GraphBuildInput } from "./graph/build.js";
-import { markReachable } from "./graph/reachability.js";
-import { propagateReExports } from "./graph/re-exports.js";
-import { analyzeGraph } from "./analyzer/analyze.js";
+import type { DeslopConfig, ScanResult } from "./types.js";
+import { DEFAULT_ENTRY_GLOBS, DEFAULT_EXTENSIONS, OUTPUT_DIRECTORIES } from "./constants.js";
+import { collectSourceFiles, resolveEntries, getFrameworkExclusions } from "./collect/entries.js";
+import { resolveWorkspaces } from "./collect/workspaces.js";
+import { parseSourceFile } from "./collect/parse.js";
+import { createResolver } from "./resolver/resolve.js";
+import { buildDependencyGraph } from "./linker/build.js";
+import type { ModuleLinkInput } from "./linker/build.js";
+import { traceReachability } from "./linker/reachability.js";
+import { resolveReExportChains } from "./linker/re-exports.js";
+import { generateReport } from "./report/generate.js";
 
 const STYLE_EXTENSIONS = [".css", ".scss"];
 
@@ -34,13 +34,13 @@ const detectReactNative = (rootDir: string, workspacePackages: Array<{ directory
   return false;
 };
 
-export type { AnalysisResult, DeslopConfig, UnusedFile, UnusedExport, UnusedDependency, CircularDependency } from "./types.js";
+export type { ScanResult, DeslopConfig, UnusedFile, UnusedExport, UnusedDependency, CircularDependency } from "./types.js";
 
 export const defineConfig = (
   options: Partial<DeslopConfig> & { rootDir: string },
 ): DeslopConfig => ({
   rootDir: resolve(options.rootDir),
-  entryPatterns: options.entryPatterns ?? DEFAULT_ENTRY_PATTERNS,
+  entryPatterns: options.entryPatterns ?? DEFAULT_ENTRY_GLOBS,
   ignorePatterns: options.ignorePatterns ?? [],
   includeExtensions: options.includeExtensions ?? DEFAULT_EXTENSIONS,
   tsConfigPath: options.tsConfigPath ?? undefined,
@@ -48,13 +48,13 @@ export const defineConfig = (
   includeEntryExports: options.includeEntryExports ?? false,
 });
 
-export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => {
+export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
   const pipelineStartTime = performance.now();
 
-  const workspaceDiscovery = discoverWorkspacePackagesWithExclusions(resolve(config.rootDir));
+  const workspaceDiscovery = resolveWorkspaces(resolve(config.rootDir));
   const workspacePackages = workspaceDiscovery.packages;
 
-  const frameworkIgnorePatterns = discoverFrameworkIgnorePatterns(config.rootDir);
+  const frameworkIgnorePatterns = getFrameworkExclusions(config.rootDir);
 
   const absoluteRoot = resolve(config.rootDir);
   const outputDirectoryExclusions = OUTPUT_DIRECTORIES.flatMap((outputDirectory) => {
@@ -81,20 +81,20 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
       }
     : config;
 
-  const files = await discoverFiles(configWithExclusions);
-  const discoveredEntries = await discoverEntryPoints(configWithExclusions);
+  const files = await collectSourceFiles(configWithExclusions);
+  const discoveredEntries = await resolveEntries(configWithExclusions);
   const productionEntrySet = new Set(discoveredEntries.productionEntries);
   const testEntrySet = new Set(discoveredEntries.testEntries);
   const alwaysUsedFileSet = new Set(discoveredEntries.alwaysUsedFiles);
   const hasReactNative = detectReactNative(config.rootDir, workspacePackages);
-  const moduleResolver = createModuleResolver(config, workspacePackages.map((workspacePackage) => ({
+  const moduleResolver = createResolver(config, workspacePackages.map((workspacePackage) => ({
     name: workspacePackage.name,
     directory: workspacePackage.directory,
   })), { hasReactNative });
-  const graphInputs: GraphBuildInput[] = [];
+  const graphInputs: ModuleLinkInput[] = [];
 
   for (const file of files) {
-    const parsedModule = parseModule(file.path);
+    const parsedModule = parseSourceFile(file.path);
     const resolvedImportMap = new Map<
       string,
       ReturnType<typeof moduleResolver.resolveModule>
@@ -169,8 +169,8 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
   const sortedStyleFiles = [...styleFilesToAdd].sort();
   let nextFileIndex = files.length;
   for (const styleFilePath of sortedStyleFiles) {
-    const styleFileId = { index: nextFileIndex, path: styleFilePath };
-    const parsedStyleModule = parseModule(styleFilePath);
+    const styleSourceFile = { index: nextFileIndex, path: styleFilePath };
+    const parsedStyleModule = parseSourceFile(styleFilePath);
     const resolvedStyleImportMap = new Map<string, ReturnType<typeof moduleResolver.resolveModule>>();
 
     for (const importInfo of parsedStyleModule.imports) {
@@ -185,7 +185,7 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
     }
 
     graphInputs.push({
-      fileId: styleFileId,
+      fileId: styleSourceFile,
       parsed: parsedStyleModule,
       resolvedImports: resolvedStyleImportMap,
       isEntryPoint: false,
@@ -195,13 +195,13 @@ export const analyze = async (config: DeslopConfig): Promise<AnalysisResult> => 
     nextFileIndex++;
   }
 
-  const moduleGraph = buildModuleGraph(graphInputs);
+  const moduleGraph = buildDependencyGraph(graphInputs);
 
-  propagateReExports(moduleGraph);
+  resolveReExportChains(moduleGraph);
 
-  markReachable(moduleGraph);
+  traceReachability(moduleGraph);
 
-  const analysisResult = analyzeGraph(moduleGraph, config);
+  const analysisResult = generateReport(moduleGraph, config);
 
   analysisResult.analysisTimeMs = performance.now() - pipelineStartTime;
 

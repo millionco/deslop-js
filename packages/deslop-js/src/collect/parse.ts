@@ -17,12 +17,12 @@ import type {
   Expression,
   ModuleDeclaration,
 } from "@oxc-project/types";
-import type { ImportInfo, ExportInfo, ImportedName, MemberAccess } from "../types.js";
+import type { ImportReference, ExportReference, ImportBinding, MemberAccess } from "../types.js";
 import { getLineFromOffset, getColumnFromOffset } from "../utils/line-column.js";
 
-export interface ParsedModule {
-  imports: ImportInfo[];
-  exports: ExportInfo[];
+export interface ParsedSource {
+  imports: ImportReference[];
+  exports: ExportReference[];
   memberAccesses: MemberAccess[];
   wholeObjectUses: string[];
 }
@@ -114,9 +114,9 @@ const CSS_EXTENSIONS = [".css", ".scss", ".less", ".sass"];
 const CSS_IMPORT_PATTERN = /@import\s+(?:url\()?['"]([^'"]+)['"]\)?/g;
 const SCSS_USE_FORWARD_PATTERN = /@(?:use|forward)\s+['"]([^'"]+)['"]/g;
 
-const parseCssImports = (filePath: string): ParsedModule => {
+const parseCssImports = (filePath: string): ParsedSource => {
   const sourceText = readFileSync(filePath, "utf-8");
-  const imports: ImportInfo[] = [];
+  const imports: ImportReference[] = [];
 
   const patterns = [CSS_IMPORT_PATTERN, SCSS_USE_FORWARD_PATTERN];
   for (const pattern of patterns) {
@@ -143,7 +143,7 @@ const parseCssImports = (filePath: string): ParsedModule => {
 
 const NON_JS_EXTENSIONS = [".graphql", ".gql"];
 
-export const parseModule = (filePath: string): ParsedModule => {
+export const parseSourceFile = (filePath: string): ParsedSource => {
   const isCss = CSS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   if (isCss) {
     return parseCssImports(filePath);
@@ -155,8 +155,8 @@ export const parseModule = (filePath: string): ParsedModule => {
   }
 
   const sourceText = readFileSync(filePath, "utf-8");
-  const imports: ImportInfo[] = [];
-  const exports: ExportInfo[] = [];
+  const imports: ImportReference[] = [];
+  const exports: ExportReference[] = [];
 
   const isMdx = filePath.endsWith(".mdx");
   const isAstro = filePath.endsWith(".astro");
@@ -233,7 +233,7 @@ const WHOLE_OBJECT_FUNCTION_NAMES = new Set([
   "getOwnPropertyNames", "getOwnPropertyDescriptors",
 ]);
 
-const collectNamespaceLocalNames = (imports: ImportInfo[]): Set<string> => {
+const collectNamespaceLocalNames = (imports: ImportReference[]): Set<string> => {
   const namespaceNames = new Set<string>();
   for (const importInfo of imports) {
     for (const importedName of importInfo.importedNames) {
@@ -354,13 +354,13 @@ const collectMemberAccesses = (
 const extractImportDeclaration = (
   node: ImportDeclaration,
   sourceText: string,
-  imports: ImportInfo[],
+  imports: ImportReference[],
 ): void => {
   const specifier = node.source.value;
   if (!specifier) return;
 
   const isTypeOnly = node.importKind === "type";
-  const importedNames: ImportedName[] = [];
+  const importedNames: ImportBinding[] = [];
 
   for (const specifierNode of node.specifiers) {
     switch (specifierNode.type) {
@@ -426,7 +426,7 @@ const extractImportDeclaration = (
 const extractNamedExportDeclaration = (
   node: ExportNamedDeclaration,
   sourceText: string,
-  exports: ExportInfo[],
+  exports: ExportReference[],
 ): void => {
   const isTypeOnly = node.exportKind === "type";
   const reExportSource = node.source?.value ?? undefined;
@@ -457,7 +457,7 @@ const extractNamedExportDeclaration = (
 const extractDefaultExportDeclaration = (
   node: ExportDefaultDeclaration,
   sourceText: string,
-  exports: ExportInfo[],
+  exports: ExportReference[],
 ): void => {
   exports.push({
     name: "default",
@@ -476,7 +476,7 @@ const extractDefaultExportDeclaration = (
 const extractExportAllDeclaration = (
   node: ExportAllDeclaration,
   sourceText: string,
-  exports: ExportInfo[],
+  exports: ExportReference[],
 ): void => {
   const reExportSource = node.source.value;
   if (!reExportSource) return;
@@ -503,7 +503,7 @@ const extractDeclarationNames = (
   declaration: Declaration,
   isTypeOnly: boolean,
   sourceText: string,
-  exports: ExportInfo[],
+  exports: ExportReference[],
   fallbackStart: number,
 ): void => {
   const declarationType = declaration.type;
@@ -616,7 +616,7 @@ const extractBindingPatternNames = (pattern: BindingPattern): string[] => {
   return [];
 };
 
-const createNamespaceImportedName = (): ImportedName => ({
+const createNamespaceImportBinding = (): ImportBinding => ({
   name: "*",
   alias: undefined,
   isNamespace: true,
@@ -720,7 +720,7 @@ const synthesizeAutoMockSibling = (mockSource: string): string | undefined => {
 const collectDynamicImports = (
   bodyNodes: Array<Statement | ModuleDeclaration>,
   sourceText: string,
-  imports: ImportInfo[],
+  imports: ImportReference[],
 ): void => {
   const walkNode = (node: WalkableNode): void => {
     if (node.type === "ImportExpression") {
@@ -731,7 +731,7 @@ const collectDynamicImports = (
         if (specifierValue) {
           imports.push({
             specifier: specifierValue,
-            importedNames: [createNamespaceImportedName()],
+            importedNames: [createNamespaceImportBinding()],
             isTypeOnly: false,
             isDynamic: true,
             isSideEffect: false,
@@ -746,7 +746,7 @@ const collectDynamicImports = (
           if (globPattern.startsWith("./") || globPattern.startsWith("../")) {
             imports.push({
               specifier: globPattern,
-              importedNames: [createNamespaceImportedName()],
+              importedNames: [createNamespaceImportBinding()],
               isTypeOnly: false,
               isDynamic: true,
               isSideEffect: false,
@@ -768,7 +768,7 @@ const collectDynamicImports = (
         if (requireSpecifier) {
           imports.push({
             specifier: requireSpecifier,
-            importedNames: [createNamespaceImportedName()],
+            importedNames: [createNamespaceImportBinding()],
             isTypeOnly: false,
             isDynamic: true,
             isSideEffect: false,
@@ -790,7 +790,7 @@ const collectDynamicImports = (
           if (resolveSpecifier) {
             imports.push({
               specifier: resolveSpecifier,
-              importedNames: [createNamespaceImportedName()],
+              importedNames: [createNamespaceImportBinding()],
               isTypeOnly: false,
               isDynamic: true,
               isSideEffect: false,
@@ -809,7 +809,7 @@ const collectDynamicImports = (
           if (mockSpecifier) {
             imports.push({
               specifier: mockSpecifier,
-              importedNames: [createNamespaceImportedName()],
+              importedNames: [createNamespaceImportBinding()],
               isTypeOnly: false,
               isDynamic: true,
               isSideEffect: true,
@@ -822,7 +822,7 @@ const collectDynamicImports = (
             if (!hasFactoryArgument && autoMockSibling) {
               imports.push({
                 specifier: autoMockSibling,
-                importedNames: [createNamespaceImportedName()],
+                importedNames: [createNamespaceImportBinding()],
                 isTypeOnly: false,
                 isDynamic: true,
                 isSideEffect: true,
@@ -840,7 +840,7 @@ const collectDynamicImports = (
           for (const globPattern of globPatterns) {
             imports.push({
               specifier: globPattern,
-              importedNames: [createNamespaceImportedName()],
+              importedNames: [createNamespaceImportBinding()],
               isTypeOnly: false,
               isDynamic: true,
               isSideEffect: false,
@@ -869,7 +869,7 @@ const collectDynamicImports = (
               const contextGlobPattern = regexSuffix ? `${contextGlobPrefix}${regexSuffix}` : `${contextGlobPrefix}*`;
               imports.push({
                 specifier: contextGlobPattern,
-                importedNames: [createNamespaceImportedName()],
+                importedNames: [createNamespaceImportBinding()],
                 isTypeOnly: false,
                 isDynamic: true,
                 isSideEffect: false,
@@ -900,7 +900,7 @@ const collectDynamicImports = (
           if (urlSpecifier) {
             imports.push({
               specifier: urlSpecifier,
-              importedNames: [createNamespaceImportedName()],
+              importedNames: [createNamespaceImportBinding()],
               isTypeOnly: false,
               isDynamic: true,
               isSideEffect: true,

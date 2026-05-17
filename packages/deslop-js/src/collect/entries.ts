@@ -2,14 +2,14 @@ import fg from "fast-glob";
 import { resolve, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
-import type { FileId, DeslopConfig, DiscoveredEntryPoints } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_EXTENSIONLESS_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, SHALLOW_WORKSPACE_MAX_DEPTH, SOURCE_EXTENSIONS as IMPORTABLE_SOURCE_EXTENSIONS } from "../constants.js";
-import { discoverWorkspacePackagesWithExclusions, discoverFrameworkEntryPoints } from "./workspaces.js";
+import type { SourceFile, DeslopConfig, ResolvedEntries } from "../types.js";
+import { DEFAULT_EXTENSIONS, DEFAULT_EXCLUSIONS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_EXTENSIONLESS_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, SHALLOW_WORKSPACE_MAX_DEPTH, SOURCE_EXTENSIONS as IMPORTABLE_SOURCE_EXTENSIONS } from "../constants.js";
+import { resolveWorkspaces, detectFrameworkEntries } from "./workspaces.js";
 import type { WorkspacePackage } from "./workspaces.js";
 import { resolveSourcePath } from "../resolver/source-path.js";
 import { join } from "node:path";
 
-export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => {
+export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFile[]> => {
   const extensions =
     config.includeExtensions.length > 0
       ? config.includeExtensions
@@ -20,7 +20,7 @@ export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => 
       ? `**/*${extensions[0]}`
       : `**/*{${extensions.join(",")}}`;
 
-  const ignorePatterns = [...DEFAULT_IGNORE_PATTERNS, ...config.ignorePatterns];
+  const ignorePatterns = [...DEFAULT_EXCLUSIONS, ...config.ignorePatterns];
   const absoluteRoot = resolve(config.rootDir);
 
   const mainFiles = await fg(extensionGlob, {
@@ -57,9 +57,9 @@ export const discoverFiles = async (config: DeslopConfig): Promise<FileId[]> => 
   }));
 };
 
-export const discoverFrameworkIgnorePatterns = (rootDir: string): string[] => {
+export const getFrameworkExclusions = (rootDir: string): string[] => {
   const absoluteRoot = resolve(rootDir);
-  const workspacePackages = discoverWorkspacePackagesWithExclusions(absoluteRoot).packages;
+  const workspacePackages = resolveWorkspaces(absoluteRoot).packages;
   const directoriesToCheck = [absoluteRoot, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
   const ignorePatterns: string[] = [];
 
@@ -80,7 +80,7 @@ export const discoverFrameworkIgnorePatterns = (rootDir: string): string[] => {
       continue;
     }
 
-    for (const plugin of TOOLING_PLUGIN_DEFINITIONS) {
+    for (const plugin of FRAMEWORK_PATTERNS) {
       if (plugin.contentIgnorePatterns && isToolingPluginEnabled(plugin, allDependencies)) {
         for (const pattern of plugin.contentIgnorePatterns) {
           const absolutePattern = join(directory, pattern);
@@ -93,7 +93,7 @@ export const discoverFrameworkIgnorePatterns = (rootDir: string): string[] => {
   return ignorePatterns;
 };
 
-export const discoverEntryPoints = async (config: DeslopConfig): Promise<DiscoveredEntryPoints> => {
+export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntries> => {
   const absoluteRoot = resolve(config.rootDir);
 
   const entryFiles = config.entryPatterns.length > 0
@@ -107,7 +107,7 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
   const packageJsonPath = resolve(absoluteRoot, "package.json");
   const packageJsonEntries = await extractPackageJsonEntries(packageJsonPath);
 
-  const workspaceDiscovery = discoverWorkspacePackagesWithExclusions(absoluteRoot);
+  const workspaceDiscovery = resolveWorkspaces(absoluteRoot);
   const workspacePackages = workspaceDiscovery.packages;
   const isEntryEligible = (workspacePackage: WorkspacePackage): boolean => {
     if (workspaceDiscovery.hasRootLevelWorkspacePatterns) return true;
@@ -124,7 +124,7 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
       ? workspacePackage.isDeclaredWorkspace && isEligible
       : isEligible;
     if (shouldRunFrameworkDetection) {
-      const workspaceFrameworkEntries = discoverFrameworkEntryPoints(workspacePackage.directory);
+      const workspaceFrameworkEntries = detectFrameworkEntries(workspacePackage.directory);
       workspaceEntries.push(...workspaceFrameworkEntries);
     }
 
@@ -144,7 +144,7 @@ export const discoverEntryPoints = async (config: DeslopConfig): Promise<Discove
     }
   }
 
-  const frameworkEntries = discoverFrameworkEntryPoints(absoluteRoot);
+  const frameworkEntries = detectFrameworkEntries(absoluteRoot);
 
   const entryEligiblePackages = workspacePackages.filter(isEntryEligible);
 
@@ -394,7 +394,7 @@ const ENV_WRAPPER_BINARIES = new Set([
   "cross-env", "dotenv", "dotenv-flow", "env-cmd",
 ]);
 
-const NON_ENTRY_BINARIES = new Set([
+const IGNORED_CLI_TOOLS = new Set([
   "prettier", "eslint", "tslint", "stylelint", "biome", "oxlint", "oxfmt",
   "tsc", "tsup", "tsdown", "rollup", "webpack",
   "rimraf", "del-cli", "shx", "cpy-cli", "cpx",
@@ -462,8 +462,8 @@ const extractScriptFileArguments = (scriptCommand: string, directory: string): s
     const effectiveBinaryName = (binaryName === "npx" || binaryName === "pnpx" || binaryName === "bunx")
       ? (tokens[startIndex + 1]?.replace(/^.*\//, "") ?? "")
       : binaryName;
-    const isNonEntryBinary = NON_ENTRY_BINARIES.has(binaryName) ||
-      (effectiveBinaryName !== "" && NON_ENTRY_BINARIES.has(effectiveBinaryName));
+    const isNonEntryBinary = IGNORED_CLI_TOOLS.has(binaryName) ||
+      (effectiveBinaryName !== "" && IGNORED_CLI_TOOLS.has(effectiveBinaryName));
 
     for (let tokenIndex = startIndex + 1; tokenIndex < tokens.length; tokenIndex++) {
       const token = tokens[tokenIndex].replace(/^['"]|['"]$/g, "");
@@ -1271,7 +1271,7 @@ interface TestRunnerDefinition {
   alwaysUsed: string[];
 }
 
-const TEST_RUNNER_DEFINITIONS: TestRunnerDefinition[] = [
+const TEST_FRAMEWORK_PATTERNS: TestRunnerDefinition[] = [
   {
     enablers: ["vitest", "@vitest/runner", "vite-plus"],
     configFileActivators: [
@@ -1384,7 +1384,7 @@ interface ToolingPluginDefinition {
   contentIgnorePatterns?: string[];
 }
 
-const TOOLING_PLUGIN_DEFINITIONS: ToolingPluginDefinition[] = [
+const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
   {
     enablers: ["storybook"],
     enablerPrefixes: ["@storybook/"],
@@ -2059,7 +2059,7 @@ const discoverTestRunnerEntryPoints = (
       return runner.configFileActivators.some((configFile) => existsSync(join(checkDirectory, configFile)));
     };
 
-    for (const runner of TEST_RUNNER_DEFINITIONS) {
+    for (const runner of TEST_FRAMEWORK_PATTERNS) {
       if (isRunnerEnabled(runner, allDependencies, directory)) {
         const isVitestRunner = runner.enablers.includes("vitest");
         const isJestRunner = runner.enablers.includes("jest");
@@ -2090,7 +2090,7 @@ const discoverTestRunnerEntryPoints = (
             ...rootPackageJson.devDependencies,
             ...rootPackageJson.optionalDependencies,
           };
-          for (const runner of TEST_RUNNER_DEFINITIONS) {
+          for (const runner of TEST_FRAMEWORK_PATTERNS) {
             if (isRunnerEnabled(runner, rootDeps, rootDir)) {
               activatedPatterns.push(...runner.entryPatterns);
               activatedFixturePatterns.push(...runner.fixturePatterns);
@@ -2226,7 +2226,7 @@ const discoverToolingEntryPoints = (
     const activatedPatterns: string[] = [];
     const activatedAlwaysUsed: string[] = [];
 
-    for (const plugin of TOOLING_PLUGIN_DEFINITIONS) {
+    for (const plugin of FRAMEWORK_PATTERNS) {
       if (isToolingPluginEnabled(plugin, mergedDependencies)) {
         activatedPatterns.push(...plugin.entryPatterns);
         activatedAlwaysUsed.push(...plugin.alwaysUsed);
@@ -2259,7 +2259,7 @@ const discoverToolingEntryPoints = (
   }
 
   const rootActivatedGlobalPatterns: string[] = [];
-  for (const plugin of TOOLING_PLUGIN_DEFINITIONS) {
+  for (const plugin of FRAMEWORK_PATTERNS) {
     if (isToolingPluginEnabled(plugin, rootDependencies)) {
       for (const pattern of plugin.alwaysUsed) {
         if (!pattern.startsWith("**/")) {

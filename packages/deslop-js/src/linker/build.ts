@@ -1,32 +1,32 @@
 import path from "node:path";
 import { minimatch } from "minimatch";
 import type {
-  FileId,
-  ModuleGraph,
-  ModuleNode,
+  SourceFile,
+  DependencyGraph,
+  SourceModule,
   Edge,
-  ImportedSymbol,
+  LinkedSymbol,
   ReExportMapping,
 } from "../types.js";
-import type { ParsedModule } from "../scanner/parse.js";
+import type { ParsedSource } from "../collect/parse.js";
 import type { ResolvedImport } from "../resolver/resolve.js";
 import { isConfigFile } from "../utils/is-config-file.js";
 
-export interface GraphBuildInput {
-  fileId: FileId;
-  parsed: ParsedModule;
+export interface ModuleLinkInput {
+  fileId: SourceFile;
+  parsed: ParsedSource;
   resolvedImports: Map<string, ResolvedImport>;
   isEntryPoint: boolean;
   isTestEntry: boolean;
 }
 
-export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
+export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph => {
   const fileIdMap = new Map<string, number>();
   for (const input of inputs) {
     fileIdMap.set(input.fileId.path, input.fileId.index);
   }
 
-  const modules: ModuleNode[] = inputs.map((input) => ({
+  const modules: SourceModule[] = inputs.map((input) => ({
     fileId: input.fileId,
     imports: input.parsed.imports,
     exports: input.parsed.exports,
@@ -48,7 +48,7 @@ export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
   const addEdge = (
     sourceIndex: number,
     targetIndex: number,
-    symbols: ImportedSymbol[],
+    symbols: LinkedSymbol[],
     isReExportEdge: boolean = false,
     reExportedNames: string[] = [],
     reExportMappings: ReExportMapping[] = [],
@@ -91,7 +91,7 @@ export const buildModuleGraph = (inputs: GraphBuildInput[]): ModuleGraph => {
       const targetIndex = fileIdMap.get(resolved.resolvedPath);
       if (targetIndex === undefined) continue;
 
-      const importedSymbols: ImportedSymbol[] = importInfo.importedNames.map(
+      const importedSymbols: LinkedSymbol[] = importInfo.importedNames.map(
         (importedName) => ({
           importedName: importedName.name,
           localName: importedName.alias ?? importedName.name,

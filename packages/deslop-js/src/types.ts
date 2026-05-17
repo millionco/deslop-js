@@ -1,11 +1,11 @@
-export interface FileId {
+export interface SourceFile {
   index: number;
   path: string;
 }
 
-export interface ImportInfo {
+export interface ImportReference {
   specifier: string;
-  importedNames: ImportedName[];
+  importedNames: ImportBinding[];
   isTypeOnly: boolean;
   isDynamic: boolean;
   isSideEffect: boolean;
@@ -14,7 +14,7 @@ export interface ImportInfo {
   column: number;
 }
 
-export interface ImportedName {
+export interface ImportBinding {
   name: string;
   alias: string | undefined;
   isNamespace: boolean;
@@ -22,7 +22,7 @@ export interface ImportedName {
   isTypeOnly: boolean;
 }
 
-export interface ExportInfo {
+export interface ExportReference {
   name: string;
   isDefault: boolean;
   isTypeOnly: boolean;
@@ -40,10 +40,10 @@ export interface MemberAccess {
   memberName: string;
 }
 
-export interface ModuleNode {
-  fileId: FileId;
-  imports: ImportInfo[];
-  exports: ExportInfo[];
+export interface SourceModule {
+  fileId: SourceFile;
+  imports: ImportReference[];
+  exports: ExportReference[];
   memberAccesses: MemberAccess[];
   wholeObjectUses: string[];
   isEntryPoint: boolean;
@@ -61,13 +61,13 @@ export interface ReExportMapping {
 export interface Edge {
   source: number;
   target: number;
-  importedSymbols: ImportedSymbol[];
+  importedSymbols: LinkedSymbol[];
   isReExportEdge: boolean;
   reExportedNames: string[];
   reExportMappings: ReExportMapping[];
 }
 
-export interface ImportedSymbol {
+export interface LinkedSymbol {
   importedName: string;
   localName: string;
   isTypeOnly: boolean;
@@ -75,8 +75,8 @@ export interface ImportedSymbol {
   isDefault: boolean;
 }
 
-export interface ModuleGraph {
-  modules: ModuleNode[];
+export interface DependencyGraph {
+  modules: SourceModule[];
   edges: Edge[];
   reverseEdges: Map<number, number[]>;
   fileIdMap: Map<string, number>;
@@ -103,7 +103,7 @@ export interface CircularDependency {
   files: string[];
 }
 
-export interface AnalysisResult {
+export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
   unusedDependencies: UnusedDependency[];
@@ -113,7 +113,7 @@ export interface AnalysisResult {
   analysisTimeMs: number;
 }
 
-export interface DiscoveredEntryPoints {
+export interface ResolvedEntries {
   productionEntries: string[];
   testEntries: string[];
   alwaysUsedFiles: string[];

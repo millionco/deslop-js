@@ -31,7 +31,7 @@ export const OUTPUT_DIRECTORIES = ["dist", "build", "out", "esm", "cjs"];
 
 export const SOURCE_EXTENSIONS = ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
 
-export const DEFAULT_IGNORE_PATTERNS = [
+export const DEFAULT_EXCLUSIONS = [
   "**/node_modules/**",
   "**/.git/**",
   "**/coverage/**",
@@ -48,14 +48,14 @@ export const SCRIPT_CONFIG_FILE_PATTERN = /--config\s+([\w./@-]+\.(?:ts|tsx|js|j
 
 export const SCRIPT_ENTRY_PATTERNS: string[] = [];
 
-export const DEFAULT_ENTRY_PATTERNS = [
+export const DEFAULT_ENTRY_GLOBS = [
   "src/index.{ts,tsx,js,jsx}",
   "src/main.{ts,tsx,js,jsx}",
   "index.{ts,tsx,js,jsx}",
   "main.{ts,tsx,js,jsx}",
 ];
 
-export const CONFIG_FILE_PREFIXES = [
+export const KNOWN_CONFIG_PREFIXES = [
   "babel.config.",
   "rollup.config.",
   "webpack.config.",
@@ -113,7 +113,7 @@ export const CONFIG_FILE_PREFIXES = [
   "vite-env.d.",
 ];
 
-export const ALWAYS_USED_PACKAGES = new Set([
+export const IMPLICIT_DEPENDENCIES = new Set([
   "typescript",
   "@types/node",
   "@types/react",

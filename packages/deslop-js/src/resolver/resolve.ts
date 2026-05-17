@@ -172,7 +172,7 @@ export interface ModuleResolverOptions {
   hasReactNative?: boolean;
 }
 
-export const createModuleResolver = (config: DeslopConfig, workspacePackages: WorkspacePackageMap[] = [], options: ModuleResolverOptions = {}) => {
+export const createResolver = (config: DeslopConfig, workspacePackages: WorkspacePackageMap[] = [], options: ModuleResolverOptions = {}) => {
   const resolverCache = new Map<string, ResolverFactory>();
   const resolveResultCache = new Map<string, ResolvedImport>();
 

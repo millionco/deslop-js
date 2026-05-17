@@ -1,7 +1,7 @@
 {
   "name": "deslop-js",
   "version": "0.0.1",
-  "description": "High-performance dead code detector for TypeScript/JavaScript using the OXC toolchain",
+  "description": "Deslop JavaScript code",
   "keywords": [
     "dead-code",
     "unused",
@@ -54,8 +54,7 @@
     "fast-glob": "^3.3.3",
     "minimatch": "^10.2.5",
     "oxc-parser": "^0.130.0",
-    "oxc-resolver": "^11.19.1",
-    "picomatch": "^4.0.4"
+    "oxc-resolver": "^11.19.1"
   },
   "devDependencies": {
     "@types/minimatch": "^5.1.2",

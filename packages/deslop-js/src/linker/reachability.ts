@@ -1,4 +1,4 @@
-import type { ModuleGraph, Edge } from "../types.js";
+import type { DependencyGraph, Edge } from "../types.js";
 import { PLATFORM_SUFFIXES } from "../constants.js";
 
 const PLATFORM_DIRECTORY_NAMES = new Set(["web", "native", "ios", "android", "desktop", "windows", "macos"]);
@@ -32,7 +32,7 @@ interface ReachabilityQueueItem {
   demandedSymbols: Set<string> | "all";
 }
 
-export const markReachable = (graph: ModuleGraph): void => {
+export const traceReachability = (graph: DependencyGraph): void => {
   const totalModules = graph.modules.length;
   const visited = new Uint8Array(totalModules);
   const consumedExportsPerModule = new Map<number, Set<string>>();

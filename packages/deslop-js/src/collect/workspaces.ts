@@ -17,7 +17,7 @@ export interface WorkspaceDiscoveryResult {
   hasRootLevelWorkspacePatterns: boolean;
 }
 
-export const discoverWorkspacePackagesWithExclusions = (rootDir: string): WorkspaceDiscoveryResult => {
+export const resolveWorkspaces = (rootDir: string): WorkspaceDiscoveryResult => {
   const rootPatterns = collectWorkspacePatterns(rootDir);
   const hasRootLevelWorkspacePatterns = rootPatterns.length > 0;
   let expandedDirectories = hasRootLevelWorkspacePatterns
@@ -68,9 +68,6 @@ export const discoverWorkspacePackagesWithExclusions = (rootDir: string): Worksp
 
   return { packages: workspacePackages, excludedDirectories, hasRootLevelWorkspacePatterns };
 };
-
-export const discoverWorkspacePackages = (rootDir: string): WorkspacePackage[] =>
-  discoverWorkspacePackagesWithExclusions(rootDir).packages;
 
 const IMPLICIT_SUB_PROJECT_SEARCH_DEPTH = 3;
 
@@ -474,7 +471,7 @@ const extractRouteModuleEntriesFromRoutesFiles = (rootDir: string, appDirectory:
   return resolvedEntries;
 };
 
-export const discoverFrameworkEntryPoints = (rootDir: string): string[] => {
+export const detectFrameworkEntries = (rootDir: string): string[] => {
   const entryPoints: string[] = [];
   const dependencies = readDependencies(rootDir);
 

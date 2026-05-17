@@ -1,4 +1,4 @@
-import { CONFIG_FILE_PREFIXES } from "../constants.js";
+import { KNOWN_CONFIG_PREFIXES } from "../constants.js";
 
 export const isConfigFile = (filePath: string): boolean => {
   const fileName = filePath.split("/").pop() ?? "";
@@ -9,5 +9,5 @@ export const isConfigFile = (filePath: string): boolean => {
     }
   }
 
-  return CONFIG_FILE_PREFIXES.some((prefix) => fileName.startsWith(prefix));
+  return KNOWN_CONFIG_PREFIXES.some((prefix) => fileName.startsWith(prefix));
 };

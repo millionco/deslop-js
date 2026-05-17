@@ -1,7 +1,7 @@
-import type { ModuleGraph, ModuleNode, ExportInfo, UnusedExport, DeslopConfig, MemberAccess } from "../types.js";
+import type { DependencyGraph, SourceModule, ExportReference, UnusedExport, DeslopConfig, MemberAccess } from "../types.js";
 
-export const findUnusedExports = (
-  graph: ModuleGraph,
+export const detectDeadExports = (
+  graph: DependencyGraph,
   config: DeslopConfig,
 ): UnusedExport[] => {
   const usageMap = buildUsageMap(graph);
@@ -33,7 +33,7 @@ export const findUnusedExports = (
   return unusedExports;
 };
 
-const buildUsageMap = (graph: ModuleGraph): Set<string> => {
+const buildUsageMap = (graph: DependencyGraph): Set<string> => {
   const usedExportKeys = new Set<string>();
   const sourceToTargetMap = buildSourceToTargetsMap(graph);
 
@@ -71,10 +71,10 @@ const buildUsageMap = (graph: ModuleGraph): Set<string> => {
 };
 
 const handleNamespaceImport = (
-  sourceModule: ModuleNode | undefined,
-  targetModule: ModuleNode,
+  sourceModule: SourceModule | undefined,
+  targetModule: SourceModule,
   namespaceLocalName: string,
-  graph: ModuleGraph,
+  graph: DependencyGraph,
   sourceToTargets: Map<number, number[]>,
   usedKeys: Set<string>,
 ): void => {
@@ -138,7 +138,7 @@ const extractAccessedMemberNames = (
 };
 
 const buildSourceToTargetsMap = (
-  graph: ModuleGraph,
+  graph: DependencyGraph,
 ): Map<number, number[]> => {
   const sourceToTargets = new Map<number, number[]>();
 
@@ -157,8 +157,8 @@ const buildSourceToTargetsMap = (
 };
 
 const markAllExportsUsedRecursive = (
-  module: ModuleNode,
-  graph: ModuleGraph,
+  module: SourceModule,
+  graph: DependencyGraph,
   sourceToTargets: Map<number, number[]>,
   usedKeys: Set<string>,
   visited: Set<string>,
@@ -189,7 +189,7 @@ const markAllExportsUsedRecursive = (
 const markExportUsedRecursive = (
   filePath: string,
   exportName: string,
-  graph: ModuleGraph,
+  graph: DependencyGraph,
   sourceToTargets: Map<number, number[]>,
   usedKeys: Set<string>,
   visited: Set<string>,
@@ -224,8 +224,8 @@ const markExportUsedRecursive = (
 
 const followReExportChain = (
   reExporterModuleIndex: number,
-  exportInfo: ExportInfo,
-  graph: ModuleGraph,
+  exportInfo: ExportReference,
+  graph: DependencyGraph,
   sourceToTargets: Map<number, number[]>,
   usedKeys: Set<string>,
   visited: Set<string>,

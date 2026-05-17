@@ -1,10 +1,10 @@
-import type { ModuleGraph, UnusedFile, ModuleNode } from "../types.js";
+import type { DependencyGraph, UnusedFile, SourceModule } from "../types.js";
 
 const isHtmlFile = (filePath: string): boolean => {
   return filePath.endsWith(".html");
 };
 
-export const findUnusedFiles = (graph: ModuleGraph): UnusedFile[] => {
+export const detectOrphanFiles = (graph: DependencyGraph): UnusedFile[] => {
   const unusedFiles: UnusedFile[] = [];
 
   for (const module of graph.modules) {
@@ -23,8 +23,8 @@ export const findUnusedFiles = (graph: ModuleGraph): UnusedFile[] => {
 };
 
 const isBarrelWithReachableSources = (
-  module: ModuleNode,
-  graph: ModuleGraph,
+  module: SourceModule,
+  graph: DependencyGraph,
 ): boolean => {
   if (module.exports.length === 0) return false;
 
@@ -46,7 +46,7 @@ const isBarrelWithReachableSources = (
 
 const hasReachableDirectImporter = (
   targetModuleIndex: number,
-  graph: ModuleGraph,
+  graph: DependencyGraph,
 ): boolean => {
   for (const edge of graph.edges) {
     if (edge.target !== targetModuleIndex) continue;

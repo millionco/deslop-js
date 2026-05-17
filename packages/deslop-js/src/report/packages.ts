@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
-import type { ModuleGraph, UnusedDependency, DeslopConfig } from "../types.js";
-import { ALWAYS_USED_PACKAGES } from "../constants.js";
+import type { DependencyGraph, UnusedDependency, DeslopConfig } from "../types.js";
+import { IMPLICIT_DEPENDENCIES } from "../constants.js";
 import { extractPackageName } from "../utils/package-name.js";
 
 interface PackageJsonDependencies {
@@ -9,8 +9,8 @@ interface PackageJsonDependencies {
   devDependencies?: Record<string, string>;
 }
 
-export const findUnusedDependencies = (
-  graph: ModuleGraph,
+export const detectStalePackages = (
+  graph: DependencyGraph,
   config: DeslopConfig,
 ): UnusedDependency[] => {
   const packageJsonPath = resolve(config.rootDir, "package.json");
@@ -51,7 +51,7 @@ export const findUnusedDependencies = (
   return unusedDependencies;
 };
 
-const collectUsedPackages = (graph: ModuleGraph): Set<string> => {
+const collectUsedPackages = (graph: DependencyGraph): Set<string> => {
   const usedPackages = new Set<string>();
 
   for (const module of graph.modules) {
@@ -67,7 +67,7 @@ const collectUsedPackages = (graph: ModuleGraph): Set<string> => {
 };
 
 const isAlwaysConsideredUsed = (dependencyName: string): boolean => {
-  if (ALWAYS_USED_PACKAGES.has(dependencyName)) return true;
+  if (IMPLICIT_DEPENDENCIES.has(dependencyName)) return true;
   if (dependencyName.startsWith("@types/")) return true;
   if (dependencyName.startsWith("eslint-config-")) return true;
   if (dependencyName.startsWith("eslint-plugin-")) return true;

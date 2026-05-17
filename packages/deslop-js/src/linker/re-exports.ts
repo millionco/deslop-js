@@ -1,6 +1,6 @@
-import type { ModuleGraph } from "../types.js";
+import type { DependencyGraph } from "../types.js";
 
-export const propagateReExports = (graph: ModuleGraph): void => {
+export const resolveReExportChains = (graph: DependencyGraph): void => {
   const sourceToTargets = buildSourceTargetMap(graph);
   const maxIterations = graph.modules.length * 2 + 1;
   let didChange = true;
@@ -56,7 +56,7 @@ export const propagateReExports = (graph: ModuleGraph): void => {
   }
 };
 
-const buildSourceTargetMap = (graph: ModuleGraph): Map<number, number[]> => {
+const buildSourceTargetMap = (graph: DependencyGraph): Map<number, number[]> => {
   const sourceTargets = new Map<number, number[]>();
 
   for (const edge of graph.edges) {

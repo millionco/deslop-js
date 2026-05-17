@@ -3,7 +3,7 @@
 [![version](https://img.shields.io/npm/v/deslop-js?style=flat&colorA=000000&colorB=000000)](https://npmjs.com/package/deslop-js)
 [![downloads](https://img.shields.io/npm/dt/deslop-js.svg?style=flat&colorA=000000&colorB=000000)](https://npmjs.com/package/deslop-js)
 
-High-performance dead code detector for TypeScript/JavaScript using the OXC toolchain.
+Deslop JavaScript code.
 
 ## Install
 
@@ -53,7 +53,7 @@ const config = defineConfig({
 ### Result
 
 ```ts
-interface AnalysisResult {
+interface ScanResult {
   unusedFiles: { path: string }[];
   unusedExports: {
     path: string;

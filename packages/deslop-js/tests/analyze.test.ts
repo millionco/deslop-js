@@ -2,14 +2,14 @@ import { describe, it, test } from "node:test";
 import assert from "node:assert/strict";
 import { resolve, relative } from "node:path";
 import { analyze, defineConfig } from "../src/index.js";
-import type { AnalysisResult } from "../src/types.js";
+import type { ScanResult } from "../src/types.js";
 
 const FIXTURES_DIR = resolve(import.meta.dirname, "fixtures");
 
-const analyzeFixture = async (
+const scanFixture = async (
   fixtureName: string,
   overrides: Record<string, unknown> = {},
-): Promise<AnalysisResult> => {
+): Promise<ScanResult> => {
   const fixtureDir = resolve(FIXTURES_DIR, fixtureName);
   const config = defineConfig({
     rootDir: fixtureDir,
@@ -18,14 +18,14 @@ const analyzeFixture = async (
   return analyze(config);
 };
 
-const relativePaths = (result: AnalysisResult, fixtureDir: string): string[] =>
+const orphanPaths = (result: ScanResult, fixtureDir: string): string[] =>
   result.unusedFiles.map((unusedFile) => relative(fixtureDir, unusedFile.path)).sort();
 
-const unusedExportNames = (result: AnalysisResult): string[] =>
+const deadExportNames = (result: ScanResult): string[] =>
   result.unusedExports.map((unusedExport) => unusedExport.name).sort();
 
-const unusedExportsByFile = (
-  result: AnalysisResult,
+const deadExportsByFile = (
+  result: ScanResult,
   fixtureDir: string,
 ): Record<string, string[]> => {
   const byFile: Record<string, string[]> = {};
@@ -40,21 +40,21 @@ const unusedExportsByFile = (
   return byFile;
 };
 
-const unusedDependencyNames = (result: AnalysisResult): string[] =>
+const staleDependencyNames = (result: ScanResult): string[] =>
   result.unusedDependencies.map((dep) => dep.name).sort();
 
-describe("basic-project", () => {
+describe("simple-app", () => {
   it("should detect orphan file", async () => {
-    const result = await analyzeFixture("basic-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "basic-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("simple-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "simple-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
   });
 
   it("should detect unused exports in utils", async () => {
-    const result = await analyzeFixture("basic-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "basic-project");
-    const exportsByFile = unusedExportsByFile(result, fixtureDir);
+    const result = await scanFixture("simple-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "simple-app");
+    const exportsByFile = deadExportsByFile(result, fixtureDir);
     assert.ok(
       exportsByFile["src/utils.ts"]?.includes("unusedFunction"),
       `unusedFunction should be flagged, got: ${JSON.stringify(exportsByFile["src/utils.ts"])}`,
@@ -62,41 +62,41 @@ describe("basic-project", () => {
   });
 
   it("should detect unused dependency", async () => {
-    const result = await analyzeFixture("basic-project");
-    const deps = unusedDependencyNames(result);
+    const result = await scanFixture("simple-app");
+    const deps = staleDependencyNames(result);
     assert.ok(deps.includes("unused-dep"), `unused-dep should be flagged, got: ${deps}`);
   });
 
   it("should not flag usedFunction as unused", async () => {
-    const result = await analyzeFixture("basic-project");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("simple-app");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("usedFunction"), "usedFunction should not be unused");
   });
 
   it("should flag react as unused (declared but never imported)", async () => {
-    const result = await analyzeFixture("basic-project");
-    const deps = unusedDependencyNames(result);
+    const result = await scanFixture("simple-app");
+    const deps = staleDependencyNames(result);
     assert.ok(deps.includes("react"), `react should be unused since never imported, got: ${deps}`);
   });
 });
 
-describe("barrel-exports", () => {
+describe("reexport-star", () => {
   it("should not flag foo as unused (used via barrel)", async () => {
-    const result = await analyzeFixture("barrel-exports");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-star");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("foo"), "foo is used through barrel");
   });
 
   it("should flag fooUnused as unused", async () => {
-    const result = await analyzeFixture("barrel-exports");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-star");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("fooUnused"), `fooUnused should be unused, got: ${allUnusedNames}`);
   });
 
   it("should not flag module-b.ts as unused file (file-level: re-exported by barrel makes it reachable)", async () => {
-    const result = await analyzeFixture("barrel-exports");
-    const fixtureDir = resolve(FIXTURES_DIR, "barrel-exports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("reexport-star");
+    const fixtureDir = resolve(FIXTURES_DIR, "reexport-star");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.some((filePath) => filePath === "src/module-b.ts"),
       `module-b.ts should be reachable via barrel re-export (file-level), got: ${unusedFilePaths}`,
@@ -104,9 +104,9 @@ describe("barrel-exports", () => {
   });
 
   it("should not flag module-c.ts as unused file (file-level: star re-exported by barrel makes it reachable)", async () => {
-    const result = await analyzeFixture("barrel-exports");
-    const fixtureDir = resolve(FIXTURES_DIR, "barrel-exports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("reexport-star");
+    const fixtureDir = resolve(FIXTURES_DIR, "reexport-star");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.some((filePath) => filePath === "src/module-c.ts"),
       `module-c.ts should be reachable via barrel star re-export (file-level), got: ${unusedFilePaths}`,
@@ -114,91 +114,91 @@ describe("barrel-exports", () => {
   });
 });
 
-describe("re-export-chains (3-level barrel chain)", () => {
+describe("reexport-chains (3-level barrel chain)", () => {
   it("should not flag alpha and beta (used via 3-level chain)", async () => {
-    const result = await analyzeFixture("re-export-chains");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-chains");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("alpha"), "alpha is used via chain");
     assert.ok(!allUnusedNames.includes("beta"), "beta is used via chain");
   });
 
   it("should flag gamma and delta as unused", async () => {
-    const result = await analyzeFixture("re-export-chains");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-chains");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("gamma"), `gamma should be unused, got: ${allUnusedNames}`);
     assert.ok(allUnusedNames.includes("delta"), `delta should be unused, got: ${allUnusedNames}`);
   });
 
   it("should not flag any file as unused", async () => {
-    const result = await analyzeFixture("re-export-chains");
+    const result = await scanFixture("reexport-chains");
     assert.equal(result.unusedFiles.length, 0, "all files are reachable via chain");
   });
 });
 
-describe("namespace-imports", () => {
+describe("ns-imports", () => {
   it("should flag exports not accessed via namespace member access", async () => {
-    const result = await analyzeFixture("namespace-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "namespace-imports");
-    const exportsByFile = unusedExportsByFile(result, fixtureDir);
+    const result = await scanFixture("ns-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "ns-imports");
+    const exportsByFile = deadExportsByFile(result, fixtureDir);
     assert.deepStrictEqual(exportsByFile["src/utils.ts"], ["bar", "baz"]);
   });
 
   it("should not flag any files as unused", async () => {
-    const result = await analyzeFixture("namespace-imports");
+    const result = await scanFixture("ns-imports");
     assert.equal(result.unusedFiles.length, 0);
   });
 });
 
-describe("namespace-partial-access", () => {
+describe("ns-partial", () => {
   it("should flag only the exports not accessed via member access", async () => {
-    const result = await analyzeFixture("namespace-partial-access");
-    const fixtureDir = resolve(FIXTURES_DIR, "namespace-partial-access");
-    const exportsByFile = unusedExportsByFile(result, fixtureDir);
+    const result = await scanFixture("ns-partial");
+    const fixtureDir = resolve(FIXTURES_DIR, "ns-partial");
+    const exportsByFile = deadExportsByFile(result, fixtureDir);
     const unusedMathExports = (exportsByFile["src/math.ts"] ?? []).sort();
     assert.deepStrictEqual(unusedMathExports, ["divide", "subtract"]);
   });
 });
 
-describe("namespace-whole-object", () => {
+describe("ns-whole", () => {
   it("should not flag any exports when Object.values is used on namespace", async () => {
-    const result = await analyzeFixture("namespace-whole-object");
-    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${unusedExportNames(result)}`);
+    const result = await scanFixture("ns-whole");
+    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${deadExportNames(result)}`);
   });
 });
 
-describe("namespace-spread", () => {
+describe("ns-spread", () => {
   it("should not flag any exports when namespace is spread into object", async () => {
-    const result = await analyzeFixture("namespace-spread");
-    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${unusedExportNames(result)}`);
+    const result = await scanFixture("ns-spread");
+    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${deadExportNames(result)}`);
   });
 });
 
-describe("namespace-forin", () => {
+describe("ns-forin", () => {
   it("should not flag any exports when namespace is used in for..in", async () => {
-    const result = await analyzeFixture("namespace-forin");
-    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${unusedExportNames(result)}`);
+    const result = await scanFixture("ns-forin");
+    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${deadExportNames(result)}`);
   });
 });
 
-describe("namespace-barrel-reexport", () => {
+describe("ns-reexport", () => {
   it("should flag only the exports not accessed through barrel via namespace member access", async () => {
-    const result = await analyzeFixture("namespace-barrel-reexport");
-    const fixtureDir = resolve(FIXTURES_DIR, "namespace-barrel-reexport");
-    const exportsByFile = unusedExportsByFile(result, fixtureDir);
+    const result = await scanFixture("ns-reexport");
+    const fixtureDir = resolve(FIXTURES_DIR, "ns-reexport");
+    const exportsByFile = deadExportsByFile(result, fixtureDir);
     assert.deepStrictEqual(exportsByFile["src/lib/helpers.ts"], ["helperB", "helperC"]);
   });
 
   it("should not flag any files as unused", async () => {
-    const result = await analyzeFixture("namespace-barrel-reexport");
+    const result = await scanFixture("ns-reexport");
     assert.equal(result.unusedFiles.length, 0);
   });
 });
 
-describe("default-export", () => {
+describe("export-default", () => {
   it("should flag default export of component.ts (only named is used)", async () => {
-    const result = await analyzeFixture("default-export");
-    const fixtureDir = resolve(FIXTURES_DIR, "default-export");
-    const exportsByFile = unusedExportsByFile(result, fixtureDir);
+    const result = await scanFixture("export-default");
+    const fixtureDir = resolve(FIXTURES_DIR, "export-default");
+    const exportsByFile = deadExportsByFile(result, fixtureDir);
     assert.ok(
       exportsByFile["src/component.ts"]?.includes("default"),
       `default should be unused in component.ts, got: ${JSON.stringify(exportsByFile)}`,
@@ -206,9 +206,9 @@ describe("default-export", () => {
   });
 
   it("should flag unused-default.ts as unused file", async () => {
-    const result = await analyzeFixture("default-export");
-    const fixtureDir = resolve(FIXTURES_DIR, "default-export");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("export-default");
+    const fixtureDir = resolve(FIXTURES_DIR, "export-default");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/unused-default.ts"),
       `unused-default.ts should be unused file, got: ${unusedFilePaths}`,
@@ -216,119 +216,119 @@ describe("default-export", () => {
   });
 
   it("should not flag usedNamed as unused", async () => {
-    const result = await analyzeFixture("default-export");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("export-default");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("usedNamed"), "usedNamed is imported");
   });
 });
 
-describe("side-effect-imports", () => {
+describe("import-side-effect", () => {
   it("should keep setup.ts reachable (side-effect import)", async () => {
-    const result = await analyzeFixture("side-effect-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "side-effect-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("import-side-effect");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-side-effect");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(!unusedFilePaths.includes("src/setup.ts"), "setup.ts is side-effect imported");
   });
 
   it("should flag orphan.ts as unused", async () => {
-    const result = await analyzeFixture("side-effect-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "side-effect-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("import-side-effect");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-side-effect");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
   });
 });
 
-describe("circular-re-export", () => {
+describe("cycle-reexport", () => {
   it("should not flag fromA or fromB (used despite circular re-exports)", async () => {
-    const result = await analyzeFixture("circular-re-export");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("cycle-reexport");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("fromA"), "fromA is used");
     assert.ok(!allUnusedNames.includes("fromB"), "fromB is used");
   });
 
   it("should not hang or crash from circular re-export", async () => {
-    const result = await analyzeFixture("circular-re-export");
+    const result = await scanFixture("cycle-reexport");
     assert.ok(result.totalFiles > 0, "analysis should complete");
   });
 });
 
-describe("star-re-export-chain", () => {
+describe("star-reexport-chain", () => {
   it("should not flag used as unused (via star re-export chain)", async () => {
-    const result = await analyzeFixture("star-re-export-chain");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("star-reexport-chain");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("used"), "used should be found through star chain");
   });
 
   it("should flag unused export in source", async () => {
-    const result = await analyzeFixture("star-re-export-chain");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("star-reexport-chain");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("unused"), `unused should be flagged, got: ${allUnusedNames}`);
   });
 });
 
-describe("star-selective-usage", () => {
+describe("star-selective", () => {
   it("should not flag usedOne and usedTwo (selectively imported via star barrel)", async () => {
-    const result = await analyzeFixture("star-selective-usage");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("star-selective");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("usedOne"), "usedOne is used");
     assert.ok(!allUnusedNames.includes("usedTwo"), "usedTwo is used");
   });
 
   it("should flag unusedThree and unusedFour", async () => {
-    const result = await analyzeFixture("star-selective-usage");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("star-selective");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("unusedThree"), `unusedThree should be flagged, got: ${allUnusedNames}`);
     assert.ok(allUnusedNames.includes("unusedFour"), `unusedFour should be flagged, got: ${allUnusedNames}`);
   });
 });
 
-describe("multi-hop-barrel", () => {
+describe("reexport-multi-hop", () => {
   it("should not flag used (imported through two barrel hops)", async () => {
-    const result = await analyzeFixture("multi-hop-barrel");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-multi-hop");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("used"), "used is consumed through 2-hop barrel");
   });
 
   it("should flag unused1 and unused2", async () => {
-    const result = await analyzeFixture("multi-hop-barrel");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-multi-hop");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("unused1"), `unused1 should be unused, got: ${allUnusedNames}`);
     assert.ok(allUnusedNames.includes("unused2"), `unused2 should be unused, got: ${allUnusedNames}`);
   });
 });
 
-describe("multi-level-barrel-chain", () => {
+describe("reexport-multi-level", () => {
   it("should not flag alpha and beta (used through 3-level named re-export chain)", async () => {
-    const result = await analyzeFixture("multi-level-barrel-chain");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-multi-level");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("alpha"), "alpha is used");
     assert.ok(!allUnusedNames.includes("beta"), "beta is used");
   });
 
   it("should flag gamma (re-exported in barrel-a but not imported)", async () => {
-    const result = await analyzeFixture("multi-level-barrel-chain");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-multi-level");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("gamma"), `gamma should be unused, got: ${allUnusedNames}`);
   });
 
   it("should flag delta (only in barrel-b, not re-exported by barrel-a)", async () => {
-    const result = await analyzeFixture("multi-level-barrel-chain");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-multi-level");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("delta"), `delta should be unused, got: ${allUnusedNames}`);
   });
 
   it("should flag epsilon (not re-exported at all)", async () => {
-    const result = await analyzeFixture("multi-level-barrel-chain");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-multi-level");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("epsilon"), `epsilon should be unused, got: ${allUnusedNames}`);
   });
 });
 
-describe("barrel-default-reexport", () => {
+describe("reexport-default", () => {
   it("should not flag Button (used via default re-export through barrel)", async () => {
-    const result = await analyzeFixture("barrel-default-reexport");
-    const fixtureDir = resolve(FIXTURES_DIR, "barrel-default-reexport");
-    const exportsByFile = unusedExportsByFile(result, fixtureDir);
+    const result = await scanFixture("reexport-default");
+    const fixtureDir = resolve(FIXTURES_DIR, "reexport-default");
+    const exportsByFile = deadExportsByFile(result, fixtureDir);
     const buttonExports = exportsByFile["src/components/Button.ts"];
     assert.ok(
       !buttonExports?.includes("default"),
@@ -337,17 +337,17 @@ describe("barrel-default-reexport", () => {
   });
 });
 
-describe("barrel-unused-reexports", () => {
+describe("reexport-unused", () => {
   it("should not flag UsedComponent", async () => {
-    const result = await analyzeFixture("barrel-unused-reexports");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-unused");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("UsedComponent"), "UsedComponent is imported");
   });
 
   it("should not flag unused-source.ts as unused file (file-level: barrel re-export makes it reachable)", async () => {
-    const result = await analyzeFixture("barrel-unused-reexports");
-    const fixtureDir = resolve(FIXTURES_DIR, "barrel-unused-reexports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("reexport-unused");
+    const fixtureDir = resolve(FIXTURES_DIR, "reexport-unused");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.some((filePath) => filePath === "src/components/unused-source.ts"),
       `unused-source.ts should be reachable via barrel re-export (file-level), got: ${unusedFilePaths}`,
@@ -355,11 +355,11 @@ describe("barrel-unused-reexports", () => {
   });
 });
 
-describe("deep-barrel-symbol-tracking", () => {
+describe("deep-reexport-tracking", () => {
   it("should keep used-source.ts reachable (usedHelper consumed through two barrel layers)", async () => {
-    const result = await analyzeFixture("deep-barrel-symbol-tracking");
-    const fixtureDir = resolve(FIXTURES_DIR, "deep-barrel-symbol-tracking");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("deep-reexport-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "deep-reexport-tracking");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/used-source.ts"),
       "used-source.ts should be reachable via barrel-mid → barrel-top → index",
@@ -367,9 +367,9 @@ describe("deep-barrel-symbol-tracking", () => {
   });
 
   it("should not flag unused-source.ts as unused file (file-level: barrel re-export chain makes it reachable)", async () => {
-    const result = await analyzeFixture("deep-barrel-symbol-tracking");
-    const fixtureDir = resolve(FIXTURES_DIR, "deep-barrel-symbol-tracking");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("deep-reexport-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "deep-reexport-tracking");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/unused-source.ts"),
       `unused-source.ts should be reachable via barrel re-export chain (file-level), got: ${unusedFilePaths}`,
@@ -377,9 +377,9 @@ describe("deep-barrel-symbol-tracking", () => {
   });
 
   it("should flag orphan.ts as unused file", async () => {
-    const result = await analyzeFixture("deep-barrel-symbol-tracking");
-    const fixtureDir = resolve(FIXTURES_DIR, "deep-barrel-symbol-tracking");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("deep-reexport-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "deep-reexport-tracking");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -387,8 +387,8 @@ describe("deep-barrel-symbol-tracking", () => {
   });
 
   it("should flag usedHelperSibling as unused export", async () => {
-    const result = await analyzeFixture("deep-barrel-symbol-tracking");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("deep-reexport-tracking");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(
       allUnusedNames.includes("usedHelperSibling"),
       `usedHelperSibling should be unused, got: ${allUnusedNames}`,
@@ -396,11 +396,11 @@ describe("deep-barrel-symbol-tracking", () => {
   });
 });
 
-describe("late-consumed-wildcard-reexport", () => {
+describe("wildcard-late-consume", () => {
   it("should keep color-picker reachable when consumed via plugin that imports from sibling component barrel", async () => {
-    const result = await analyzeFixture("late-consumed-wildcard-reexport");
-    const fixtureDir = resolve(FIXTURES_DIR, "late-consumed-wildcard-reexport");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("wildcard-late-consume");
+    const fixtureDir = resolve(FIXTURES_DIR, "wildcard-late-consume");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/components/color-picker/color-picker.ts"),
       `color-picker.ts should be reachable via plugin → components barrel → color-picker barrel, got unused: ${unusedFilePaths}`,
@@ -408,9 +408,9 @@ describe("late-consumed-wildcard-reexport", () => {
   });
 
   it("should keep color-picker/index.ts reachable as intermediate barrel", async () => {
-    const result = await analyzeFixture("late-consumed-wildcard-reexport");
-    const fixtureDir = resolve(FIXTURES_DIR, "late-consumed-wildcard-reexport");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("wildcard-late-consume");
+    const fixtureDir = resolve(FIXTURES_DIR, "wildcard-late-consume");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/components/color-picker/index.ts"),
       `color-picker/index.ts should be reachable, got unused: ${unusedFilePaths}`,
@@ -418,9 +418,9 @@ describe("late-consumed-wildcard-reexport", () => {
   });
 
   it("should flag unused-widget.ts as unused file (never imported by any plugin)", async () => {
-    const result = await analyzeFixture("late-consumed-wildcard-reexport");
-    const fixtureDir = resolve(FIXTURES_DIR, "late-consumed-wildcard-reexport");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("wildcard-late-consume");
+    const fixtureDir = resolve(FIXTURES_DIR, "wildcard-late-consume");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/components/unused-widget.ts"),
       `unused-widget.ts should be unused, got: ${unusedFilePaths}`,
@@ -428,8 +428,8 @@ describe("late-consumed-wildcard-reexport", () => {
   });
 
   it("should flag ColorUtils as unused export (only ColorPicker consumed from color-picker.ts)", async () => {
-    const result = await analyzeFixture("late-consumed-wildcard-reexport");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("wildcard-late-consume");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(
       allUnusedNames.includes("ColorUtils"),
       `ColorUtils should be unused export, got: ${allUnusedNames}`,
@@ -437,11 +437,11 @@ describe("late-consumed-wildcard-reexport", () => {
   });
 });
 
-describe("import-and-reexport-same-target", () => {
+describe("import-reexport-same", () => {
   it("should create both direct import and re-export edges when a file imports from and re-exports the same module", async () => {
-    const result = await analyzeFixture("import-and-reexport-same-target");
-    const fixtureDir = resolve(FIXTURES_DIR, "import-and-reexport-same-target");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("import-reexport-same");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-reexport-same");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/components/widget.ts"),
       `widget.ts should be reachable via re-export through components barrel (export * from), got unused: ${unusedFilePaths}`,
@@ -449,9 +449,9 @@ describe("import-and-reexport-same-target", () => {
   });
 
   it("should keep helper.ts reachable via both direct import and re-export", async () => {
-    const result = await analyzeFixture("import-and-reexport-same-target");
-    const fixtureDir = resolve(FIXTURES_DIR, "import-and-reexport-same-target");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("import-reexport-same");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-reexport-same");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/components/helper.ts"),
       `helper.ts should be reachable, got unused: ${unusedFilePaths}`,
@@ -459,9 +459,9 @@ describe("import-and-reexport-same-target", () => {
   });
 
   it("should flag orphan.ts as unused (not imported or re-exported by anyone)", async () => {
-    const result = await analyzeFixture("import-and-reexport-same-target");
-    const fixtureDir = resolve(FIXTURES_DIR, "import-and-reexport-same-target");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("import-reexport-same");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-reexport-same");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -469,17 +469,17 @@ describe("import-and-reexport-same-target", () => {
   });
 });
 
-describe("re-export-alias-chain", () => {
+describe("reexport-alias", () => {
   it("should not flag original and renamed (used via aliased re-export chain)", async () => {
-    const result = await analyzeFixture("re-export-alias-chain");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-alias");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("original"), "original is used via aliasC");
     assert.ok(!allUnusedNames.includes("renamed"), "renamed is used via doubleAlias");
   });
 
   it("should flag unusedOriginal (aliased but never consumed)", async () => {
-    const result = await analyzeFixture("re-export-alias-chain");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-alias");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(
       allUnusedNames.includes("unusedOriginal"),
       `unusedOriginal should be unused, got: ${allUnusedNames}`,
@@ -487,8 +487,8 @@ describe("re-export-alias-chain", () => {
   });
 
   it("should flag neverExported (not re-exported by any barrel)", async () => {
-    const result = await analyzeFixture("re-export-alias-chain");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-alias");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(
       allUnusedNames.includes("neverExported"),
       `neverExported should be unused, got: ${allUnusedNames}`,
@@ -496,40 +496,40 @@ describe("re-export-alias-chain", () => {
   });
 });
 
-describe("dynamic-imports", () => {
+describe("import-dynamic", () => {
   it("should keep lazy.ts reachable via dynamic import", async () => {
-    const result = await analyzeFixture("dynamic-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "dynamic-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("import-dynamic");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-dynamic");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(!unusedFilePaths.includes("src/lazy.ts"), "lazy.ts is dynamically imported");
   });
 
   it("should flag orphan.ts as unused file", async () => {
-    const result = await analyzeFixture("dynamic-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "dynamic-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("import-dynamic");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-dynamic");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
   });
 
   it("should flag unused export in utils", async () => {
-    const result = await analyzeFixture("dynamic-imports");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("import-dynamic");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("unused"), `unused should be flagged, got: ${allUnusedNames}`);
   });
 });
 
-describe("type-only-deps", () => {
+describe("type-deps", () => {
   it("should detect type-only imports", async () => {
-    const result = await analyzeFixture("type-only-deps");
+    const result = await scanFixture("type-deps");
     assert.ok(result.totalFiles > 0, "should find files");
   });
 });
 
-describe("unreachable-barrel-subtree", () => {
+describe("orphan-barrel-subtree", () => {
   it("should flag all files in the dead subtree", async () => {
-    const result = await analyzeFixture("unreachable-barrel-subtree");
-    const fixtureDir = resolve(FIXTURES_DIR, "unreachable-barrel-subtree");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("orphan-barrel-subtree");
+    const fixtureDir = resolve(FIXTURES_DIR, "orphan-barrel-subtree");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/subtree/setup.ts"),
       `setup.ts should be unused, got: ${unusedFilePaths}`,
@@ -537,11 +537,11 @@ describe("unreachable-barrel-subtree", () => {
   });
 });
 
-describe("unreachable-mixed-exports", () => {
+describe("orphan-mixed-exports", () => {
   it("should flag both files in unreachable test-utils", async () => {
-    const result = await analyzeFixture("unreachable-mixed-exports");
-    const fixtureDir = resolve(FIXTURES_DIR, "unreachable-mixed-exports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("orphan-mixed-exports");
+    const fixtureDir = resolve(FIXTURES_DIR, "orphan-mixed-exports");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/test-utils/helpers.ts"),
       `helpers.ts should be unused, got: ${unusedFilePaths}`,
@@ -553,48 +553,48 @@ describe("unreachable-mixed-exports", () => {
   });
 });
 
-describe("mixed-named-star-reexports", () => {
+describe("reexport-mixed", () => {
   it("should not flag namedUsed and starUsed", async () => {
-    const result = await analyzeFixture("mixed-named-star-reexports");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-mixed");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("namedUsed"), "namedUsed is consumed");
     assert.ok(!allUnusedNames.includes("starUsed"), "starUsed is consumed");
   });
 
   it("should flag namedUnused and starUnused", async () => {
-    const result = await analyzeFixture("mixed-named-star-reexports");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-mixed");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("namedUnused"), `namedUnused should be flagged, got: ${allUnusedNames}`);
     assert.ok(allUnusedNames.includes("starUnused"), `starUnused should be flagged, got: ${allUnusedNames}`);
   });
 });
 
-describe("path-aliases", () => {
+describe("alias-paths", () => {
   it("should resolve @/ alias and not flag helper as unused", async () => {
-    const result = await analyzeFixture("path-aliases");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("alias-paths");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("helper"), "helper is imported via @/ alias");
   });
 
   it("should not flag any files as unused", async () => {
-    const result = await analyzeFixture("path-aliases");
+    const result = await scanFixture("alias-paths");
     assert.equal(result.unusedFiles.length, 0, "all files reachable via alias");
   });
 });
 
-describe("entry-export-validation", () => {
+describe("entry-validation", () => {
   it("should not flag entry exports by default", async () => {
-    const result = await analyzeFixture("entry-export-validation");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("entry-validation");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("meatdata"), "entry exports are excluded by default");
     assert.ok(!allUnusedNames.includes("config"), "entry exports are excluded by default");
   });
 
   it("should flag entry exports when includeEntryExports is true", async () => {
-    const result = await analyzeFixture("entry-export-validation", {
+    const result = await scanFixture("entry-validation", {
       includeEntryExports: true,
     });
-    const allUnusedNames = unusedExportNames(result);
+    const allUnusedNames = deadExportNames(result);
     assert.ok(
       allUnusedNames.includes("meatdata"),
       `meatdata should be unused when checking entry exports, got: ${allUnusedNames}`,
@@ -606,158 +606,158 @@ describe("entry-export-validation", () => {
   });
 });
 
-describe("namespace-exports", () => {
+describe("ns-exports", () => {
   it("should handle TypeScript namespace exports", async () => {
-    const result = await analyzeFixture("namespace-exports");
+    const result = await scanFixture("ns-exports");
     assert.ok(result.totalFiles > 0, "should parse files with namespace exports");
-    const fixtureDir = resolve(FIXTURES_DIR, "namespace-exports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const fixtureDir = resolve(FIXTURES_DIR, "ns-exports");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(!unusedFilePaths.includes("src/helpers.ts"), "helpers.ts is imported");
   });
 });
 
-describe("cjs-project", () => {
+describe("commonjs-app", () => {
   it("should flag orphan.js as unused", async () => {
-    const result = await analyzeFixture("cjs-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "cjs-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("commonjs-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "commonjs-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/orphan.js"), `orphan.js should be unused, got: ${unusedFilePaths}`);
   });
 });
 
-describe("config-file-project", () => {
+describe("config-detection", () => {
   it("should flag orphan.ts as unused", async () => {
-    const result = await analyzeFixture("config-file-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "config-file-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("config-detection");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-detection");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
   });
 
   it("should flag unusedFunction as unused export", async () => {
-    const result = await analyzeFixture("config-file-project");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("config-detection");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("unusedFunction"), `unusedFunction should be unused, got: ${allUnusedNames}`);
   });
 });
 
-describe("dynamic-import-literals", () => {
+describe("import-dynamic-literal", () => {
   it("should keep notes.ts reachable via dynamic import from parent path", async () => {
-    const result = await analyzeFixture("dynamic-import-literals");
-    const fixtureDir = resolve(FIXTURES_DIR, "dynamic-import-literals");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("import-dynamic-literal");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-dynamic-literal");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(!unusedFilePaths.includes("notes.ts"), "notes.ts is dynamically imported");
   });
 
   it("should flag orphan.ts as unused", async () => {
-    const result = await analyzeFixture("dynamic-import-literals");
-    const fixtureDir = resolve(FIXTURES_DIR, "dynamic-import-literals");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("import-dynamic-literal");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-dynamic-literal");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
   });
 });
 
-describe("arrow-wrapped-dynamic-imports", () => {
+describe("arrow-wrapped-import-dynamic", () => {
   it("should keep Foo.tsx, Bar.tsx, Baz.tsx reachable via wrapped dynamic imports", async () => {
-    const result = await analyzeFixture("arrow-wrapped-dynamic-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "arrow-wrapped-dynamic-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("arrow-wrapped-import-dynamic");
+    const fixtureDir = resolve(FIXTURES_DIR, "arrow-wrapped-import-dynamic");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(!unusedFilePaths.includes("src/Foo.tsx"), "Foo.tsx is lazily imported");
     assert.ok(!unusedFilePaths.includes("src/Bar.tsx"), "Bar.tsx is lazily imported");
     assert.ok(!unusedFilePaths.includes("src/Baz.tsx"), "Baz.tsx is lazily imported");
   });
 
   it("should keep feature.routes.ts reachable via loadChildren arrow", async () => {
-    const result = await analyzeFixture("arrow-wrapped-dynamic-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "arrow-wrapped-dynamic-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("arrow-wrapped-import-dynamic");
+    const fixtureDir = resolve(FIXTURES_DIR, "arrow-wrapped-import-dynamic");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(!unusedFilePaths.includes("src/feature.routes.ts"), "feature.routes.ts is dynamically imported");
   });
 
   it("should flag orphan.ts as unused", async () => {
-    const result = await analyzeFixture("arrow-wrapped-dynamic-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "arrow-wrapped-dynamic-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("arrow-wrapped-import-dynamic");
+    const fixtureDir = resolve(FIXTURES_DIR, "arrow-wrapped-import-dynamic");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
   });
 });
 
-describe("type-only-cycle", () => {
+describe("type-cycle", () => {
   it("should not crash on circular type-only imports", async () => {
-    const result = await analyzeFixture("type-only-cycle");
+    const result = await scanFixture("type-cycle");
     assert.ok(result.totalFiles > 0, "should complete analysis without crashing");
   });
 
   it("should not flag user.ts or post.ts as unused", async () => {
-    const result = await analyzeFixture("type-only-cycle");
-    const fixtureDir = resolve(FIXTURES_DIR, "type-only-cycle");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("type-cycle");
+    const fixtureDir = resolve(FIXTURES_DIR, "type-cycle");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(!unusedFilePaths.includes("src/user.ts"), "user.ts is imported");
     assert.ok(!unusedFilePaths.includes("src/post.ts"), "post.ts is imported");
   });
 
   it("should not flag createUser or createPost as unused", async () => {
-    const result = await analyzeFixture("type-only-cycle");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("type-cycle");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(!allUnusedNames.includes("createUser"), "createUser is used");
     assert.ok(!allUnusedNames.includes("createPost"), "createPost is used");
   });
 });
 
-describe("unreachable-dynamic-subtree", () => {
+describe("orphan-dynamic-subtree", () => {
   it("should flag setup.ts and lazy.ts as unused (subtree not reachable from entry)", async () => {
-    const result = await analyzeFixture("unreachable-dynamic-subtree");
-    const fixtureDir = resolve(FIXTURES_DIR, "unreachable-dynamic-subtree");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("orphan-dynamic-subtree");
+    const fixtureDir = resolve(FIXTURES_DIR, "orphan-dynamic-subtree");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/subtree/setup.ts"), `setup.ts should be unused, got: ${unusedFilePaths}`);
     assert.ok(unusedFilePaths.includes("src/subtree/lazy.ts"), `lazy.ts should be unused, got: ${unusedFilePaths}`);
   });
 });
 
-describe("unreachable-shared-child", () => {
+describe("orphan-shared-child", () => {
   it("should flag subtree/setup.ts and subtree/helpers.ts as unused", async () => {
-    const result = await analyzeFixture("unreachable-shared-child");
-    const fixtureDir = resolve(FIXTURES_DIR, "unreachable-shared-child");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("orphan-shared-child");
+    const fixtureDir = resolve(FIXTURES_DIR, "orphan-shared-child");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/subtree/setup.ts"), `setup.ts should be unused, got: ${unusedFilePaths}`);
     assert.ok(unusedFilePaths.includes("src/subtree/helpers.ts"), `helpers.ts should be unused, got: ${unusedFilePaths}`);
   });
 
   it("should not flag shared/utils.ts as unused (imported by entry)", async () => {
-    const result = await analyzeFixture("unreachable-shared-child");
-    const fixtureDir = resolve(FIXTURES_DIR, "unreachable-shared-child");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("orphan-shared-child");
+    const fixtureDir = resolve(FIXTURES_DIR, "orphan-shared-child");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(!unusedFilePaths.includes("src/shared/utils.ts"), "shared/utils.ts is used by entry");
   });
 });
 
-describe("css-tracking", () => {
+describe("style-tracking", () => {
   it("should track imported CSS as reachable via import graph", async () => {
-    const result = await analyzeFixture("css-tracking");
-    const fixtureDir = resolve(FIXTURES_DIR, "css-tracking");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("style-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "style-tracking");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(!unusedFilePaths.includes("src/styles.css"), "styles.css is imported and should be reachable");
   });
 
   it("should flag unimported CSS files as unused", async () => {
-    const result = await analyzeFixture("css-tracking");
-    const fixtureDir = resolve(FIXTURES_DIR, "css-tracking");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("style-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "style-tracking");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/unused.css"), "unused.css should be flagged as unused");
   });
 
   it("should flag orphan TS files", async () => {
-    const result = await analyzeFixture("css-tracking");
-    const fixtureDir = resolve(FIXTURES_DIR, "css-tracking");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("style-tracking");
+    const fixtureDir = resolve(FIXTURES_DIR, "style-tracking");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
   });
 });
 
-describe("config-files-cjs-mjs", () => {
+describe("config-mixed-formats", () => {
   it("should treat .cjs and .mjs config files as entry points", async () => {
-    const result = await analyzeFixture("config-files-cjs-mjs");
-    const fixtureDir = resolve(FIXTURES_DIR, "config-files-cjs-mjs");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("config-mixed-formats");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-mixed-formats");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("prettier.config.mjs"),
       "prettier.config.mjs should be treated as config entry point",
@@ -773,18 +773,18 @@ describe("config-files-cjs-mjs", () => {
   });
 
   it("should still flag orphan files", async () => {
-    const result = await analyzeFixture("config-files-cjs-mjs");
-    const fixtureDir = resolve(FIXTURES_DIR, "config-files-cjs-mjs");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("config-mixed-formats");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-mixed-formats");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
   });
 });
 
-describe("test-runner-detection", () => {
+describe("test-runner-detect", () => {
   it("should treat .test.ts files as entry points", async () => {
-    const result = await analyzeFixture("test-runner-detection");
-    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detection");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("test-runner-detect");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detect");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/helper.test.ts"),
       `helper.test.ts should be an entry point (vitest detected), got: ${unusedFilePaths}`,
@@ -792,9 +792,9 @@ describe("test-runner-detection", () => {
   });
 
   it("should treat __tests__ files as entry points", async () => {
-    const result = await analyzeFixture("test-runner-detection");
-    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detection");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("test-runner-detect");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detect");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/__tests__/utils.test.ts"),
       `__tests__/utils.test.ts should be an entry point (vitest detected), got: ${unusedFilePaths}`,
@@ -802,9 +802,9 @@ describe("test-runner-detection", () => {
   });
 
   it("should keep files imported by test files as reachable", async () => {
-    const result = await analyzeFixture("test-runner-detection");
-    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detection");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("test-runner-detect");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detect");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/helper.ts"),
       `helper.ts should be reachable via test import, got: ${unusedFilePaths}`,
@@ -816,9 +816,9 @@ describe("test-runner-detection", () => {
   });
 
   it("should still flag orphan files", async () => {
-    const result = await analyzeFixture("test-runner-detection");
-    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detection");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("test-runner-detect");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-runner-detect");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -826,11 +826,11 @@ describe("test-runner-detection", () => {
   });
 });
 
-describe("no-test-runner", () => {
+describe("test-no-runner", () => {
   it("should NOT treat .test.ts as entry point without a test runner dependency", async () => {
-    const result = await analyzeFixture("no-test-runner");
-    const fixtureDir = resolve(FIXTURES_DIR, "no-test-runner");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("test-no-runner");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-no-runner");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/helper.test.ts"),
       `helper.test.ts should be unused without test runner, got: ${unusedFilePaths}`,
@@ -838,35 +838,35 @@ describe("no-test-runner", () => {
   });
 });
 
-describe("path-aliases-mixed-exports", () => {
+describe("alias-mixed-exports", () => {
   it("should resolve @/ aliases and keep used files reachable", async () => {
-    const result = await analyzeFixture("path-aliases-mixed-exports");
-    const fixtureDir = resolve(FIXTURES_DIR, "path-aliases-mixed-exports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("alias-mixed-exports");
+    const fixtureDir = resolve(FIXTURES_DIR, "alias-mixed-exports");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(!unusedFilePaths.includes("src/types.ts"), "types.ts is imported via alias");
     assert.ok(!unusedFilePaths.includes("src/helpers.ts"), "helpers.ts is imported via alias");
   });
 
   it("should flag orphan.ts as unused", async () => {
-    const result = await analyzeFixture("path-aliases-mixed-exports");
-    const fixtureDir = resolve(FIXTURES_DIR, "path-aliases-mixed-exports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("alias-mixed-exports");
+    const fixtureDir = resolve(FIXTURES_DIR, "alias-mixed-exports");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
   });
 
   it("should flag unusedExport and unusedHelper", async () => {
-    const result = await analyzeFixture("path-aliases-mixed-exports");
-    const allUnusedNames = unusedExportNames(result);
+    const result = await scanFixture("alias-mixed-exports");
+    const allUnusedNames = deadExportNames(result);
     assert.ok(allUnusedNames.includes("unusedExport"), `unusedExport should be unused, got: ${allUnusedNames}`);
     assert.ok(allUnusedNames.includes("unusedHelper"), `unusedHelper should be unused, got: ${allUnusedNames}`);
   });
 });
 
-describe("fixture-patterns", () => {
+describe("mock-patterns", () => {
   it("should treat __fixtures__ files as entry points", async () => {
-    const result = await analyzeFixture("fixture-patterns");
-    const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("mock-patterns");
+    const fixtureDir = resolve(FIXTURES_DIR, "mock-patterns");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/__fixtures__/user-data.ts"),
       `__fixtures__/user-data.ts should be an entry point (vitest fixture), got: ${unusedFilePaths}`,
@@ -874,9 +874,9 @@ describe("fixture-patterns", () => {
   });
 
   it("should treat __mocks__ files as unused when only vitest is present (not jest)", async () => {
-    const result = await analyzeFixture("fixture-patterns");
-    const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("mock-patterns");
+    const fixtureDir = resolve(FIXTURES_DIR, "mock-patterns");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/__mocks__/api-client.ts"),
       `__mocks__/api-client.ts should be unused (vitest does not auto-discover __mocks__), got: ${unusedFilePaths}`,
@@ -884,9 +884,9 @@ describe("fixture-patterns", () => {
   });
 
   it("should still flag orphan files", async () => {
-    const result = await analyzeFixture("fixture-patterns");
-    const fixtureDir = resolve(FIXTURES_DIR, "fixture-patterns");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("mock-patterns");
+    const fixtureDir = resolve(FIXTURES_DIR, "mock-patterns");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -894,11 +894,11 @@ describe("fixture-patterns", () => {
   });
 });
 
-describe("electron-project", () => {
+describe("electron-app", () => {
   it("should use directory-based Electron plugin patterns (src/main/**/)", async () => {
-    const result = await analyzeFixture("electron-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "electron-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("electron-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "electron-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/main/index.ts"),
       `src/main/index.ts should be entry via Electron plugin src/main/**/*.{ts,js}, got: ${unusedFilePaths}`,
@@ -922,11 +922,11 @@ describe("electron-project", () => {
   });
 });
 
-describe("electron-file-entries", () => {
+describe("electron-entries", () => {
   it("should detect vite src/main.ts entry and electron src/preload/ dir entries", async () => {
-    const result = await analyzeFixture("electron-file-entries");
-    const fixtureDir = resolve(FIXTURES_DIR, "electron-file-entries");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("electron-entries");
+    const fixtureDir = resolve(FIXTURES_DIR, "electron-entries");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/main.ts"),
       `src/main.ts should be entry via vite plugin, got: ${unusedFilePaths}`,
@@ -950,11 +950,11 @@ describe("electron-file-entries", () => {
   });
 });
 
-describe("ava-project", () => {
+describe("ava-app", () => {
   it("should detect ava test files as entry points", async () => {
-    const result = await analyzeFixture("ava-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "ava-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("ava-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "ava-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("test/math.test.ts"),
       `test/math.test.ts should be entry via ava plugin, got: ${unusedFilePaths}`,
@@ -970,11 +970,11 @@ describe("ava-project", () => {
   });
 });
 
-describe("source-path-fallback", () => {
+describe("src-path-fallback", () => {
   it("should resolve dist/ exports to src/index.ts fallback when exact match not found", async () => {
-    const result = await analyzeFixture("source-path-fallback");
-    const fixtureDir = resolve(FIXTURES_DIR, "source-path-fallback");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("src-path-fallback");
+    const fixtureDir = resolve(FIXTURES_DIR, "src-path-fallback");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/index.ts"),
       `src/index.ts should be resolved from dist/index.js export, got: ${unusedFilePaths}`,
@@ -986,9 +986,9 @@ describe("source-path-fallback", () => {
   });
 
   it("should resolve dist/cli.js to src/cli/index.ts via tsconfig outDir", async () => {
-    const result = await analyzeFixture("source-path-fallback");
-    const fixtureDir = resolve(FIXTURES_DIR, "source-path-fallback");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("src-path-fallback");
+    const fixtureDir = resolve(FIXTURES_DIR, "src-path-fallback");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/cli/index.ts"),
       `src/cli/index.ts should be reachable via dist/cli.js bin entry, got: ${unusedFilePaths}`,
@@ -1000,9 +1000,9 @@ describe("source-path-fallback", () => {
   });
 
   it("should still flag orphan files", async () => {
-    const result = await analyzeFixture("source-path-fallback");
-    const fixtureDir = resolve(FIXTURES_DIR, "source-path-fallback");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("src-path-fallback");
+    const fixtureDir = resolve(FIXTURES_DIR, "src-path-fallback");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1010,11 +1010,11 @@ describe("source-path-fallback", () => {
   });
 });
 
-describe("heuristic-no-directory-fallback", () => {
+describe("heuristic-no-dir-fallback", () => {
   it("should not resolve dist/cli.js to src/cli/index.ts without tsconfig outDir", async () => {
-    const result = await analyzeFixture("heuristic-no-directory-fallback");
-    const fixtureDir = resolve(FIXTURES_DIR, "heuristic-no-directory-fallback");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("heuristic-no-dir-fallback");
+    const fixtureDir = resolve(FIXTURES_DIR, "heuristic-no-dir-fallback");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/cli/index.ts"),
       `src/cli/index.ts should be unused (heuristic should not do directory fallback), got: ${unusedFilePaths}`,
@@ -1030,11 +1030,11 @@ describe("heuristic-no-directory-fallback", () => {
   });
 });
 
-describe("dash-spec-patterns", () => {
+describe("spec-dash-patterns", () => {
   it("should treat *-spec.ts and *_spec.ts as unused (not matched by vitest/jest patterns)", async () => {
-    const result = await analyzeFixture("dash-spec-patterns");
-    const fixtureDir = resolve(FIXTURES_DIR, "dash-spec-patterns");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("spec-dash-patterns");
+    const fixtureDir = resolve(FIXTURES_DIR, "spec-dash-patterns");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("spec/utils-spec.ts"),
       `utils-spec.ts should be unused (*-spec not matched by vitest), got: ${unusedFilePaths}`,
@@ -1046,9 +1046,9 @@ describe("dash-spec-patterns", () => {
   });
 
   it("should still flag orphan files", async () => {
-    const result = await analyzeFixture("dash-spec-patterns");
-    const fixtureDir = resolve(FIXTURES_DIR, "dash-spec-patterns");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("spec-dash-patterns");
+    const fixtureDir = resolve(FIXTURES_DIR, "spec-dash-patterns");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1056,11 +1056,11 @@ describe("dash-spec-patterns", () => {
   });
 });
 
-describe("workspace-explicit-entries", () => {
+describe("workspace-explicit", () => {
   it("should treat workspace package main entry as reachable and keep non-imported files unused", async () => {
-    const result = await analyzeFixture("workspace-explicit-entries");
-    const fixtureDir = resolve(FIXTURES_DIR, "workspace-explicit-entries");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("workspace-explicit");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-explicit");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("packages/ui/src/button.ts"),
       `packages/ui/src/button.ts should be reachable (workspace main entry), got: ${unusedFilePaths}`,
@@ -1080,11 +1080,11 @@ describe("workspace-explicit-entries", () => {
   });
 });
 
-describe("workspace-default-fallback", () => {
+describe("workspace-defaults", () => {
   it("should fall back to src/index when package.json entries point to non-existent dist", async () => {
-    const result = await analyzeFixture("workspace-default-fallback");
-    const fixtureDir = resolve(FIXTURES_DIR, "workspace-default-fallback");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("workspace-defaults");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-defaults");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("packages/lib-a/src/index.ts"),
       `packages/lib-a/src/index.ts should be reachable (default fallback from dist entry), got: ${unusedFilePaths}`,
@@ -1104,11 +1104,11 @@ describe("workspace-default-fallback", () => {
   });
 });
 
-describe("workspace-wildcard-exports", () => {
+describe("workspace-wildcards", () => {
   it("should expand wildcard exports as entry points and resolve via imports", async () => {
-    const result = await analyzeFixture("workspace-wildcard-exports");
-    const fixtureDir = resolve(FIXTURES_DIR, "workspace-wildcard-exports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("workspace-wildcards");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-wildcards");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("packages/ui/src/components/index.ts"),
       `components/index.ts should be reachable via wildcard export resolution, got: ${unusedFilePaths}`,
@@ -1128,11 +1128,11 @@ describe("workspace-wildcard-exports", () => {
   });
 });
 
-describe("wildcard-subpath-exports", () => {
+describe("wildcard-subpath", () => {
   it("should expand wildcard exports as entry points", async () => {
-    const result = await analyzeFixture("wildcard-subpath-exports");
-    const fixtureDir = resolve(FIXTURES_DIR, "wildcard-subpath-exports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("wildcard-subpath");
+    const fixtureDir = resolve(FIXTURES_DIR, "wildcard-subpath");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/templates/welcome.tsx"),
       `welcome.tsx should be reachable — wildcard exports are expanded as entries, got: ${unusedFilePaths}`,
@@ -1148,11 +1148,11 @@ describe("wildcard-subpath-exports", () => {
   });
 });
 
-describe("import-meta-glob", () => {
+describe("vite-glob-import", () => {
   it("should resolve import.meta.glob patterns including array syntax", async () => {
-    const result = await analyzeFixture("import-meta-glob");
-    const fixtureDir = resolve(FIXTURES_DIR, "import-meta-glob");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("vite-glob-import");
+    const fixtureDir = resolve(FIXTURES_DIR, "vite-glob-import");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/modules/alpha.ts"),
       `alpha.ts should be reachable via import.meta.glob, got: ${unusedFilePaths}`,
@@ -1172,11 +1172,11 @@ describe("import-meta-glob", () => {
   });
 });
 
-describe("jest-mocks", () => {
+describe("jest-mock-files", () => {
   it("should treat __mocks__ files as test entry points when jest is present", async () => {
-    const result = await analyzeFixture("jest-mocks");
-    const fixtureDir = resolve(FIXTURES_DIR, "jest-mocks");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("jest-mock-files");
+    const fixtureDir = resolve(FIXTURES_DIR, "jest-mock-files");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("__mocks__/fs.ts"),
       `__mocks__/fs.ts should be reachable as Jest manual mock entry, got: ${unusedFilePaths}`,
@@ -1192,11 +1192,11 @@ describe("jest-mocks", () => {
   });
 });
 
-describe("jest-test-match", () => {
+describe("jest-match", () => {
   it("should use custom testMatch patterns from jest.config.ts instead of defaults", async () => {
-    const result = await analyzeFixture("jest-test-match");
-    const fixtureDir = resolve(FIXTURES_DIR, "jest-test-match");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("jest-match");
+    const fixtureDir = resolve(FIXTURES_DIR, "jest-match");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/utils.test.ts"),
       `src/utils.test.ts should be reachable via custom testMatch, got: ${unusedFilePaths}`,
@@ -1216,11 +1216,11 @@ describe("jest-test-match", () => {
   });
 });
 
-describe("require-context", () => {
+describe("webpack-require-ctx", () => {
   it("should resolve require.context patterns with recursive flag and regex filter", async () => {
-    const result = await analyzeFixture("require-context");
-    const fixtureDir = resolve(FIXTURES_DIR, "require-context");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("webpack-require-ctx");
+    const fixtureDir = resolve(FIXTURES_DIR, "webpack-require-ctx");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/components/Button.tsx"),
       `Button.tsx should be reachable via require.context('./components', true, /\\.tsx$/), got: ${unusedFilePaths}`,
@@ -1240,11 +1240,11 @@ describe("require-context", () => {
   });
 });
 
-describe("storybook-project", () => {
+describe("storybook-app", () => {
   it("should treat .stories.ts files as entry points when @storybook/* is present", async () => {
-    const result = await analyzeFixture("storybook-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "storybook-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("storybook-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "storybook-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/components/Button.stories.ts"),
       `Button.stories.ts should be entry point, got: ${unusedFilePaths}`,
@@ -1252,9 +1252,9 @@ describe("storybook-project", () => {
   });
 
   it("should treat .storybook config files as entry points", async () => {
-    const result = await analyzeFixture("storybook-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "storybook-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("storybook-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "storybook-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes(".storybook/main.ts"),
       `.storybook/main.ts should be entry point, got: ${unusedFilePaths}`,
@@ -1266,9 +1266,9 @@ describe("storybook-project", () => {
   });
 
   it("should mark components imported by stories as used", async () => {
-    const result = await analyzeFixture("storybook-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "storybook-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("storybook-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "storybook-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/components/Button.ts"),
       `Button.ts should be reachable from stories, got: ${unusedFilePaths}`,
@@ -1276,9 +1276,9 @@ describe("storybook-project", () => {
   });
 
   it("should still flag orphan files in storybook projects", async () => {
-    const result = await analyzeFixture("storybook-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "storybook-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("storybook-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "storybook-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1286,11 +1286,11 @@ describe("storybook-project", () => {
   });
 });
 
-describe("graphql-files", () => {
+describe("graphql-schema", () => {
   it("should track imported graphql files as reachable", async () => {
-    const result = await analyzeFixture("graphql-files");
-    const fixtureDir = resolve(FIXTURES_DIR, "graphql-files");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("graphql-schema");
+    const fixtureDir = resolve(FIXTURES_DIR, "graphql-schema");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/schema.graphql"),
       `schema.graphql is imported and should be reachable, got: ${unusedFilePaths}`,
@@ -1298,9 +1298,9 @@ describe("graphql-files", () => {
   });
 
   it("should flag unused graphql files", async () => {
-    const result = await analyzeFixture("graphql-files");
-    const fixtureDir = resolve(FIXTURES_DIR, "graphql-files");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("graphql-schema");
+    const fixtureDir = resolve(FIXTURES_DIR, "graphql-schema");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/unused.graphql"),
       `unused.graphql should be flagged as unused, got: ${unusedFilePaths}`,
@@ -1308,11 +1308,11 @@ describe("graphql-files", () => {
   });
 });
 
-describe("nextjs-pages-mdx", () => {
+describe("next-pages-mdx", () => {
   it("should not treat standalone MDX files in pages/ as entry points", async () => {
-    const result = await analyzeFixture("nextjs-pages-mdx");
-    const fixtureDir = resolve(FIXTURES_DIR, "nextjs-pages-mdx");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("next-pages-mdx");
+    const fixtureDir = resolve(FIXTURES_DIR, "next-pages-mdx");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("pages/about.mdx"),
       `about.mdx should be unused (not auto-discovered as page entry), got: ${unusedFilePaths}`,
@@ -1320,9 +1320,9 @@ describe("nextjs-pages-mdx", () => {
   });
 
   it("should still discover TSX files in pages/ as entry points", async () => {
-    const result = await analyzeFixture("nextjs-pages-mdx");
-    const fixtureDir = resolve(FIXTURES_DIR, "nextjs-pages-mdx");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("next-pages-mdx");
+    const fixtureDir = resolve(FIXTURES_DIR, "next-pages-mdx");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("pages/index.tsx"),
       `index.tsx should be entry point, got: ${unusedFilePaths}`,
@@ -1330,9 +1330,9 @@ describe("nextjs-pages-mdx", () => {
   });
 
   it("should mark components imported by pages as reachable", async () => {
-    const result = await analyzeFixture("nextjs-pages-mdx");
-    const fixtureDir = resolve(FIXTURES_DIR, "nextjs-pages-mdx");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("next-pages-mdx");
+    const fixtureDir = resolve(FIXTURES_DIR, "next-pages-mdx");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/Home.ts"),
       `Home.ts is imported by index.tsx and should be reachable, got: ${unusedFilePaths}`,
@@ -1340,11 +1340,11 @@ describe("nextjs-pages-mdx", () => {
   });
 });
 
-describe("orm-migrations", () => {
+describe("migration-orm", () => {
   it("should treat migration files as entry points when ORM is detected", async () => {
-    const result = await analyzeFixture("orm-migrations");
-    const fixtureDir = resolve(FIXTURES_DIR, "orm-migrations");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("migration-orm");
+    const fixtureDir = resolve(FIXTURES_DIR, "migration-orm");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("migrations/001-create-users.ts"),
       `migration file should be entry point when knex is present, got: ${unusedFilePaths}`,
@@ -1352,9 +1352,9 @@ describe("orm-migrations", () => {
   });
 
   it("should still flag orphan files", async () => {
-    const result = await analyzeFixture("orm-migrations");
-    const fixtureDir = resolve(FIXTURES_DIR, "orm-migrations");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("migration-orm");
+    const fixtureDir = resolve(FIXTURES_DIR, "migration-orm");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1362,11 +1362,11 @@ describe("orm-migrations", () => {
   });
 });
 
-describe("migrations-no-orm", () => {
+describe("migration-raw", () => {
   it("should NOT treat migration files as entry points without ORM dependency", async () => {
-    const result = await analyzeFixture("migrations-no-orm");
-    const fixtureDir = resolve(FIXTURES_DIR, "migrations-no-orm");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("migration-raw");
+    const fixtureDir = resolve(FIXTURES_DIR, "migration-raw");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("migrations/001-create-users.ts"),
       `migration file should be unused without ORM, got: ${unusedFilePaths}`,
@@ -1374,11 +1374,11 @@ describe("migrations-no-orm", () => {
   });
 });
 
-describe("css-imports", () => {
+describe("style-imports", () => {
   it("should track CSS files imported from TS as reachable", async () => {
-    const result = await analyzeFixture("css-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "css-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("style-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "style-imports");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/app.css"),
       `app.css is imported by index.ts and should be reachable, got: ${unusedFilePaths}`,
@@ -1386,9 +1386,9 @@ describe("css-imports", () => {
   });
 
   it("should track CSS @import chains as reachable", async () => {
-    const result = await analyzeFixture("css-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "css-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("style-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "style-imports");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("styles/base.css"),
       `base.css is @imported from app.css and should be reachable, got: ${unusedFilePaths}`,
@@ -1396,9 +1396,9 @@ describe("css-imports", () => {
   });
 
   it("should flag orphan CSS files as unused", async () => {
-    const result = await analyzeFixture("css-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "css-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("style-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "style-imports");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("styles/orphan.css"),
       `orphan.css is not imported and should be unused, got: ${unusedFilePaths}`,
@@ -1406,11 +1406,11 @@ describe("css-imports", () => {
   });
 });
 
-describe("nestjs-project", () => {
+describe("nestjs-app", () => {
   it("should detect NestJS convention files as entry points", async () => {
-    const result = await analyzeFixture("nestjs-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "nestjs-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("nestjs-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "nestjs-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/app.module.ts"),
       `app.module.ts should be entry point (NestJS module), got: ${unusedFilePaths}`,
@@ -1422,9 +1422,9 @@ describe("nestjs-project", () => {
   });
 
   it("should flag non-NestJS files as unused", async () => {
-    const result = await analyzeFixture("nestjs-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "nestjs-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("nestjs-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "nestjs-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1432,11 +1432,11 @@ describe("nestjs-project", () => {
   });
 });
 
-describe("node-test-runner", () => {
+describe("test-node-runner", () => {
   it("should treat node --test files as entry points", async () => {
-    const result = await analyzeFixture("node-test-runner");
-    const fixtureDir = resolve(FIXTURES_DIR, "node-test-runner");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("test-node-runner");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-node-runner");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/__tests__/main.test.ts"),
       `main.test.ts should be an entry point (node test runner detected), got: ${unusedFilePaths}`,
@@ -1444,9 +1444,9 @@ describe("node-test-runner", () => {
   });
 
   it("should flag non-test orphan files as unused", async () => {
-    const result = await analyzeFixture("node-test-runner");
-    const fixtureDir = resolve(FIXTURES_DIR, "node-test-runner");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("test-node-runner");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-node-runner");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1454,11 +1454,11 @@ describe("node-test-runner", () => {
   });
 });
 
-describe("config-flag-scripts", () => {
+describe("config-script-flags", () => {
   it("should detect --config flag files as entry points", async () => {
-    const result = await analyzeFixture("config-flag-scripts");
-    const fixtureDir = resolve(FIXTURES_DIR, "config-flag-scripts");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("config-script-flags");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-script-flags");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("db/drizzle.config.ts"),
       `drizzle.config.ts should be entry point (--config flag), got: ${unusedFilePaths}`,
@@ -1466,9 +1466,9 @@ describe("config-flag-scripts", () => {
   });
 
   it("should detect tsx script files as entry points", async () => {
-    const result = await analyzeFixture("config-flag-scripts");
-    const fixtureDir = resolve(FIXTURES_DIR, "config-flag-scripts");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("config-script-flags");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-script-flags");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("scripts/seed.ts"),
       `seed.ts should be entry point (tsx script), got: ${unusedFilePaths}`,
@@ -1476,21 +1476,21 @@ describe("config-flag-scripts", () => {
   });
 
   it("should flag orphan files as unused", async () => {
-    const result = await analyzeFixture("config-flag-scripts");
-    const fixtureDir = resolve(FIXTURES_DIR, "config-flag-scripts");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("config-script-flags");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-script-flags");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
-      `orphan.ts should be unused (config-flag-scripts), got: ${unusedFilePaths}`,
+      `orphan.ts should be unused (config-script-flags), got: ${unusedFilePaths}`,
     );
   });
 });
 
-describe("i18n-project", () => {
+describe("i18n-app", () => {
   it("should mark locale JSON files as always-used when i18next is a dependency", async () => {
-    const result = await analyzeFixture("i18n-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "i18n-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("i18n-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "i18n-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("public/locales/en.json"),
       `en.json should be always-used (i18next locale), got: ${unusedFilePaths}`,
@@ -1498,21 +1498,21 @@ describe("i18n-project", () => {
   });
 
   it("should flag orphan files as unused", async () => {
-    const result = await analyzeFixture("i18n-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "i18n-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("i18n-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "i18n-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
-      `orphan.ts should be unused (i18n-project), got: ${unusedFilePaths}`,
+      `orphan.ts should be unused (i18n-app), got: ${unusedFilePaths}`,
     );
   });
 });
 
-describe("standalone-subproject-excluded", () => {
+describe("subproject-standalone", () => {
   it("should still scan standalone sub-project files and report unused", async () => {
-    const result = await analyzeFixture("standalone-subproject-excluded");
-    const fixtureDir = resolve(FIXTURES_DIR, "standalone-subproject-excluded");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("subproject-standalone");
+    const fixtureDir = resolve(FIXTURES_DIR, "subproject-standalone");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.some((filePath: string) => filePath.startsWith("docs/")),
       `docs/ files should still be scanned, got: ${unusedFilePaths}`,
@@ -1520,9 +1520,9 @@ describe("standalone-subproject-excluded", () => {
   });
 
   it("should still detect unused files in the main app", async () => {
-    const result = await analyzeFixture("standalone-subproject-excluded");
-    const fixtureDir = resolve(FIXTURES_DIR, "standalone-subproject-excluded");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("subproject-standalone");
+    const fixtureDir = resolve(FIXTURES_DIR, "subproject-standalone");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("app/src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1530,11 +1530,11 @@ describe("standalone-subproject-excluded", () => {
   });
 });
 
-describe("build-script-source-map", () => {
+describe("build-script-map", () => {
   it("should resolve build/ script references to src/ source files", async () => {
-    const result = await analyzeFixture("build-script-source-map");
-    const fixtureDir = resolve(FIXTURES_DIR, "build-script-source-map");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("build-script-map");
+    const fixtureDir = resolve(FIXTURES_DIR, "build-script-map");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/scripts/migrate.ts"),
       `migrate.ts should be entry (build/ → src/ mapping), got: ${unusedFilePaths}`,
@@ -1546,9 +1546,9 @@ describe("build-script-source-map", () => {
   });
 
   it("should flag orphan files as unused", async () => {
-    const result = await analyzeFixture("build-script-source-map");
-    const fixtureDir = resolve(FIXTURES_DIR, "build-script-source-map");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("build-script-map");
+    const fixtureDir = resolve(FIXTURES_DIR, "build-script-map");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1556,11 +1556,11 @@ describe("build-script-source-map", () => {
   });
 });
 
-describe("tsconfig-path-alias-wildcard", () => {
+describe("tsconfig-wildcard", () => {
   it("should resolve wildcard * path alias that shadows Node.js built-in modules", async () => {
-    const result = await analyzeFixture("tsconfig-path-alias-wildcard");
-    const fixtureDir = resolve(FIXTURES_DIR, "tsconfig-path-alias-wildcard");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("tsconfig-wildcard");
+    const fixtureDir = resolve(FIXTURES_DIR, "tsconfig-wildcard");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/constants/api.ts"),
       `constants/api.ts should be resolved via wildcard path alias, got: ${unusedFilePaths}`,
@@ -1568,9 +1568,9 @@ describe("tsconfig-path-alias-wildcard", () => {
   });
 
   it("should flag orphan files as unused", async () => {
-    const result = await analyzeFixture("tsconfig-path-alias-wildcard");
-    const fixtureDir = resolve(FIXTURES_DIR, "tsconfig-path-alias-wildcard");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("tsconfig-wildcard");
+    const fixtureDir = resolve(FIXTURES_DIR, "tsconfig-wildcard");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused (wildcard alias), got: ${unusedFilePaths}`,
@@ -1578,11 +1578,11 @@ describe("tsconfig-path-alias-wildcard", () => {
   });
 });
 
-describe("scss-partials", () => {
+describe("scss-partial", () => {
   it("should resolve SCSS partial imports with underscore prefix", async () => {
-    const result = await analyzeFixture("scss-partials");
-    const fixtureDir = resolve(FIXTURES_DIR, "scss-partials");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("scss-partial");
+    const fixtureDir = resolve(FIXTURES_DIR, "scss-partial");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/styles/_variables.scss"),
       `_variables.scss should be used (SCSS partial import), got: ${unusedFilePaths}`,
@@ -1594,9 +1594,9 @@ describe("scss-partials", () => {
   });
 
   it("should flag orphan SCSS partials as unused", async () => {
-    const result = await analyzeFixture("scss-partials");
-    const fixtureDir = resolve(FIXTURES_DIR, "scss-partials");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("scss-partial");
+    const fixtureDir = resolve(FIXTURES_DIR, "scss-partial");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/styles/_orphan.scss"),
       `_orphan.scss should be unused, got: ${unusedFilePaths}`,
@@ -1604,11 +1604,11 @@ describe("scss-partials", () => {
   });
 });
 
-describe("custom-test-extensions", () => {
+describe("test-custom-ext", () => {
   it("should treat .clienttest, .servertest, and __e2e__ test files as unused (non-standard patterns)", async () => {
-    const result = await analyzeFixture("custom-test-extensions");
-    const fixtureDir = resolve(FIXTURES_DIR, "custom-test-extensions");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("test-custom-ext");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-custom-ext");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/utils.clienttest.ts"),
       `.clienttest.ts should be unused (non-standard pattern), got: ${unusedFilePaths}`,
@@ -1624,9 +1624,9 @@ describe("custom-test-extensions", () => {
   });
 
   it("should flag orphan files as unused", async () => {
-    const result = await analyzeFixture("custom-test-extensions");
-    const fixtureDir = resolve(FIXTURES_DIR, "custom-test-extensions");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("test-custom-ext");
+    const fixtureDir = resolve(FIXTURES_DIR, "test-custom-ext");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1634,11 +1634,11 @@ describe("custom-test-extensions", () => {
   });
 });
 
-describe("vue-sfc", () => {
+describe("vue-app", () => {
   it("should follow imports inside Vue SFC script blocks", async () => {
-    const result = await analyzeFixture("vue-sfc");
-    const fixtureDir = resolve(FIXTURES_DIR, "vue-sfc");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("vue-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "vue-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/App.vue"),
       `App.vue should be used (imported from main.ts), got: ${unusedFilePaths}`,
@@ -1654,9 +1654,9 @@ describe("vue-sfc", () => {
   });
 
   it("should flag orphan Vue components as unused", async () => {
-    const result = await analyzeFixture("vue-sfc");
-    const fixtureDir = resolve(FIXTURES_DIR, "vue-sfc");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("vue-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "vue-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1668,11 +1668,11 @@ describe("vue-sfc", () => {
   });
 });
 
-describe("vite-entry", () => {
+describe("vite-app", () => {
   it("should detect entry points from vite.config rollupOptions.input", async () => {
-    const result = await analyzeFixture("vite-entry");
-    const fixtureDir = resolve(FIXTURES_DIR, "vite-entry");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("vite-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "vite-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/main.tsx"),
       `main.tsx should be used (vite entry), got: ${unusedFilePaths}`,
@@ -1684,9 +1684,9 @@ describe("vite-entry", () => {
   });
 
   it("should flag orphan files as unused with vite entry", async () => {
-    const result = await analyzeFixture("vite-entry");
-    const fixtureDir = resolve(FIXTURES_DIR, "vite-entry");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("vite-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "vite-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1694,11 +1694,11 @@ describe("vite-entry", () => {
   });
 });
 
-describe("outdir-source-map", () => {
+describe("outdir-mapping", () => {
   it("should resolve built paths back to source via tsconfig outDir", async () => {
-    const result = await analyzeFixture("outdir-source-map");
-    const fixtureDir = resolve(FIXTURES_DIR, "outdir-source-map");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("outdir-mapping");
+    const fixtureDir = resolve(FIXTURES_DIR, "outdir-mapping");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("main/index.ts"),
       `main/index.ts should be used (entry via outDir mapping), got: ${unusedFilePaths}`,
@@ -1710,9 +1710,9 @@ describe("outdir-source-map", () => {
   });
 
   it("should flag orphan files even with outDir source mapping", async () => {
-    const result = await analyzeFixture("outdir-source-map");
-    const fixtureDir = resolve(FIXTURES_DIR, "outdir-source-map");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("outdir-mapping");
+    const fixtureDir = resolve(FIXTURES_DIR, "outdir-mapping");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("main/orphan.ts"),
       `main/orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -1721,7 +1721,7 @@ describe("outdir-source-map", () => {
 });
 
 test("should resolve imports with query parameters (e.g. ?url, ?raw, ?worker)", async () => {
-  const result = await analyzeFixture("query-param-imports");
+  const result = await scanFixture("import-query-param");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith("config.ts")),
@@ -1738,7 +1738,7 @@ test("should resolve imports with query parameters (e.g. ?url, ?raw, ?worker)", 
 });
 
 test("should flag orphan files even with query-param imports present", async () => {
-  const result = await analyzeFixture("query-param-imports");
+  const result = await scanFixture("import-query-param");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
     unusedFilePaths.some((filePath) => filePath.endsWith("orphan.ts")),
@@ -1747,7 +1747,7 @@ test("should flag orphan files even with query-param imports present", async () 
 });
 
 test("should detect script entry points with --key value flag pairs", async () => {
-  const result = await analyzeFixture("script-flag-args");
+  const result = await scanFixture("script-flags");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith("scripts/build.ts")),
@@ -1768,7 +1768,7 @@ test("should detect script entry points with --key value flag pairs", async () =
 });
 
 test("should detect Angular workspace entry points from angular.json", async () => {
-  const result = await analyzeFixture("angular-workspace");
+  const result = await scanFixture("angular-workspace");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith("main.ts")),
@@ -1809,7 +1809,7 @@ test("should detect Angular workspace entry points from angular.json", async () 
 });
 
 test("should resolve #hash subpath imports via tsconfig paths with .js extension", async () => {
-  const result = await analyzeFixture("subpath-imports");
+  const result = await scanFixture("import-subpath");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith("api/user.ts")),
@@ -1822,7 +1822,7 @@ test("should resolve #hash subpath imports via tsconfig paths with .js extension
 });
 
 test("should treat vitest setupFiles as entry points", async () => {
-  const result = await analyzeFixture("vitest-setup-files");
+  const result = await scanFixture("vitest-setup");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith("test/setup.ts")),
@@ -1839,7 +1839,7 @@ test("should treat vitest setupFiles as entry points", async () => {
 });
 
 test("should detect new URL with import.meta.url as imports (web workers)", async () => {
-  const result = await analyzeFixture("new-url-worker");
+  const result = await scanFixture("worker-new-url");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith("worker.js")),
@@ -1852,7 +1852,7 @@ test("should detect new URL with import.meta.url as imports (web workers)", asyn
 });
 
 test("should exclude multi-segment config files (e.g. cypress.config.contract.js)", async () => {
-  const result = await analyzeFixture("config-multi-segment");
+  const result = await scanFixture("config-compound-name");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith("cypress.config.contract.js")),
@@ -1869,7 +1869,7 @@ test("should exclude multi-segment config files (e.g. cypress.config.contract.js
 });
 
 test("should treat jest __mocks__ files as entry points", async () => {
-  const result = await analyzeFixture("jest-module-mapper");
+  const result = await scanFixture("jest-mapper");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith("__mocks__/styleMock.js")),
@@ -1886,7 +1886,7 @@ test("should treat jest __mocks__ files as entry points", async () => {
 });
 
 test("should resolve CSS files imported via tsconfig path aliases", async () => {
-  const result = await analyzeFixture("css-path-alias");
+  const result = await scanFixture("style-alias");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith("globals.css")),
@@ -1903,7 +1903,7 @@ test("should resolve CSS files imported via tsconfig path aliases", async () => 
 });
 
 test("should resolve @/ imports via Next.js default path alias when tsconfig is empty", async () => {
-  const result = await analyzeFixture("nextjs-empty-tsconfig");
+  const result = await scanFixture("next-empty-tsconfig");
   const unusedFilePaths = result.unusedFiles.map((file) => file.path);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith("src/env.ts")),
@@ -1915,11 +1915,11 @@ test("should resolve @/ imports via Next.js default path alias when tsconfig is 
   );
 });
 
-describe("docusaurus-content", () => {
+describe("docusaurus-docs", () => {
   it("should exclude docs/ and blog/ content directories from file discovery", async () => {
-    const result = await analyzeFixture("docusaurus-content");
-    const fixtureDir = resolve(FIXTURES_DIR, "docusaurus-content");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("docusaurus-docs");
+    const fixtureDir = resolve(FIXTURES_DIR, "docusaurus-docs");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.some((filePath) => filePath.startsWith("docs/")),
       `docs/ content files should not be discovered at all, got unused: ${unusedFilePaths}`,
@@ -1936,9 +1936,9 @@ describe("docusaurus-content", () => {
 });
 
 it("should resolve React Native platform extensions (.web.ts, .native.ts) when react-native detected", async () => {
-  const result = await analyzeFixture("react-native-platform");
-  const fixtureDir = resolve(FIXTURES_DIR, "react-native-platform");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("rn-platform");
+  const fixtureDir = resolve(FIXTURES_DIR, "rn-platform");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("src/handler.web.ts"),
     `handler.web.ts should be reachable via platform extension, got unused: ${unusedFilePaths}`,
@@ -1954,9 +1954,9 @@ it("should resolve React Native platform extensions (.web.ts, .native.ts) when r
 });
 
 it("should resolve React Native .ios.tsx and .android.tsx platform variants as reachable", async () => {
-  const result = await analyzeFixture("react-native-platform");
-  const fixtureDir = resolve(FIXTURES_DIR, "react-native-platform");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("rn-platform");
+  const fixtureDir = resolve(FIXTURES_DIR, "rn-platform");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("src/button.tsx"),
     `button.tsx should be reachable as the default platform variant, got unused: ${unusedFilePaths}`,
@@ -1971,10 +1971,10 @@ it("should resolve React Native .ios.tsx and .android.tsx platform variants as r
   );
 });
 
-it("should detect react-app-rewired as CRA variant and use src/index as entry", async () => {
-  const result = await analyzeFixture("react-app-rewired");
-  const fixtureDir = resolve(FIXTURES_DIR, "react-app-rewired");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+it("should detect cra-rewired as CRA variant and use src/index as entry", async () => {
+  const result = await scanFixture("cra-rewired");
+  const fixtureDir = resolve(FIXTURES_DIR, "cra-rewired");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("src/index.tsx"),
     `src/index.tsx should be reachable as CRA entry point, got unused: ${unusedFilePaths}`,
@@ -1994,9 +1994,9 @@ it("should detect react-app-rewired as CRA variant and use src/index as entry", 
 });
 
 it("should resolve Storybook MDX imports from story files", async () => {
-  const result = await analyzeFixture("storybook-mdx-imports");
-  const fixtureDir = resolve(FIXTURES_DIR, "storybook-mdx-imports");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("storybook-mdx-import");
+  const fixtureDir = resolve(FIXTURES_DIR, "storybook-mdx-import");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("src/components/Alert.story.tsx"),
     `Alert.story.tsx should be reachable as storybook entry, got unused: ${unusedFilePaths}`,
@@ -2012,9 +2012,9 @@ it("should resolve Storybook MDX imports from story files", async () => {
 });
 
 it("should resolve deep workspace imports like @pkg/shared/hooks/assets", async () => {
-  const result = await analyzeFixture("deep-workspace-imports");
-  const fixtureDir = resolve(FIXTURES_DIR, "deep-workspace-imports");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("workspace-deep-imports");
+  const fixtureDir = resolve(FIXTURES_DIR, "workspace-deep-imports");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("packages/shared/src/hooks/assets.ts"),
     `hooks/assets.ts should be reachable via deep workspace import, got unused: ${unusedFilePaths}`,
@@ -2030,9 +2030,9 @@ it("should resolve deep workspace imports like @pkg/shared/hooks/assets", async 
 });
 
 it("should mark config files in non-workspace directories as always used via global patterns", async () => {
-  const result = await analyzeFixture("global-config-patterns");
-  const fixtureDir = resolve(FIXTURES_DIR, "global-config-patterns");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("config-global-scope");
+  const fixtureDir = resolve(FIXTURES_DIR, "config-global-scope");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("templates/next-app/postcss.config.mjs"),
     `postcss.config.mjs should be always used via global pattern, got unused: ${unusedFilePaths}`,
@@ -2048,9 +2048,9 @@ it("should mark config files in non-workspace directories as always used via glo
 });
 
 it("should resolve dynamic imports with template literals as glob patterns", async () => {
-  const result = await analyzeFixture("dynamic-import-template");
-  const fixtureDir = resolve(FIXTURES_DIR, "dynamic-import-template");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("import-dynamic-template");
+  const fixtureDir = resolve(FIXTURES_DIR, "import-dynamic-template");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("src/locales/en/core.js"),
     `en/core.js should be reachable via template literal glob, got unused: ${unusedFilePaths}`,
@@ -2070,9 +2070,9 @@ it("should resolve dynamic imports with template literals as glob patterns", asy
 });
 
 it("should resolve package.json exports pointing to .ts files that only exist as .tsx", async () => {
-  const result = await analyzeFixture("exports-ts-to-tsx");
-  const fixtureDir = resolve(FIXTURES_DIR, "exports-ts-to-tsx");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("cross-ext-ts-tsx");
+  const fixtureDir = resolve(FIXTURES_DIR, "cross-ext-ts-tsx");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("src/components/Button.tsx"),
     `Button.tsx should be an entry (exported as Button.ts -> .tsx fallback), got unused: ${unusedFilePaths}`,
@@ -2084,9 +2084,9 @@ it("should resolve package.json exports pointing to .ts files that only exist as
 });
 
 it("should resolve package.json exports pointing to .js files that only exist as .ts", async () => {
-  const result = await analyzeFixture("exports-js-to-ts");
-  const fixtureDir = resolve(FIXTURES_DIR, "exports-js-to-ts");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("cross-ext-js-ts");
+  const fixtureDir = resolve(FIXTURES_DIR, "cross-ext-js-ts");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("generators.ts"),
     `generators.ts should be an entry (exported as ./generators.js), got unused: ${unusedFilePaths}`,
@@ -2106,9 +2106,9 @@ it("should resolve package.json exports pointing to .js files that only exist as
 });
 
 it("should detect script files referenced in GitHub Actions workflow files", async () => {
-  const result = await analyzeFixture("ci-workflow-scripts");
-  const fixtureDir = resolve(FIXTURES_DIR, "ci-workflow-scripts");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("ci-scripts");
+  const fixtureDir = resolve(FIXTURES_DIR, "ci-scripts");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("scripts/deploy.mjs"),
     `deploy.mjs should be detected from CI workflow run step, got unused: ${unusedFilePaths}`,
@@ -2124,9 +2124,9 @@ it("should detect script files referenced in GitHub Actions workflow files", asy
 });
 
 it("should detect next.config files in non-workspace directories via global alwaysUsed", async () => {
-  const result = await analyzeFixture("next-config-global");
-  const fixtureDir = resolve(FIXTURES_DIR, "next-config-global");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("next-config-scope");
+  const fixtureDir = resolve(FIXTURES_DIR, "next-config-scope");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("examples/my-app/next.config.mjs"),
     `next.config.mjs in examples should be detected via global alwaysUsed, got unused: ${unusedFilePaths}`,
@@ -2138,9 +2138,9 @@ it("should detect next.config files in non-workspace directories via global alwa
 });
 
 it("should mark files matched by glob patterns in package.json scripts as entry points", async () => {
-  const result = await analyzeFixture("script-glob-entries");
-  const fixtureDir = resolve(FIXTURES_DIR, "script-glob-entries");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("script-globs");
+  const fixtureDir = resolve(FIXTURES_DIR, "script-globs");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("styles/themes/dark.css"),
     `dark.css should be marked as entry via script glob (postcss styles/themes/*.css), got unused: ${unusedFilePaths}`,
@@ -2156,9 +2156,9 @@ it("should mark files matched by glob patterns in package.json scripts as entry 
 });
 
 it("should exclude config files from unused file detection", async () => {
-  const result = await analyzeFixture("config-file-exclusion");
-  const fixtureDir = resolve(FIXTURES_DIR, "config-file-exclusion");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("config-exclusion");
+  const fixtureDir = resolve(FIXTURES_DIR, "config-exclusion");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("vitest.config.ts"),
     `vitest.config.ts should be excluded as config file, got unused: ${unusedFilePaths}`,
@@ -2182,9 +2182,9 @@ it("should exclude config files from unused file detection", async () => {
 });
 
 it("should activate tooling plugins from optionalDependencies", async () => {
-  const result = await analyzeFixture("optional-dependencies-tooling");
-  const fixtureDir = resolve(FIXTURES_DIR, "optional-dependencies-tooling");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("optional-deps");
+  const fixtureDir = resolve(FIXTURES_DIR, "optional-deps");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("sanity.config.ts"),
     `sanity.config.ts should be excluded (sanity in optionalDependencies), got unused: ${unusedFilePaths}`,
@@ -2200,9 +2200,9 @@ it("should activate tooling plugins from optionalDependencies", async () => {
 });
 
 it("should extract entry points from tsdown/tsup config files", async () => {
-  const result = await analyzeFixture("tsdown-config-entry");
-  const fixtureDir = resolve(FIXTURES_DIR, "tsdown-config-entry");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("tsdown-entry");
+  const fixtureDir = resolve(FIXTURES_DIR, "tsdown-entry");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("src/main.ts"),
     `src/main.ts should be reachable (entry in tsdown.config.ts), got unused: ${unusedFilePaths}`,
@@ -2222,9 +2222,9 @@ it("should extract entry points from tsdown/tsup config files", async () => {
 });
 
 it("should not exclude source directories named build from scanning", async () => {
-  const result = await analyzeFixture("source-build-directory");
-  const fixtureDir = resolve(FIXTURES_DIR, "source-build-directory");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("src-build-dir");
+  const fixtureDir = resolve(FIXTURES_DIR, "src-build-dir");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("src/build/plugins.ts"),
     `src/build/plugins.ts should be reachable (imported by src/index.ts), got unused: ${unusedFilePaths}`,
@@ -2240,9 +2240,9 @@ it("should not exclude source directories named build from scanning", async () =
 });
 
 it("should treat files referenced via vi.mock/jest.mock as reachable (test imports create edges)", async () => {
-  const result = await analyzeFixture("test-mock-imports");
-  const fixtureDir = resolve(FIXTURES_DIR, "test-mock-imports");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("test-mock-import");
+  const fixtureDir = resolve(FIXTURES_DIR, "test-mock-import");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("src/mocked-util.ts"),
     `mocked-util.ts should be reachable (imported via vi.mock from test entry), got: ${unusedFilePaths}`,
@@ -2254,9 +2254,9 @@ it("should treat files referenced via vi.mock/jest.mock as reachable (test impor
 });
 
 test("should not treat all .github files as entries, only CI-referenced scripts", async () => {
-  const result = await analyzeFixture("github-actions-scripts");
-  const fixtureDir = resolve(FIXTURES_DIR, "github-actions-scripts");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("gh-actions-scripts");
+  const fixtureDir = resolve(FIXTURES_DIR, "gh-actions-scripts");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.endsWith(".github/actions/deploy/run.js")),
     `run.js should NOT be unused (referenced in CI workflow), got: ${unusedFilePaths}`,
@@ -2268,9 +2268,9 @@ test("should not treat all .github files as entries, only CI-referenced scripts"
 });
 
 test("should resolve workspace dist paths to source and not mark dist as entries", async () => {
-  const result = await analyzeFixture("workspace-dist-resolution");
-  const fixtureDir = resolve(FIXTURES_DIR, "workspace-dist-resolution");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("workspace-dist-resolve");
+  const fixtureDir = resolve(FIXTURES_DIR, "workspace-dist-resolve");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.some((filePath) => filePath.includes("dist/")),
     `dist/ files should not appear in unused files (ignored), got: ${unusedFilePaths}`,
@@ -2282,9 +2282,9 @@ test("should resolve workspace dist paths to source and not mark dist as entries
 });
 
 test("should exclude .gen.ts files from test entry patterns", async () => {
-  const result = await analyzeFixture("generated-spec-files");
-  const fixtureDir = resolve(FIXTURES_DIR, "generated-spec-files");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("generated-specs");
+  const fixtureDir = resolve(FIXTURES_DIR, "generated-specs");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     unusedFilePaths.some((filePath) => filePath.endsWith("types.spec.gen.ts")),
     `types.spec.gen.ts should be unused (generated file, not a test), got: ${unusedFilePaths}`,
@@ -2300,9 +2300,9 @@ test("should exclude .gen.ts files from test entry patterns", async () => {
 });
 
 test("should not treat formatter/linter glob targets as entry points", async () => {
-  const result = await analyzeFixture("formatter-glob-scripts");
-  const fixtureDir = resolve(FIXTURES_DIR, "formatter-glob-scripts");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("script-glob-formatter");
+  const fixtureDir = resolve(FIXTURES_DIR, "script-glob-formatter");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     unusedFilePaths.some((filePath) => filePath.endsWith("src/orphan.ts")),
     `orphan.ts should be unused (not imported by anyone), got: ${unusedFilePaths}`,
@@ -2318,9 +2318,9 @@ test("should not treat formatter/linter glob targets as entry points", async () 
 });
 
 test("should not treat pages/app directories as entry points without framework dependency", async () => {
-  const result = await analyzeFixture("framework-gating/no-framework");
-  const fixtureDir = resolve(FIXTURES_DIR, "framework-gating/no-framework");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("framework-gate/no-framework");
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-gate/no-framework");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     unusedFilePaths.some((filePath) => filePath === "app/dashboard/page.tsx"),
     `app/dashboard/page.tsx should be unused without next dependency, got: ${unusedFilePaths}`,
@@ -2336,9 +2336,9 @@ test("should not treat pages/app directories as entry points without framework d
 });
 
 test("should treat pages/app as entry points when next is a dependency", async () => {
-  const result = await analyzeFixture("framework-gating/with-nextjs");
-  const fixtureDir = resolve(FIXTURES_DIR, "framework-gating/with-nextjs");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("framework-gate/with-nextjs");
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-gate/with-nextjs");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     unusedFilePaths.some((filePath) => filePath === "unused.tsx"),
     `unused.tsx should be unused, got: ${unusedFilePaths}`,
@@ -2354,9 +2354,9 @@ test("should treat pages/app as entry points when next is a dependency", async (
 });
 
 test("should treat app/routes as entry points when @react-router/dev is a dependency and read appDirectory from config", async () => {
-  const result = await analyzeFixture("framework-gating/with-react-router");
-  const fixtureDir = resolve(FIXTURES_DIR, "framework-gating/with-react-router");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("framework-gate/with-react-router");
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-gate/with-react-router");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     unusedFilePaths.some((filePath) => filePath === "unused.tsx"),
     `unused.tsx should be unused, got: ${unusedFilePaths}`,
@@ -2371,11 +2371,11 @@ test("should treat app/routes as entry points when @react-router/dev is a depend
   );
 });
 
-describe("sub-project-workspace", () => {
+describe("subproject-workspace", () => {
   it("should not activate framework detection for sub-project children", async () => {
-    const result = await analyzeFixture("sub-project-workspace");
-    const fixtureDir = resolve(FIXTURES_DIR, "sub-project-workspace");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("subproject-workspace");
+    const fixtureDir = resolve(FIXTURES_DIR, "subproject-workspace");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("app/packages/core/app/page.ts"),
       `app/packages/core/app/page.ts should be unused (Next.js detection should not activate for sub-project children), got: ${unusedFilePaths}`,
@@ -2383,9 +2383,9 @@ describe("sub-project-workspace", () => {
   });
 
   it("should not add sub-project child package entry files as global entries", async () => {
-    const result = await analyzeFixture("sub-project-workspace");
-    const fixtureDir = resolve(FIXTURES_DIR, "sub-project-workspace");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("subproject-workspace");
+    const fixtureDir = resolve(FIXTURES_DIR, "subproject-workspace");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("app/packages/icons/src/index.ts"),
       `app/packages/icons/src/index.ts should be unused (not an entry when root has no workspace patterns), got: ${unusedFilePaths}`,
@@ -2393,9 +2393,9 @@ describe("sub-project-workspace", () => {
   });
 
   it("should still detect files under sub-project children as unused", async () => {
-    const result = await analyzeFixture("sub-project-workspace");
-    const fixtureDir = resolve(FIXTURES_DIR, "sub-project-workspace");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("subproject-workspace");
+    const fixtureDir = resolve(FIXTURES_DIR, "subproject-workspace");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("app/packages/core/src/unused-util.ts"),
       `app/packages/core/src/unused-util.ts should be unused, got: ${unusedFilePaths}`,
@@ -2403,11 +2403,11 @@ describe("sub-project-workspace", () => {
   });
 });
 
-describe("tanstack-start", () => {
+describe("tanstack-app", () => {
   it("should treat src/routes and src/server as entry points", async () => {
-    const result = await analyzeFixture("tanstack-start");
-    const fixtureDir = resolve(FIXTURES_DIR, "tanstack-start");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("tanstack-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "tanstack-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/routes/index.tsx"),
       `src/routes/index.tsx should be reachable via TanStack Start route, got: ${unusedFilePaths}`,
@@ -2427,11 +2427,11 @@ describe("tanstack-start", () => {
   });
 });
 
-describe("wrangler-worker", () => {
+describe("cloudflare-worker", () => {
   it("should treat src/index.ts as entry point when wrangler is present", async () => {
-    const result = await analyzeFixture("wrangler-worker");
-    const fixtureDir = resolve(FIXTURES_DIR, "wrangler-worker");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("cloudflare-worker");
+    const fixtureDir = resolve(FIXTURES_DIR, "cloudflare-worker");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/index.ts"),
       `src/index.ts should be reachable as Wrangler worker entry, got: ${unusedFilePaths}`,
@@ -2443,11 +2443,11 @@ describe("wrangler-worker", () => {
   });
 });
 
-describe("config-always-used", () => {
+describe("config-entry-seed", () => {
   it("should exclude config files from unused reporting but not propagate reachability", async () => {
-    const result = await analyzeFixture("config-always-used");
-    const fixtureDir = resolve(FIXTURES_DIR, "config-always-used");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("config-entry-seed");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-entry-seed");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("vite.config.ts"),
       `vite.config.ts should be excluded from unused (config file), got: ${unusedFilePaths}`,
@@ -2471,11 +2471,11 @@ describe("config-always-used", () => {
   });
 });
 
-describe("config-file-imports", () => {
+describe("config-imports", () => {
   it("should propagate reachability from config entry points when plugin activates", async () => {
-    const result = await analyzeFixture("config-file-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "config-file-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("config-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-imports");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("vite.config.ts"),
       `vite.config.ts should be excluded (config file), got: ${unusedFilePaths}`,
@@ -2495,11 +2495,11 @@ describe("config-file-imports", () => {
   });
 });
 
-describe("webpack-path-join", () => {
+describe("webpack-path", () => {
   it("should resolve path.join(__dirname, .., app/index) webpack entries", async () => {
-    const result = await analyzeFixture("webpack-path-join");
-    const fixtureDir = resolve(FIXTURES_DIR, "webpack-path-join");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("webpack-path");
+    const fixtureDir = resolve(FIXTURES_DIR, "webpack-path");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("app/index.js"),
       `app/index.js should be reachable via webpack path.join entry, got: ${unusedFilePaths}`,
@@ -2515,11 +2515,11 @@ describe("webpack-path-join", () => {
   });
 });
 
-describe("html-entry-scoping", () => {
+describe("html-entry-scope", () => {
   it("should only discover HTML script entries from root-level HTML files, not nested subdirectories", async () => {
-    const result = await analyzeFixture("html-entry-scoping");
-    const fixtureDir = resolve(FIXTURES_DIR, "html-entry-scoping");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("html-entry-scope");
+    const fixtureDir = resolve(FIXTURES_DIR, "html-entry-scope");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("packages/app/src/main.tsx"),
       `packages/app/src/main.tsx should be reachable via workspace root index.html, got: ${unusedFilePaths}`,
@@ -2539,11 +2539,11 @@ describe("html-entry-scoping", () => {
   });
 });
 
-describe("i18n-extract-glob-not-entry", () => {
+describe("i18n-glob-skip", () => {
   it("should not treat formatjs extract glob arguments as entry points", async () => {
-    const result = await analyzeFixture("i18n-extract-glob-not-entry");
-    const fixtureDir = resolve(FIXTURES_DIR, "i18n-extract-glob-not-entry");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("i18n-glob-skip");
+    const fixtureDir = resolve(FIXTURES_DIR, "i18n-glob-skip");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `src/orphan.ts should be unused because formatjs extract globs should not seed entries, got: ${unusedFilePaths}`,
@@ -2551,11 +2551,11 @@ describe("i18n-extract-glob-not-entry", () => {
   });
 });
 
-describe("remark-glob-not-entry", () => {
+describe("remark-glob-skip", () => {
   it("should not treat remark and cspell glob arguments as entry points", async () => {
-    const result = await analyzeFixture("remark-glob-not-entry");
-    const fixtureDir = resolve(FIXTURES_DIR, "remark-glob-not-entry");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("remark-glob-skip");
+    const fixtureDir = resolve(FIXTURES_DIR, "remark-glob-skip");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
       `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
@@ -2571,11 +2571,11 @@ describe("remark-glob-not-entry", () => {
   });
 });
 
-describe("vitest-custom-include", () => {
+describe("vitest-custom", () => {
   it("should use custom include patterns from vitest.config.ts", async () => {
-    const result = await analyzeFixture("vitest-custom-include");
-    const fixtureDir = resolve(FIXTURES_DIR, "vitest-custom-include");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("vitest-custom");
+    const fixtureDir = resolve(FIXTURES_DIR, "vitest-custom");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("spec/utils-spec.ts"),
       `utils-spec.ts should be an entry (matched by vitest include pattern), got: ${unusedFilePaths}`,
@@ -2587,11 +2587,11 @@ describe("vitest-custom-include", () => {
   });
 });
 
-describe("workspace-no-main-field", () => {
+describe("workspace-no-main", () => {
   it("should fall back to index.js for workspace packages without a main field", async () => {
-    const result = await analyzeFixture("workspace-no-main-field");
-    const fixtureDir = resolve(FIXTURES_DIR, "workspace-no-main-field");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("workspace-no-main");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-no-main");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("packages/lib-a/index.js"),
       `index.js should NOT be unused (default entry for package without main), got: ${unusedFilePaths}`,
@@ -2607,11 +2607,11 @@ describe("workspace-no-main-field", () => {
   });
 });
 
-describe("css-export-map", () => {
+describe("style-export-map", () => {
   it("should resolve CSS files exported via package.json exports map through dist→src heuristic", async () => {
-    const result = await analyzeFixture("css-export-map");
-    const fixtureDir = resolve(FIXTURES_DIR, "css-export-map");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("style-export-map");
+    const fixtureDir = resolve(FIXTURES_DIR, "style-export-map");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/style.css"),
       `src/style.css should NOT be unused (exported via package.json exports), got: ${unusedFilePaths}`,
@@ -2623,11 +2623,11 @@ describe("css-export-map", () => {
   });
 });
 
-describe("playwright-pw-extension", () => {
+describe("playwright-ext", () => {
   it("should NOT treat .pw.ts files as test entries", async () => {
-    const result = await analyzeFixture("playwright-pw-extension");
-    const fixtureDir = resolve(FIXTURES_DIR, "playwright-pw-extension");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("playwright-ext");
+    const fixtureDir = resolve(FIXTURES_DIR, "playwright-ext");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("my-test.pw.ts"),
       `my-test.pw.ts should be unused (.pw.ts is not a standard test pattern), got: ${unusedFilePaths}`,
@@ -2639,11 +2639,11 @@ describe("playwright-pw-extension", () => {
   });
 });
 
-describe("playwright-lib-support", () => {
+describe("playwright-lib", () => {
   it("should NOT treat lib/ and support/ directories as Playwright test entry points", async () => {
-    const result = await analyzeFixture("playwright-lib-support");
-    const fixtureDir = resolve(FIXTURES_DIR, "playwright-lib-support");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("playwright-lib");
+    const fixtureDir = resolve(FIXTURES_DIR, "playwright-lib");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFilePaths.includes("lib/helpers.ts"),
       `lib/helpers.ts should be unused (lib/ is not a Playwright entry pattern), got: ${unusedFilePaths}`,
@@ -2667,11 +2667,11 @@ describe("playwright-lib-support", () => {
   });
 });
 
-describe("cross-env-wrapper", () => {
+describe("env-wrapper", () => {
   it("should see through cross-env wrapper to find real binary and file arguments", async () => {
-    const result = await analyzeFixture("cross-env-wrapper");
-    const fixtureDir = resolve(FIXTURES_DIR, "cross-env-wrapper");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("env-wrapper");
+    const fixtureDir = resolve(FIXTURES_DIR, "env-wrapper");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/main.js"),
       `src/main.js should NOT be unused (entry via cross-env node), got: ${unusedFilePaths}`,
@@ -2691,11 +2691,11 @@ describe("cross-env-wrapper", () => {
   });
 });
 
-describe("jest-mocks-entry", () => {
+describe("jest-mock-entry", () => {
   it("should treat __mocks__ files as entry points in jest projects", async () => {
-    const result = await analyzeFixture("jest-mocks-entry");
-    const fixtureDir = resolve(FIXTURES_DIR, "jest-mocks-entry");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("jest-mock-entry");
+    const fixtureDir = resolve(FIXTURES_DIR, "jest-mock-entry");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/__mocks__/fs.ts"),
       `src/__mocks__/fs.ts should be reachable as Jest __mocks__ entry, got: ${unusedFilePaths}`,
@@ -2710,16 +2710,16 @@ describe("jest-mocks-entry", () => {
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
-      `orphan.ts should be unused (jest-mocks-entry), got: ${unusedFilePaths}`,
+      `orphan.ts should be unused (jest-mock-entry), got: ${unusedFilePaths}`,
     );
   });
 });
 
-describe("mdx-imports", () => {
+describe("mdx-import", () => {
   it("should trace imports from MDX entry points in Docusaurus projects", async () => {
-    const result = await analyzeFixture("mdx-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "mdx-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("mdx-import");
+    const fixtureDir = resolve(FIXTURES_DIR, "mdx-import");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/components/Chart.tsx"),
       `Chart.tsx should NOT be unused (imported by MDX entry), got: ${unusedFilePaths}`,
@@ -2730,23 +2730,23 @@ describe("mdx-imports", () => {
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
-      `orphan.ts should be unused (mdx-imports), got: ${unusedFilePaths}`,
+      `orphan.ts should be unused (mdx-import), got: ${unusedFilePaths}`,
     );
   });
 });
 
-describe("vitest-coverage-include", () => {
+describe("vitest-coverage", () => {
   it("should not confuse coverage.include with test.include patterns", async () => {
-    const result = await analyzeFixture("vitest-coverage-include");
-    const fixtureDir = resolve(FIXTURES_DIR, "vitest-coverage-include");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("vitest-coverage");
+    const fixtureDir = resolve(FIXTURES_DIR, "vitest-coverage");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("tests/core.test.ts"),
       `core.test.ts should NOT be unused (vitest test file), got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
-      `orphan.ts should be unused (vitest-coverage-include), got: ${unusedFilePaths}`,
+      `orphan.ts should be unused (vitest-coverage), got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("src/utils.ts"),
@@ -2755,11 +2755,11 @@ describe("vitest-coverage-include", () => {
   });
 });
 
-describe("declaration-file-imports", () => {
+describe("dts-imports", () => {
   it("should follow imports from .d.ts files to mark dependencies as reachable", async () => {
-    const result = await analyzeFixture("declaration-file-imports");
-    const fixtureDir = resolve(FIXTURES_DIR, "declaration-file-imports");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("dts-imports");
+    const fixtureDir = resolve(FIXTURES_DIR, "dts-imports");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/helper.ts"),
       `src/helper.ts should NOT be unused (imported by types.d.ts which is reachable), got: ${unusedFilePaths}`,
@@ -2775,27 +2775,27 @@ describe("declaration-file-imports", () => {
   });
 });
 
-describe("astro-middleware", () => {
+describe("astro-mw", () => {
   it("should treat src/middleware.ts as an Astro entry point", async () => {
-    const result = await analyzeFixture("astro-middleware");
-    const fixtureDir = resolve(FIXTURES_DIR, "astro-middleware");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("astro-mw");
+    const fixtureDir = resolve(FIXTURES_DIR, "astro-mw");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/middleware.ts"),
       `src/middleware.ts should NOT be unused (Astro middleware entry), got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
-      `orphan.ts should be unused (astro-middleware), got: ${unusedFilePaths}`,
+      `orphan.ts should be unused (astro-mw), got: ${unusedFilePaths}`,
     );
   });
 });
 
-describe("nextjs-middleware", () => {
+describe("next-middleware", () => {
   it("should treat middleware, proxy, and instrumentation as Next.js entry points", async () => {
-    const result = await analyzeFixture("nextjs-middleware");
-    const fixtureDir = resolve(FIXTURES_DIR, "nextjs-middleware");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("next-middleware");
+    const fixtureDir = resolve(FIXTURES_DIR, "next-middleware");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("src/middleware.ts"),
       `src/middleware.ts should NOT be unused (Next.js middleware entry), got: ${unusedFilePaths}`,
@@ -2814,16 +2814,16 @@ describe("nextjs-middleware", () => {
     );
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
-      `orphan.ts should be unused (nextjs-middleware), got: ${unusedFilePaths}`,
+      `orphan.ts should be unused (next-middleware), got: ${unusedFilePaths}`,
     );
   });
 });
 
-describe("barrel-file-types", () => {
+describe("reexport-file-variants", () => {
   it("should exempt star-re-export barrels but not named-re-export barrels", async () => {
-    const result = await analyzeFixture("barrel-file-types");
-    const fixtureDir = resolve(FIXTURES_DIR, "barrel-file-types");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("reexport-file-variants");
+    const fixtureDir = resolve(FIXTURES_DIR, "reexport-file-variants");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       !unusedFilePaths.includes("src/star-barrel.ts"),
@@ -2837,16 +2837,16 @@ describe("barrel-file-types", () => {
 
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
-      `src/orphan.ts should be unused (barrel-file-types), got: ${unusedFilePaths}`,
+      `src/orphan.ts should be unused (reexport-file-variants), got: ${unusedFilePaths}`,
     );
   });
 });
 
-describe("ci-yaml-non-run-values", () => {
+describe("ci-yaml-non-run", () => {
   it("should only extract entries from run: blocks, not arbitrary YAML values", async () => {
-    const result = await analyzeFixture("ci-yaml-non-run-values");
-    const fixtureDir = resolve(FIXTURES_DIR, "ci-yaml-non-run-values");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("ci-yaml-non-run");
+    const fixtureDir = resolve(FIXTURES_DIR, "ci-yaml-non-run");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       !unusedFilePaths.includes("scripts/deploy.mjs"),
@@ -2860,11 +2860,11 @@ describe("ci-yaml-non-run-values", () => {
   });
 });
 
-describe("workspace-dist-to-src", () => {
+describe("workspace-dist-src", () => {
   it("should resolve workspace deep imports through export maps via dist→src fallback", async () => {
-    const result = await analyzeFixture("workspace-dist-to-src");
-    const fixtureDir = resolve(FIXTURES_DIR, "workspace-dist-to-src");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("workspace-dist-src");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-dist-src");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       !unusedFilePaths.includes("packages/core/src/visualdebug.ts"),
@@ -2883,11 +2883,11 @@ describe("workspace-dist-to-src", () => {
   });
 });
 
-describe("bun-test-runner", () => {
+describe("bun-test", () => {
   it("should detect bun test runner and treat test files as entry points", async () => {
-    const result = await analyzeFixture("bun-test-runner");
-    const fixtureDir = resolve(FIXTURES_DIR, "bun-test-runner");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("bun-test");
+    const fixtureDir = resolve(FIXTURES_DIR, "bun-test");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       !unusedFilePaths.includes("src/__tests__/build-output.test.ts"),
@@ -2921,11 +2921,11 @@ describe("bun-test-runner", () => {
   });
 });
 
-describe("zx-script-runner", () => {
+describe("zx-scripts", () => {
   it("should detect zx as a script runner and mark referenced files as entry points", async () => {
-    const result = await analyzeFixture("zx-script-runner");
-    const fixtureDir = resolve(FIXTURES_DIR, "zx-script-runner");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("zx-scripts");
+    const fixtureDir = resolve(FIXTURES_DIR, "zx-scripts");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       !unusedFilePaths.includes("scripts/build-image.mjs"),
@@ -2939,11 +2939,11 @@ describe("zx-script-runner", () => {
   });
 });
 
-describe("polyrepo-workspace", () => {
+describe("polyrepo", () => {
   it("should extract entry points from all sub-project package.json files without root workspace patterns", async () => {
-    const result = await analyzeFixture("polyrepo-workspace");
-    const fixtureDir = resolve(FIXTURES_DIR, "polyrepo-workspace");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("polyrepo");
+    const fixtureDir = resolve(FIXTURES_DIR, "polyrepo");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       !unusedFilePaths.includes("project-a/src/index.ts"),
@@ -2972,11 +2972,11 @@ describe("polyrepo-workspace", () => {
   });
 });
 
-describe("build-output-root-fallback", () => {
+describe("build-root-fallback", () => {
   it("should only resolve build output to src/ directory, not root-level fallback", async () => {
-    const result = await analyzeFixture("build-output-root-fallback");
-    const fixtureDir = resolve(FIXTURES_DIR, "build-output-root-fallback");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("build-root-fallback");
+    const fixtureDir = resolve(FIXTURES_DIR, "build-root-fallback");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       unusedFilePaths.includes("bin/server.js"),
@@ -2995,11 +2995,11 @@ describe("build-output-root-fallback", () => {
   });
 });
 
-describe("vitest-auto-mock", () => {
+describe("vitest-automock", () => {
   it("should treat __mocks__ sibling as reachable when vi.mock has no factory", async () => {
-    const result = await analyzeFixture("vitest-auto-mock");
-    const fixtureDir = resolve(FIXTURES_DIR, "vitest-auto-mock");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("vitest-automock");
+    const fixtureDir = resolve(FIXTURES_DIR, "vitest-automock");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       !unusedFilePaths.includes("src/server/__mocks__/api.ts"),
@@ -3018,11 +3018,11 @@ describe("vitest-auto-mock", () => {
   });
 });
 
-describe("react-router-v7", () => {
+describe("react-router", () => {
   it("should treat files referenced by route/layout/index calls in routes.ts as entry points", async () => {
-    const result = await analyzeFixture("react-router-v7");
-    const fixtureDir = resolve(FIXTURES_DIR, "react-router-v7");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("react-router");
+    const fixtureDir = resolve(FIXTURES_DIR, "react-router");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       unusedFilePaths.includes("app/components/unused-widget.tsx"),
@@ -3061,11 +3061,11 @@ describe("react-router-v7", () => {
   });
 });
 
-describe("extensionless-script-entry", () => {
+describe("script-no-extension", () => {
   it("should resolve script file references without extensions to their source files", async () => {
-    const result = await analyzeFixture("extensionless-script-entry");
-    const fixtureDir = resolve(FIXTURES_DIR, "extensionless-script-entry");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("script-no-extension");
+    const fixtureDir = resolve(FIXTURES_DIR, "script-no-extension");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       unusedFilePaths.includes("orphan.ts"),
@@ -3089,11 +3089,11 @@ describe("extensionless-script-entry", () => {
   });
 });
 
-describe("rspack-project", () => {
+describe("rspack-app", () => {
   it("should treat rspack config files as always-used entry points", async () => {
-    const result = await analyzeFixture("rspack-project");
-    const fixtureDir = resolve(FIXTURES_DIR, "rspack-project");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("rspack-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "rspack-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       !unusedFilePaths.includes("rspack.config.js"),
@@ -3117,11 +3117,11 @@ describe("rspack-project", () => {
   });
 });
 
-describe("astro-content-config", () => {
+describe("astro-content", () => {
   it("should treat astro content config files as always-used", async () => {
-    const result = await analyzeFixture("astro-content-config");
-    const fixtureDir = resolve(FIXTURES_DIR, "astro-content-config");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("astro-content");
+    const fixtureDir = resolve(FIXTURES_DIR, "astro-content");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       !unusedFilePaths.includes("astro.config.ts"),
@@ -3140,16 +3140,16 @@ describe("astro-content-config", () => {
 
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
-      `src/orphan.ts should be unused (astro-content-config), got: ${unusedFilePaths}`,
+      `src/orphan.ts should be unused (astro-content), got: ${unusedFilePaths}`,
     );
   });
 });
 
-describe("gatsby-components", () => {
+describe("gatsby-app", () => {
   it("should flag unused components but not pages, templates, or api routes", async () => {
-    const result = await analyzeFixture("gatsby-components");
-    const fixtureDir = resolve(FIXTURES_DIR, "gatsby-components");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("gatsby-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "gatsby-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       unusedFilePaths.includes("src/components/unused.tsx"),
@@ -3178,11 +3178,11 @@ describe("gatsby-components", () => {
   });
 });
 
-describe("react-native-app", () => {
+describe("rn-app", () => {
   it("should detect React Native entry points and flag orphan screens", async () => {
-    const result = await analyzeFixture("react-native-app");
-    const fixtureDir = resolve(FIXTURES_DIR, "react-native-app");
-    const unusedFilePaths = relativePaths(result, fixtureDir);
+    const result = await scanFixture("rn-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "rn-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     assert.ok(
       !unusedFilePaths.includes("index.js"),
@@ -3201,15 +3201,15 @@ describe("react-native-app", () => {
 
     assert.ok(
       unusedFilePaths.includes("src/screens/orphan.tsx"),
-      `src/screens/orphan.tsx should be unused (react-native-app), got: ${unusedFilePaths}`,
+      `src/screens/orphan.tsx should be unused (rn-app), got: ${unusedFilePaths}`,
     );
   });
 });
 
 it("should detect webpack.config.js entry points and mark imported files reachable", async () => {
-  const result = await analyzeFixture("webpack-entry-detection");
-  const fixtureDir = resolve(FIXTURES_DIR, "webpack-entry-detection");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("webpack-entries");
+  const fixtureDir = resolve(FIXTURES_DIR, "webpack-entries");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("src/index.js"),
     `src/index.js should be reachable as webpack entry, got unused: ${unusedFilePaths}`,
@@ -3233,9 +3233,9 @@ it("should detect webpack.config.js entry points and mark imported files reachab
 });
 
 it("should not treat CSS files as entry points when wildcard export map expands to all files", async () => {
-  const result = await analyzeFixture("wildcard-exports-css");
-  const fixtureDir = resolve(FIXTURES_DIR, "wildcard-exports-css");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("wildcard-css");
+  const fixtureDir = resolve(FIXTURES_DIR, "wildcard-css");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     unusedFilePaths.includes("src/components/Button.css"),
     `Button.css should be unused (CSS files should not become entry points via wildcard exports), got: ${unusedFilePaths}`,
@@ -3251,9 +3251,9 @@ it("should not treat CSS files as entry points when wildcard export map expands 
 });
 
 it("should detect Electron main/preload entries and mark imported files reachable", async () => {
-  const result = await analyzeFixture("electron-plugin-detection");
-  const fixtureDir = resolve(FIXTURES_DIR, "electron-plugin-detection");
-  const unusedFilePaths = relativePaths(result, fixtureDir);
+  const result = await scanFixture("electron-detection");
+  const fixtureDir = resolve(FIXTURES_DIR, "electron-detection");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
     !unusedFilePaths.includes("src/main.ts"),
     `src/main.ts should be reachable as Electron main entry, got unused: ${unusedFilePaths}`,
@@ -3272,13 +3272,13 @@ it("should detect Electron main/preload entries and mark imported files reachabl
   );
 });
 
-describe("circular-deps-simple", () => {
+describe("cycle-simple", () => {
   it("should detect a simple A→B→A circular dependency", async () => {
-    const result = await analyzeFixture("circular-deps-simple");
+    const result = await scanFixture("cycle-simple");
     assert.ok(result.circularDependencies.length > 0, "should find at least one cycle");
     const cyclePaths = result.circularDependencies.map((cycle) =>
       cycle.files.map((filePath) => {
-        const fixtureDir = resolve(FIXTURES_DIR, "circular-deps-simple");
+        const fixtureDir = resolve(FIXTURES_DIR, "cycle-simple");
         return relative(fixtureDir, filePath);
       }),
     );
@@ -3289,9 +3289,9 @@ describe("circular-deps-simple", () => {
   });
 });
 
-describe("circular-deps-type-only", () => {
+describe("cycle-type-only", () => {
   it("should not detect circular dependencies when imports are type-only", async () => {
-    const result = await analyzeFixture("circular-deps-type-only");
+    const result = await scanFixture("cycle-type-only");
     assert.equal(
       result.circularDependencies.length,
       0,
@@ -3300,13 +3300,13 @@ describe("circular-deps-type-only", () => {
   });
 });
 
-describe("circular-deps-chain", () => {
+describe("cycle-chain", () => {
   it("should detect A→B→C→A circular dependency chain", async () => {
-    const result = await analyzeFixture("circular-deps-chain");
+    const result = await scanFixture("cycle-chain");
     assert.ok(result.circularDependencies.length > 0, "should find at least one cycle");
     const cyclePaths = result.circularDependencies.map((cycle) =>
       cycle.files.map((filePath) => {
-        const fixtureDir = resolve(FIXTURES_DIR, "circular-deps-chain");
+        const fixtureDir = resolve(FIXTURES_DIR, "cycle-chain");
         return relative(fixtureDir, filePath);
       }),
     );
@@ -3324,18 +3324,18 @@ describe("circular-deps-chain", () => {
   });
 });
 
-describe("circular-deps-none", () => {
+describe("cycle-none", () => {
   it("should not detect any circular dependencies in a linear dependency graph", async () => {
-    const result = await analyzeFixture("circular-deps-none");
+    const result = await scanFixture("cycle-none");
     assert.equal(result.circularDependencies.length, 0);
   });
 });
 
-describe("re-export-default-as-named", () => {
+describe("reexport-default-named", () => {
   it("should track default-as-named re-exports and detect unused files", async () => {
-    const result = await analyzeFixture("re-export-default-as-named");
-    const fixtureDir = resolve(FIXTURES_DIR, "re-export-default-as-named");
-    const unusedFiles = relativePaths(result, fixtureDir);
+    const result = await scanFixture("reexport-default-named");
+    const fixtureDir = resolve(FIXTURES_DIR, "reexport-default-named");
+    const unusedFiles = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFiles.includes("widget.ts"),
       "widget.ts should be reachable via re-export { default as Widget }",
@@ -3355,8 +3355,8 @@ describe("re-export-default-as-named", () => {
   });
 
   it("should detect unused exports in re-exported modules", async () => {
-    const result = await analyzeFixture("re-export-default-as-named");
-    const exportNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-default-named");
+    const exportNames = deadExportNames(result);
     assert.ok(
       exportNames.includes("widgetHelper"),
       "widgetHelper should be unused (not re-exported or consumed)",
@@ -3368,11 +3368,11 @@ describe("re-export-default-as-named", () => {
   });
 });
 
-describe("mixed-import-patterns", () => {
+describe("import-mixed", () => {
   it("should handle combined default, named, and namespace imports", async () => {
-    const result = await analyzeFixture("mixed-import-patterns");
-    const fixtureDir = resolve(FIXTURES_DIR, "mixed-import-patterns");
-    const unusedFiles = relativePaths(result, fixtureDir);
+    const result = await scanFixture("import-mixed");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-mixed");
+    const unusedFiles = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFiles.includes("orphan.ts"),
       "orphan.ts should be unused (not imported)",
@@ -3388,8 +3388,8 @@ describe("mixed-import-patterns", () => {
   });
 
   it("should detect unused exports across import patterns", async () => {
-    const result = await analyzeFixture("mixed-import-patterns");
-    const exportNames = unusedExportNames(result);
+    const result = await scanFixture("import-mixed");
+    const exportNames = deadExportNames(result);
     assert.ok(
       exportNames.includes("unused"),
       "unused export from lib.ts should be detected",
@@ -3401,11 +3401,11 @@ describe("mixed-import-patterns", () => {
   });
 });
 
-describe("namespace-chain-reexport", () => {
+describe("ns-chain", () => {
   it("should track namespace import that is re-exported", async () => {
-    const result = await analyzeFixture("namespace-chain-reexport");
-    const fixtureDir = resolve(FIXTURES_DIR, "namespace-chain-reexport");
-    const unusedFiles = relativePaths(result, fixtureDir);
+    const result = await scanFixture("ns-chain");
+    const fixtureDir = resolve(FIXTURES_DIR, "ns-chain");
+    const unusedFiles = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFiles.includes("unused-module.ts"),
       "unused-module.ts should be unused",
@@ -3421,11 +3421,11 @@ describe("namespace-chain-reexport", () => {
   });
 });
 
-describe("type-only-reexport-filtering", () => {
+describe("type-reexport-filter", () => {
   it("should not report type-only re-exports as unused by default", async () => {
-    const result = await analyzeFixture("type-only-reexport-filtering");
-    const fixtureDir = resolve(FIXTURES_DIR, "type-only-reexport-filtering");
-    const unusedFiles = relativePaths(result, fixtureDir);
+    const result = await scanFixture("type-reexport-filter");
+    const fixtureDir = resolve(FIXTURES_DIR, "type-reexport-filter");
+    const unusedFiles = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFiles.includes("types.ts"),
       "types.ts should be reachable via type-only re-export",
@@ -3441,8 +3441,8 @@ describe("type-only-reexport-filtering", () => {
   });
 
   it("should detect unused exports even with type re-exports", async () => {
-    const result = await analyzeFixture("type-only-reexport-filtering");
-    const exportNames = unusedExportNames(result);
+    const result = await scanFixture("type-reexport-filter");
+    const exportNames = deadExportNames(result);
     assert.ok(
       exportNames.includes("deleteUser"),
       "deleteUser should be unused (not re-exported or imported)",
@@ -3450,9 +3450,9 @@ describe("type-only-reexport-filtering", () => {
   });
 });
 
-describe("circular-deps-with-unused", () => {
+describe("cycle-with-orphans", () => {
   it("should detect circular dependency between module-a and module-b", async () => {
-    const result = await analyzeFixture("circular-deps-with-unused");
+    const result = await scanFixture("cycle-with-orphans");
     assert.ok(
       result.circularDependencies.length > 0,
       "should find circular dependency between module-a and module-b",
@@ -3460,9 +3460,9 @@ describe("circular-deps-with-unused", () => {
   });
 
   it("should detect unused files alongside circular deps", async () => {
-    const result = await analyzeFixture("circular-deps-with-unused");
-    const fixtureDir = resolve(FIXTURES_DIR, "circular-deps-with-unused");
-    const unusedFiles = relativePaths(result, fixtureDir);
+    const result = await scanFixture("cycle-with-orphans");
+    const fixtureDir = resolve(FIXTURES_DIR, "cycle-with-orphans");
+    const unusedFiles = orphanPaths(result, fixtureDir);
     assert.ok(
       unusedFiles.includes("orphan.ts"),
       "orphan.ts should be unused despite circular deps in other files",
@@ -3470,8 +3470,8 @@ describe("circular-deps-with-unused", () => {
   });
 
   it("should detect unused exports in circular dependency modules", async () => {
-    const result = await analyzeFixture("circular-deps-with-unused");
-    const exportNames = unusedExportNames(result);
+    const result = await scanFixture("cycle-with-orphans");
+    const exportNames = deadExportNames(result);
     assert.ok(
       exportNames.includes("unusedFromA"),
       "unusedFromA should be detected as unused despite circular dep",
@@ -3483,11 +3483,11 @@ describe("circular-deps-with-unused", () => {
   });
 });
 
-describe("deep-nested-re-export", () => {
+describe("deep-reexport-chain", () => {
   it("should propagate usage through 4-level re-export chain", async () => {
-    const result = await analyzeFixture("deep-nested-re-export");
-    const fixtureDir = resolve(FIXTURES_DIR, "deep-nested-re-export");
-    const unusedFiles = relativePaths(result, fixtureDir);
+    const result = await scanFixture("deep-reexport-chain");
+    const fixtureDir = resolve(FIXTURES_DIR, "deep-reexport-chain");
+    const unusedFiles = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFiles.includes("level-3.ts"),
       "level-3.ts should be reachable through deep re-export chain",
@@ -3507,8 +3507,8 @@ describe("deep-nested-re-export", () => {
   });
 
   it("should detect exports that are not propagated through the chain", async () => {
-    const result = await analyzeFixture("deep-nested-re-export");
-    const exportNames = unusedExportNames(result);
+    const result = await scanFixture("deep-reexport-chain");
+    const exportNames = deadExportNames(result);
     assert.ok(
       exportNames.includes("delta"),
       "delta should be unused (not re-exported past level-2)",
@@ -3520,10 +3520,10 @@ describe("deep-nested-re-export", () => {
   });
 });
 
-describe("export-enum-member", () => {
+describe("enum-export", () => {
   it("should detect unused enum exports", async () => {
-    const result = await analyzeFixture("export-enum-member");
-    const exportNames = unusedExportNames(result);
+    const result = await scanFixture("enum-export");
+    const exportNames = deadExportNames(result);
     assert.ok(
       exportNames.includes("UnusedEnum"),
       "UnusedEnum should be detected as unused",
@@ -3535,11 +3535,11 @@ describe("export-enum-member", () => {
   });
 });
 
-describe("aliased-named-exports", () => {
+describe("alias-named-exports", () => {
   it("should track aliased re-exports correctly", async () => {
-    const result = await analyzeFixture("aliased-named-exports");
-    const fixtureDir = resolve(FIXTURES_DIR, "aliased-named-exports");
-    const unusedFiles = relativePaths(result, fixtureDir);
+    const result = await scanFixture("alias-named-exports");
+    const fixtureDir = resolve(FIXTURES_DIR, "alias-named-exports");
+    const unusedFiles = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFiles.includes("greetings.ts"),
       "greetings.ts should be reachable via aliased re-export",
@@ -3547,8 +3547,8 @@ describe("aliased-named-exports", () => {
   });
 
   it("should detect unused exports with aliased names", async () => {
-    const result = await analyzeFixture("aliased-named-exports");
-    const exportNames = unusedExportNames(result);
+    const result = await scanFixture("alias-named-exports");
+    const exportNames = deadExportNames(result);
     assert.ok(
       exportNames.includes("unusedGreeting"),
       "unusedGreeting should be unused (not re-exported)",
@@ -3556,11 +3556,11 @@ describe("aliased-named-exports", () => {
   });
 });
 
-describe("side-effect-only-module", () => {
+describe("module-side-effect", () => {
   it("should keep side-effect imported files as reachable", async () => {
-    const result = await analyzeFixture("side-effect-only-module");
-    const fixtureDir = resolve(FIXTURES_DIR, "side-effect-only-module");
-    const unusedFiles = relativePaths(result, fixtureDir);
+    const result = await scanFixture("module-side-effect");
+    const fixtureDir = resolve(FIXTURES_DIR, "module-side-effect");
+    const unusedFiles = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFiles.includes("polyfill.ts"),
       "polyfill.ts should be reachable via side-effect import",
@@ -3576,11 +3576,11 @@ describe("side-effect-only-module", () => {
   });
 });
 
-describe("re-export-star-with-named", () => {
+describe("reexport-star-named", () => {
   it("should handle mixed star and named re-exports", async () => {
-    const result = await analyzeFixture("re-export-star-with-named");
-    const fixtureDir = resolve(FIXTURES_DIR, "re-export-star-with-named");
-    const unusedFiles = relativePaths(result, fixtureDir);
+    const result = await scanFixture("reexport-star-named");
+    const fixtureDir = resolve(FIXTURES_DIR, "reexport-star-named");
+    const unusedFiles = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFiles.includes("utils.ts"),
       "utils.ts should be reachable via star re-export",
@@ -3596,8 +3596,8 @@ describe("re-export-star-with-named", () => {
   });
 
   it("should detect unused exports from modules included via star", async () => {
-    const result = await analyzeFixture("re-export-star-with-named");
-    const exportNames = unusedExportNames(result);
+    const result = await scanFixture("reexport-star-named");
+    const exportNames = deadExportNames(result);
     assert.ok(
       exportNames.includes("notReExported"),
       "notReExported should be unused (not consumed via star or named re-export)",

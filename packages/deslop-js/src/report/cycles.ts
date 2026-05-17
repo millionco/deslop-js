@@ -1,4 +1,4 @@
-import type { ModuleGraph, CircularDependency } from "../types.js";
+import type { DependencyGraph, CircularDependency } from "../types.js";
 import { MAX_CYCLES_PER_SCC, MAX_TOTAL_CYCLES, MAX_SCC_SIZE_FOR_ENUMERATION } from "../constants.js";
 
 const UNDEFINED_INDEX = -1;
@@ -16,7 +16,7 @@ interface DfsFrame {
   successorPosition: number;
 }
 
-const buildAdjacencyList = (graph: ModuleGraph): number[][] => {
+const buildAdjacencyList = (graph: DependencyGraph): number[][] => {
   const targetSets: Set<number>[] = Array.from({ length: graph.modules.length }, () => new Set());
 
   for (const edge of graph.edges) {
@@ -123,7 +123,7 @@ const findStronglyConnectedComponents = (
   return components;
 };
 
-const canonicalizeCycle = (cycle: number[], graph: ModuleGraph): number[] => {
+const canonicalizeCycle = (cycle: number[], graph: DependencyGraph): number[] => {
   if (cycle.length === 0) {
     return [];
   }
@@ -145,7 +145,7 @@ const canonicalizeCycle = (cycle: number[], graph: ModuleGraph): number[] => {
 const enumerateElementaryCycles = (
   componentNodes: number[],
   adjacencyList: number[][],
-  graph: ModuleGraph,
+  graph: DependencyGraph,
 ): number[][] => {
   if (componentNodes.length === 2) {
     const [nodeA, nodeB] = componentNodes;
@@ -205,8 +205,8 @@ const enumerateElementaryCycles = (
   return cycles;
 };
 
-export const findCircularDependencies = (
-  graph: ModuleGraph,
+export const detectCycles = (
+  graph: DependencyGraph,
 ): CircularDependency[] => {
   const adjacencyList = buildAdjacencyList(graph);
   const components = findStronglyConnectedComponents(adjacencyList);
