@@ -275,23 +275,46 @@ export const createResolver = (
 
   const tsconfigBaseUrlCache = new Map<string, string | undefined>();
 
-  const getBaseUrlDirectory = (tsconfigFile: string): string | undefined => {
-    const cached = tsconfigBaseUrlCache.get(tsconfigFile);
-    if (cached !== undefined) return cached;
+  const extractBaseUrlFromTsconfig = (
+    tsconfigFile: string,
+    visitedFiles: Set<string>,
+  ): string | undefined => {
+    if (visitedFiles.has(tsconfigFile)) return undefined;
+    visitedFiles.add(tsconfigFile);
 
     try {
       const tsconfigContent = cachedReadFileSync(tsconfigFile);
       const cleanedContent = stripJsonComments(tsconfigContent);
       const tsconfigJson = JSON.parse(cleanedContent);
+      const tsconfigDir = dirname(tsconfigFile);
+
       const baseUrl = tsconfigJson.compilerOptions?.baseUrl;
-      if (baseUrl) {
-        const absoluteBaseUrl = resolve(dirname(tsconfigFile), baseUrl);
-        tsconfigBaseUrlCache.set(tsconfigFile, absoluteBaseUrl);
-        return absoluteBaseUrl;
+      if (baseUrl) return resolve(tsconfigDir, baseUrl);
+
+      if (typeof tsconfigJson.extends === "string" && tsconfigJson.extends.startsWith(".")) {
+        const extendsPath = resolve(tsconfigDir, tsconfigJson.extends);
+        const resolvedExtendsPath = cachedExistsSync(extendsPath)
+          ? extendsPath
+          : cachedExistsSync(extendsPath + ".json")
+            ? extendsPath + ".json"
+            : undefined;
+        if (resolvedExtendsPath) {
+          return extractBaseUrlFromTsconfig(resolvedExtendsPath, visitedFiles);
+        }
       }
-    } catch {}
-    tsconfigBaseUrlCache.set(tsconfigFile, undefined);
+    } catch {
+      return undefined;
+    }
     return undefined;
+  };
+
+  const getBaseUrlDirectory = (tsconfigFile: string): string | undefined => {
+    const cached = tsconfigBaseUrlCache.get(tsconfigFile);
+    if (cached !== undefined) return cached;
+
+    const result = extractBaseUrlFromTsconfig(tsconfigFile, new Set());
+    tsconfigBaseUrlCache.set(tsconfigFile, result);
+    return result;
   };
 
   const hasNextJsDependency = (() => {
@@ -306,34 +329,72 @@ export const createResolver = (
     }
   })();
 
+  const extractPathsFromTsconfig = (
+    tsconfigFile: string,
+    visitedFiles: Set<string>,
+  ): { paths: Record<string, string[]>; baseUrl: string; tsconfigDir: string } | undefined => {
+    if (visitedFiles.has(tsconfigFile)) return undefined;
+    visitedFiles.add(tsconfigFile);
+
+    try {
+      const tsconfigContent = cachedReadFileSync(tsconfigFile).trim();
+      if (tsconfigContent.length === 0) return undefined;
+      const cleanedContent = stripJsonComments(tsconfigContent);
+      const tsconfigJson = JSON.parse(cleanedContent);
+      const tsconfigDir = dirname(tsconfigFile);
+
+      const paths = tsconfigJson.compilerOptions?.paths;
+      const baseUrl = tsconfigJson.compilerOptions?.baseUrl;
+
+      if (paths && typeof paths === "object") {
+        return { paths, baseUrl: baseUrl ?? ".", tsconfigDir };
+      }
+
+      if (typeof tsconfigJson.extends === "string") {
+        const extendsPath = tsconfigJson.extends.startsWith(".")
+          ? resolve(tsconfigDir, tsconfigJson.extends)
+          : undefined;
+
+        if (extendsPath) {
+          const resolvedExtendsPath = cachedExistsSync(extendsPath)
+            ? extendsPath
+            : cachedExistsSync(extendsPath + ".json")
+              ? extendsPath + ".json"
+              : undefined;
+          if (resolvedExtendsPath) {
+            return extractPathsFromTsconfig(resolvedExtendsPath, visitedFiles);
+          }
+        }
+      }
+    } catch {
+      return undefined;
+    }
+
+    return undefined;
+  };
+
   const getPathAliases = (tsconfigFile: string): Map<string, string[]> => {
     const cached = tsconfigPathAliasCache.get(tsconfigFile);
     if (cached) return cached;
 
     const aliasMap = new Map<string, string[]>();
-    const tsconfigDir = dirname(tsconfigFile);
-    try {
-      const tsconfigContent = cachedReadFileSync(tsconfigFile).trim();
-      if (tsconfigContent.length > 0) {
-        const cleanedContent = stripJsonComments(tsconfigContent);
-        const tsconfigJson = JSON.parse(cleanedContent);
-        const paths = tsconfigJson.compilerOptions?.paths;
-        const baseUrl = tsconfigJson.compilerOptions?.baseUrl ?? ".";
 
-        if (paths && typeof paths === "object") {
-          for (const [pattern, targets] of Object.entries(paths)) {
-            if (Array.isArray(targets)) {
-              aliasMap.set(
-                pattern,
-                targets.map((target: string) => resolve(tsconfigDir, baseUrl, target)),
-              );
-            }
-          }
+    const extracted = extractPathsFromTsconfig(tsconfigFile, new Set());
+    if (extracted) {
+      for (const [pattern, targets] of Object.entries(extracted.paths)) {
+        if (Array.isArray(targets)) {
+          aliasMap.set(
+            pattern,
+            targets.map((target: string) =>
+              resolve(extracted.tsconfigDir, extracted.baseUrl, target),
+            ),
+          );
         }
       }
-    } catch {}
+    }
 
     if (aliasMap.size === 0 && hasNextJsDependency) {
+      const tsconfigDir = dirname(tsconfigFile);
       const srcDirectory = resolve(tsconfigDir, "src");
       if (cachedExistsSync(srcDirectory)) {
         aliasMap.set("@/*", [resolve(tsconfigDir, "src/*")]);
