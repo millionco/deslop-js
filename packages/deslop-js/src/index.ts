@@ -12,6 +12,7 @@ import type { ModuleLinkInput } from "./linker/build.js";
 import { traceReachability } from "./linker/reachability.js";
 import { resolveReExportChains } from "./linker/re-exports.js";
 import { generateReport } from "./report/generate.js";
+import { findMonorepoRoot } from "./utils/find-monorepo-root.js";
 
 const STYLE_EXTENSIONS = [".css", ".scss"];
 
@@ -69,7 +70,20 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
   const pipelineStartTime = performance.now();
 
   const workspaceDiscovery = resolveWorkspaces(resolve(config.rootDir));
-  const workspacePackages = workspaceDiscovery.packages;
+  const workspacePackages = [...workspaceDiscovery.packages];
+
+  const monorepoRoot = findMonorepoRoot(config.rootDir);
+  if (monorepoRoot) {
+    const monorepoWorkspaces = resolveWorkspaces(monorepoRoot);
+    const existingDirectories = new Set(
+      workspacePackages.map((workspacePackage) => workspacePackage.directory),
+    );
+    for (const monorepoPackage of monorepoWorkspaces.packages) {
+      if (!existingDirectories.has(monorepoPackage.directory)) {
+        workspacePackages.push(monorepoPackage);
+      }
+    }
+  }
 
   const frameworkIgnorePatterns = getFrameworkExclusions(config.rootDir);
 

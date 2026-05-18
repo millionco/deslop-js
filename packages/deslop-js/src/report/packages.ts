@@ -1,89 +1,15 @@
-import { resolve, join, dirname } from "node:path";
+import { resolve, join } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
 import fg from "fast-glob";
 import type { DependencyGraph, UnusedDependency, DeslopConfig } from "../types.js";
 import { IMPLICIT_DEPENDENCIES } from "../constants.js";
 import { extractPackageName } from "../utils/package-name.js";
+import { findMonorepoRoot } from "../utils/find-monorepo-root.js";
 
 interface PackageJsonDependencies {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 }
-
-const MONOREPO_ROOT_MARKERS = [
-  "pnpm-workspace.yaml",
-  "pnpm-workspace.yml",
-  "lerna.json",
-  "nx.json",
-  "turbo.json",
-  "rush.json",
-];
-
-const LOCKFILE_MARKERS = [
-  "pnpm-lock.yaml",
-  "yarn.lock",
-  "package-lock.json",
-  "bun.lockb",
-  "bun.lock",
-];
-
-const MAX_MONOREPO_WALK_DEPTH = 5;
-
-const findMonorepoRoot = (rootDir: string): string | undefined => {
-  let currentDirectory = resolve(rootDir);
-  let walkedDepth = 0;
-
-  while (walkedDepth < MAX_MONOREPO_WALK_DEPTH) {
-    const parentDirectory = dirname(currentDirectory);
-    if (parentDirectory === currentDirectory) break;
-    currentDirectory = parentDirectory;
-    walkedDepth++;
-
-    if (existsSync(join(currentDirectory, ".git"))) {
-      for (const marker of MONOREPO_ROOT_MARKERS) {
-        if (existsSync(join(currentDirectory, marker))) return currentDirectory;
-      }
-
-      const packageJsonPath = join(currentDirectory, "package.json");
-      if (existsSync(packageJsonPath)) {
-        try {
-          const content = readFileSync(packageJsonPath, "utf-8");
-          const packageJson = JSON.parse(content);
-          if (packageJson.workspaces) return currentDirectory;
-        } catch {
-          // fall through
-        }
-      }
-
-      for (const lockfile of LOCKFILE_MARKERS) {
-        if (existsSync(join(currentDirectory, lockfile))) return currentDirectory;
-      }
-
-      return undefined;
-    }
-
-    for (const marker of MONOREPO_ROOT_MARKERS) {
-      if (existsSync(join(currentDirectory, marker))) return currentDirectory;
-    }
-
-    const packageJsonPath = join(currentDirectory, "package.json");
-    if (existsSync(packageJsonPath)) {
-      try {
-        const content = readFileSync(packageJsonPath, "utf-8");
-        const packageJson = JSON.parse(content);
-        if (packageJson.workspaces) return currentDirectory;
-      } catch {
-        continue;
-      }
-    }
-
-    for (const lockfile of LOCKFILE_MARKERS) {
-      if (existsSync(join(currentDirectory, lockfile))) return currentDirectory;
-    }
-  }
-
-  return undefined;
-};
 
 const discoverAllPackageJsonPaths = (rootDir: string): string[] => {
   const paths = [join(rootDir, "package.json")];
@@ -179,6 +105,43 @@ export const detectStalePackages = (
     if (declaredNames.has("react-dom")) usedPackageNames.add("react-dom");
     if (declaredNames.has("react-native")) usedPackageNames.add("react-native");
     if (declaredNames.has("react-native-web")) usedPackageNames.add("react-native-web");
+  }
+
+  if (declaredNames.has("react-dom")) {
+    const webFrameworks = [
+      "next",
+      "gatsby",
+      "@remix-run/react",
+      "react-router-dom",
+      "vite",
+      "@docusaurus/core",
+      "react-scripts",
+      "astro",
+      "@tanstack/react-router",
+      "@tanstack/react-start",
+      "react-app-rewired",
+    ];
+    const hasWebFramework = webFrameworks.some(
+      (framework) => declaredNames.has(framework) || usedPackageNames.has(framework),
+    );
+    if (hasWebFramework) usedPackageNames.add("react-dom");
+  }
+
+  if (declaredNames.has("react") && declaredNames.has("react-dom")) {
+    const packageJsonPath = resolve(config.rootDir, "package.json");
+    try {
+      const content = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(content);
+      const peerDeps = packageJson.peerDependencies ?? {};
+      if ("react" in peerDeps && declaredDependencies.get("react") === true) {
+        usedPackageNames.add("react");
+      }
+      if ("react-dom" in peerDeps && declaredDependencies.get("react-dom") === true) {
+        usedPackageNames.add("react-dom");
+      }
+    } catch {
+      // fall through
+    }
   }
 
   const peerSatisfied = collectPeerSatisfiedPackages(
