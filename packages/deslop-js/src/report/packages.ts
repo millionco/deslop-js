@@ -188,17 +188,29 @@ export const detectStalePackages = (
   );
   for (const packageName of peerSatisfied) usedPackageNames.add(packageName);
 
+  const candidateUnused = new Set<string>();
+  for (const [dependencyName] of declaredDependencies) {
+    if (isAlwaysConsideredUsed(dependencyName)) continue;
+    if (usedPackageNames.has(dependencyName)) continue;
+    candidateUnused.add(dependencyName);
+  }
+
+  if (candidateUnused.size > 0) {
+    const sourceFileRescued = scanSourceFilesForPackageImports(config.rootDir, candidateUnused);
+    for (const packageName of sourceFileRescued) {
+      usedPackageNames.add(packageName);
+      candidateUnused.delete(packageName);
+    }
+  }
+
   const unusedDependencies: UnusedDependency[] = [];
 
-  for (const [dependencyName, isDevDependency] of declaredDependencies) {
-    if (isAlwaysConsideredUsed(dependencyName)) continue;
-
-    if (!usedPackageNames.has(dependencyName)) {
-      unusedDependencies.push({
-        name: dependencyName,
-        isDevDependency,
-      });
-    }
+  for (const dependencyName of candidateUnused) {
+    const isDevDependency = declaredDependencies.get(dependencyName) ?? false;
+    unusedDependencies.push({
+      name: dependencyName,
+      isDevDependency,
+    });
   }
 
   return unusedDependencies;
@@ -566,6 +578,57 @@ const extractExtendsPackageName = (extendsValue: string): string | undefined => 
     return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : undefined;
   }
   return extendsValue.split("/")[0];
+};
+
+const SOURCE_FILE_GLOBS = ["**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}"];
+
+const SOURCE_FILE_IGNORES = [
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/build/**",
+  "**/out/**",
+  "**/.git/**",
+  "**/coverage/**",
+  "**/*.min.js",
+  "**/*.d.ts",
+];
+
+const scanSourceFilesForPackageImports = (
+  rootDir: string,
+  candidatePackages: Set<string>,
+): Set<string> => {
+  const found = new Set<string>();
+  if (candidatePackages.size === 0) return found;
+
+  const sourceFiles = fg.sync(SOURCE_FILE_GLOBS, {
+    cwd: rootDir,
+    absolute: true,
+    onlyFiles: true,
+    ignore: SOURCE_FILE_IGNORES,
+    deep: 15,
+  });
+
+  for (const filePath of sourceFiles) {
+    if (candidatePackages.size === 0) break;
+    try {
+      const content = readFileSync(filePath, "utf-8");
+      for (const packageName of candidatePackages) {
+        if (
+          content.includes(`'${packageName}'`) ||
+          content.includes(`"${packageName}"`) ||
+          content.includes(`'${packageName}/`) ||
+          content.includes(`"${packageName}/`)
+        ) {
+          found.add(packageName);
+          candidatePackages.delete(packageName);
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return found;
 };
 
 const ALWAYS_USED_PREFIXES = [
