@@ -12,7 +12,7 @@ const EXCLUDED_EXTENSIONS = new Set([
   ".gql",
 ]);
 
-const TEST_FILE_PATTERN = /\.(?:test|spec|stories|story)\./;
+const TEST_FILE_PATTERN = /(?:\.(?:test|spec|stories|story)\.|(?:^|\/)__tests__\/)/;
 
 const hasExcludedExtension = (filePath: string): boolean => {
   const lastDot = filePath.lastIndexOf(".");
