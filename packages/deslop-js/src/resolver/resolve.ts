@@ -121,13 +121,18 @@ const TSCONFIG_FILENAMES = [
   "tsconfig.web.json",
   "tsconfig.app.json",
   "tsconfig.base.json",
+  "jsconfig.json",
 ];
 
-const findNearestTsconfig = (fromDir: string, rootDir: string): string | undefined => {
+const findNearestTsconfig = (
+  fromDir: string,
+  rootDir: string,
+  monorepoRootDir?: string,
+): string | undefined => {
   let currentDirectory = fromDir;
-  const normalizedRoot = resolve(rootDir);
+  const stopAt = monorepoRootDir ? resolve(monorepoRootDir) : resolve(rootDir);
 
-  while (currentDirectory.length >= normalizedRoot.length) {
+  while (currentDirectory.length >= stopAt.length) {
     for (const tsconfigFilename of TSCONFIG_FILENAMES) {
       const tsconfigCandidate = join(currentDirectory, tsconfigFilename);
       if (cachedExistsSync(tsconfigCandidate)) {
@@ -183,6 +188,7 @@ const resolveScssPartial = (specifier: string, fromDirectory: string): string | 
 
 export interface ModuleResolverOptions {
   hasReactNative?: boolean;
+  monorepoRoot?: string;
 }
 
 export const createResolver = (
@@ -238,18 +244,18 @@ export const createResolver = (
   if (config.tsConfigPath) {
     rootTsconfigPath = resolve(config.rootDir, config.tsConfigPath);
   } else {
-    const tsconfigCandidates = [
-      "tsconfig.json",
-      "tsconfig.web.json",
-      "tsconfig.app.json",
-      "tsconfig.base.json",
-    ];
-    for (const candidate of tsconfigCandidates) {
-      const candidatePath = resolve(config.rootDir, candidate);
-      if (cachedExistsSync(candidatePath)) {
-        rootTsconfigPath = candidatePath;
-        break;
+    const tsconfigSearchDirs = options.monorepoRoot
+      ? [config.rootDir, options.monorepoRoot]
+      : [config.rootDir];
+    for (const searchDir of tsconfigSearchDirs) {
+      for (const candidate of TSCONFIG_FILENAMES) {
+        const candidatePath = resolve(searchDir, candidate);
+        if (cachedExistsSync(candidatePath)) {
+          rootTsconfigPath = candidatePath;
+          break;
+        }
       }
+      if (rootTsconfigPath) break;
     }
   }
 
@@ -261,7 +267,7 @@ export const createResolver = (
     const cached = tsconfigPathCache.get(fileDir);
     if (cached !== undefined) return cached;
 
-    const found = findNearestTsconfig(fileDir, config.rootDir);
+    const found = findNearestTsconfig(fileDir, config.rootDir, options.monorepoRoot);
     const tsconfigResult = found ?? rootTsconfigPath;
     tsconfigPathCache.set(fileDir, tsconfigResult);
     return tsconfigResult;

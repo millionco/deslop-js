@@ -122,7 +122,7 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
       name: workspacePackage.name,
       directory: workspacePackage.directory,
     })),
-    { hasReactNative },
+    { hasReactNative, monorepoRoot },
   );
   const graphInputs: ModuleLinkInput[] = [];
 
