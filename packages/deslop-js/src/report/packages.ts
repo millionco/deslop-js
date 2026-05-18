@@ -584,14 +584,20 @@ const ALWAYS_USED_PREFIXES = [
   "@lingui/",
   "@emotion/",
   "tslint-config-",
+  "eslint-import-resolver-",
   "@changesets/",
+  "@react-navigation/",
   "@vercel/",
   "@expo/",
   "expo-",
   "react-native-",
 ];
 
+const ALWAYS_USED_SUFFIXES = ["-loader"];
+
 const isAlwaysConsideredUsed = (dependencyName: string): boolean => {
   if (IMPLICIT_DEPENDENCIES.has(dependencyName)) return true;
-  return ALWAYS_USED_PREFIXES.some((prefix) => dependencyName.startsWith(prefix));
+  if (ALWAYS_USED_PREFIXES.some((prefix) => dependencyName.startsWith(prefix))) return true;
+  if (ALWAYS_USED_SUFFIXES.some((suffix) => dependencyName.endsWith(suffix))) return true;
+  return false;
 };

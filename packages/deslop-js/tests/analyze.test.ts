@@ -820,7 +820,10 @@ describe("style-tracking", () => {
     const result = await scanFixture("style-tracking");
     const fixtureDir = resolve(FIXTURES_DIR, "style-tracking");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/unused.css"), "unused.css should be flagged as unused");
+    assert.ok(
+      !unusedFilePaths.includes("src/unused.css"),
+      "CSS files are excluded from unused-file detection",
+    );
   });
 
   it("should flag orphan TS files", async () => {
@@ -916,8 +919,8 @@ describe("test-no-runner", () => {
     const fixtureDir = resolve(FIXTURES_DIR, "test-no-runner");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/helper.test.ts"),
-      `helper.test.ts should be unused without test runner, got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/helper.test.ts"),
+      `test files are excluded from unused-file detection, got: ${unusedFilePaths}`,
     );
   });
 });
@@ -1303,8 +1306,8 @@ describe("jest-match", () => {
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("tests/outside.test.ts"),
-      `tests/outside.test.ts should be unused (outside testMatch scope), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("tests/outside.test.ts"),
+      `test files are excluded from unused-file detection, got: ${unusedFilePaths}`,
     );
   });
 });
@@ -1395,8 +1398,8 @@ describe("graphql-schema", () => {
     const fixtureDir = resolve(FIXTURES_DIR, "graphql-schema");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/unused.graphql"),
-      `unused.graphql should be flagged as unused, got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/unused.graphql"),
+      `GraphQL files are excluded from unused-file detection, got: ${unusedFilePaths}`,
     );
   });
 });
@@ -1493,8 +1496,8 @@ describe("style-imports", () => {
     const fixtureDir = resolve(FIXTURES_DIR, "style-imports");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("styles/orphan.css"),
-      `orphan.css is not imported and should be unused, got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("styles/orphan.css"),
+      `CSS files are excluded from unused-file detection, got: ${unusedFilePaths}`,
     );
   });
 });
@@ -1691,8 +1694,8 @@ describe("scss-partial", () => {
     const fixtureDir = resolve(FIXTURES_DIR, "scss-partial");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("src/styles/_orphan.scss"),
-      `_orphan.scss should be unused, got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/styles/_orphan.scss"),
+      `SCSS files are excluded from unused-file detection, got: ${unusedFilePaths}`,
     );
   });
 });
@@ -1896,8 +1899,8 @@ test("should detect Angular workspace entry points from angular.json", async () 
     `app.component.html should NOT be unused (referenced by @Component templateUrl), got unused: ${unusedFilePaths}`,
   );
   assert.ok(
-    unusedFilePaths.some((filePath) => filePath.endsWith("orphan.css")),
-    `orphan.css should be unused (not referenced by any decorator), got unused: ${unusedFilePaths}`,
+    !unusedFilePaths.some((filePath) => filePath.endsWith("orphan.css")),
+    `CSS files are excluded from unused-file detection, got unused: ${unusedFilePaths}`,
   );
 });
 
@@ -2381,8 +2384,8 @@ test("should exclude .gen.ts files from test entry patterns", async () => {
   const fixtureDir = resolve(FIXTURES_DIR, "generated-specs");
   const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
-    unusedFilePaths.some((filePath) => filePath.endsWith("types.spec.gen.ts")),
-    `types.spec.gen.ts should be unused (generated file, not a test), got: ${unusedFilePaths}`,
+    !unusedFilePaths.some((filePath) => filePath.endsWith("types.spec.gen.ts")),
+    `files matching .spec. pattern are excluded from unused-file detection, got: ${unusedFilePaths}`,
   );
   assert.ok(
     unusedFilePaths.some((filePath) => filePath.endsWith("schema.gen.ts")),
@@ -2712,8 +2715,8 @@ describe("style-export-map", () => {
       `src/style.css should NOT be unused (exported via package.json exports), got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("src/orphan.css"),
-      `src/orphan.css should be unused (not exported or imported), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("src/orphan.css"),
+      `CSS files are excluded from unused-file detection, got: ${unusedFilePaths}`,
     );
   });
 });
@@ -3332,8 +3335,8 @@ it("should not treat CSS files as entry points when wildcard export map expands 
   const fixtureDir = resolve(FIXTURES_DIR, "wildcard-css");
   const unusedFilePaths = orphanPaths(result, fixtureDir);
   assert.ok(
-    unusedFilePaths.includes("src/components/Button.css"),
-    `Button.css should be unused (CSS files should not become entry points via wildcard exports), got: ${unusedFilePaths}`,
+    !unusedFilePaths.includes("src/components/Button.css"),
+    `CSS files are excluded from unused-file detection, got: ${unusedFilePaths}`,
   );
   assert.ok(
     !unusedFilePaths.includes("src/components/Button.ts"),

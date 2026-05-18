@@ -1,12 +1,26 @@
 import type { DependencyGraph, UnusedFile, SourceModule } from "../types.js";
 
-const EXCLUDED_EXTENSIONS = new Set([".html", ".mdx", ".md"]);
+const EXCLUDED_EXTENSIONS = new Set([
+  ".html",
+  ".mdx",
+  ".md",
+  ".css",
+  ".scss",
+  ".less",
+  ".sass",
+  ".graphql",
+  ".gql",
+]);
+
+const TEST_FILE_PATTERN = /\.(?:test|spec|stories|story)\./;
 
 const hasExcludedExtension = (filePath: string): boolean => {
   const lastDot = filePath.lastIndexOf(".");
   if (lastDot === -1) return false;
   return EXCLUDED_EXTENSIONS.has(filePath.slice(lastDot));
 };
+
+const isTestFile = (filePath: string): boolean => TEST_FILE_PATTERN.test(filePath);
 
 export const detectOrphanFiles = (graph: DependencyGraph): UnusedFile[] => {
   const unusedFiles: UnusedFile[] = [];
@@ -17,6 +31,7 @@ export const detectOrphanFiles = (graph: DependencyGraph): UnusedFile[] => {
     if (module.isDeclarationFile) continue;
     if (module.isConfigFile) continue;
     if (hasExcludedExtension(module.fileId.path)) continue;
+    if (isTestFile(module.fileId.path)) continue;
     if (isBarrelWithReachableSources(module, graph)) continue;
     if (hasReachableDirectImporter(module.fileId.index, graph)) continue;
 

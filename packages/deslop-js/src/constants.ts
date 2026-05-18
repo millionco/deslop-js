@@ -154,6 +154,9 @@ export const IMPLICIT_DEPENDENCIES = new Set([
   "webpack",
   "rollup",
   "terser",
+  "autoprefixer",
+  "tailwindcss",
+  "react-test-renderer",
 ]);
 
 export const BUILTIN_MODULES = new Set([
