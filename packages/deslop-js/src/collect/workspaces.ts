@@ -133,6 +133,22 @@ const collectWorkspacePatterns = (rootDir: string): string[] => {
     } catch {}
   }
 
+  const lernaJsonPath = join(rootDir, "lerna.json");
+  if (existsSync(lernaJsonPath)) {
+    try {
+      const content = readFileSync(lernaJsonPath, "utf-8");
+      const lernaJson = JSON.parse(content);
+      if (Array.isArray(lernaJson.packages)) {
+        patterns.push(
+          ...lernaJson.packages.filter(
+            (pattern: unknown): pattern is string =>
+              typeof pattern === "string" && !pattern.startsWith("!"),
+          ),
+        );
+      }
+    } catch {}
+  }
+
   return patterns;
 };
 

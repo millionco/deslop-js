@@ -80,6 +80,52 @@ describe("simple-app", () => {
   });
 });
 
+describe("dependency-tooling", () => {
+  it("should keep peer dependencies, script binaries, overrides, and Nx project refs used", async () => {
+    const result = await scanFixture("dependency-tooling");
+    const deps = staleDependencyNames(result);
+    const expectedUsedDeps = [
+      "@babel/cli",
+      "@formatjs/cli",
+      "@hookform/resolvers",
+      "@nx/js",
+      "@tauri-apps/cli",
+      "@tinacms/cli",
+      "@typescript/native-preview",
+      "babel-eslint",
+      "chart.js",
+      "chokidar-cli",
+      "jest-cli",
+      "jest-config",
+      "prompt",
+      "react-chartjs-2",
+      "react-redux",
+      "redux",
+      "replace-in-file",
+      "tsc-alias",
+      "zod",
+    ];
+    for (const dependencyName of expectedUsedDeps) {
+      assert.ok(
+        !deps.includes(dependencyName),
+        `${dependencyName} should be treated as used, got: ${deps}`,
+      );
+    }
+    assert.ok(deps.includes("unused-dep"), `unused-dep should be unused, got: ${deps}`);
+    assert.ok(deps.includes("unused-tool"), `unused-tool should be unused, got: ${deps}`);
+    assert.ok(deps.includes("redux-thunk"), `redux-thunk should be unused, got: ${deps}`);
+  });
+});
+
+describe("css-tilde-import", () => {
+  it("should detect Sass tilde package imports as dependency usage", async () => {
+    const result = await scanFixture("css-tilde-import");
+    const deps = staleDependencyNames(result);
+    assert.ok(!deps.includes("bootstrap"), `bootstrap should be used from SCSS, got: ${deps}`);
+    assert.ok(deps.includes("unused-dep"), `unused-dep should be unused, got: ${deps}`);
+  });
+});
+
 describe("reexport-star", () => {
   it("should not flag foo as unused (used via barrel)", async () => {
     const result = await scanFixture("reexport-star");
@@ -627,6 +673,34 @@ describe("alias-paths", () => {
   });
 });
 
+describe("webpack-resolve", () => {
+  it("should resolve webpack aliases and module roots", async () => {
+    const result = await scanFixture("webpack-resolve");
+    const fixtureDir = resolve(FIXTURES_DIR, "webpack-resolve");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/App.ts"),
+      `App.ts should be reachable through resolve.modules, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("app/views/actions/run-action.ts"),
+      `run-action.ts should be reachable through resolve.alias, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("app/views/utils/helper.ts"),
+      `helper.ts should be reachable through path.join alias, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("app/views/actions/orphan.ts"),
+      `alias orphan should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("entry-validation", () => {
   it("should not flag entry exports by default", async () => {
     const result = await scanFixture("entry-validation");
@@ -1171,6 +1245,30 @@ describe("workspace-explicit", () => {
     );
     assert.ok(
       unusedFilePaths.includes("packages/utils/src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("lerna-workspace", () => {
+  it("should discover workspace packages from lerna.json", async () => {
+    const result = await scanFixture("lerna-workspace");
+    const fixtureDir = resolve(FIXTURES_DIR, "lerna-workspace");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/app/src/index.ts"),
+      `app index should be reachable as a lerna workspace entry, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("packages/ui/src/index.ts"),
+      `ui index should be reachable via workspace package import, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("packages/ui/src/button.ts"),
+      `button.ts should be reachable through the ui barrel, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("packages/ui/src/orphan.ts"),
       `orphan.ts should be unused, got: ${unusedFilePaths}`,
     );
   });
@@ -2086,6 +2184,38 @@ it("should detect cra-rewired as CRA variant and use src/index as entry", async 
   assert.ok(
     unusedFilePaths.includes("src/orphan.ts"),
     `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should resolve CRA src-root bare imports without jsconfig", async () => {
+  const result = await scanFixture("cra-src-baseurl");
+  const fixtureDir = resolve(FIXTURES_DIR, "cra-src-baseurl");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("src/App.tsx"),
+    `App.tsx should be reachable via CRA src module root, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.includes("src/components/Header.tsx"),
+    `Header.tsx should be reachable via CRA src module root, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("src/orphan.ts"),
+    `orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+});
+
+it("should scope CRA src-root resolution to packages that declare CRA", async () => {
+  const result = await scanFixture("cra-monorepo-scope");
+  const fixtureDir = resolve(FIXTURES_DIR, "cra-monorepo-scope");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
+  assert.ok(
+    !unusedFilePaths.includes("packages/app/src/App.ts"),
+    `app App.ts should resolve via its CRA dependency, got unused: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    unusedFilePaths.includes("packages/lib/src/RootOnly.ts"),
+    `lib RootOnly.ts should stay unused because lib is not CRA, got: ${unusedFilePaths}`,
   );
 });
 

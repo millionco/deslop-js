@@ -84,6 +84,13 @@ export const detectStalePackages = (
     for (const packageName of packageJsonConfigReferenced) usedPackageNames.add(packageName);
   }
 
+  const nxProjectReferenced = collectNxProjectJsonReferences(
+    config.rootDir,
+    declaredNames,
+    binToPackage,
+  );
+  for (const packageName of nxProjectReferenced) usedPackageNames.add(packageName);
+
   const configSearchRoots =
     monorepoRoot && monorepoRoot !== config.rootDir
       ? [config.rootDir, monorepoRoot]
@@ -150,6 +157,15 @@ export const detectStalePackages = (
     usedPackageNames,
   );
   for (const packageName of peerSatisfied) usedPackageNames.add(packageName);
+
+  const staticPeerSatisfied = collectStaticPeerSatisfiedPackages(declaredNames, usedPackageNames);
+  for (const packageName of staticPeerSatisfied) usedPackageNames.add(packageName);
+
+  const implicitCompanionPackages = collectImplicitCompanionPackages(
+    declaredNames,
+    usedPackageNames,
+  );
+  for (const packageName of implicitCompanionPackages) usedPackageNames.add(packageName);
 
   const candidateUnused = new Set<string>();
   for (const [dependencyName] of declaredDependencies) {
@@ -233,12 +249,98 @@ const collectPeerSatisfiedPackages = (
   return peerSatisfied;
 };
 
+const STATIC_PEER_DEPENDENCY_MAP: Record<string, string[]> = {
+  "@apollo/client": ["graphql"],
+  "@docusaurus/core": ["@mdx-js/react"],
+  "@fortawesome/react-fontawesome": ["@fortawesome/fontawesome-svg-core"],
+  "@gorhom/bottom-sheet": ["react-native-gesture-handler", "react-native-reanimated"],
+  "@hookform/resolvers": ["zod"],
+  "@mdx-js/loader": ["@mdx-js/react"],
+  "@mui/material": ["react-transition-group", "styled-components"],
+  "@stripe/react-stripe-js": ["@stripe/stripe-js"],
+  "@tiptap/core": ["@tiptap/pm"],
+  "@tiptap/react": ["@tiptap/pm"],
+  "@trpc/server": ["zod"],
+  "chart.js": [],
+  "fumadocs-core": ["@mdx-js/react"],
+  "fumadocs-mdx": ["@mdx-js/react"],
+  "fumadocs-ui": ["@mdx-js/react"],
+  "graphql-request": ["graphql"],
+  nextra: ["@mdx-js/react"],
+  "nextra-theme-blog": ["@mdx-js/react"],
+  "nextra-theme-docs": ["@mdx-js/react"],
+  "react-app-polyfill": ["core-js"],
+  "react-bootstrap": ["react-transition-group"],
+  "react-chartjs-2": ["chart.js"],
+  "react-redux": ["redux"],
+  "react-router-dom": ["react-router"],
+  "redux-thunk": ["redux"],
+  sanity: ["styled-components"],
+  sequelize: ["pg"],
+  "stylis-plugin-rtl": ["stylis"],
+  urql: ["graphql"],
+  "use-immer": ["immer"],
+  zustand: ["immer"],
+};
+
+const collectStaticPeerSatisfiedPackages = (
+  declaredNames: Set<string>,
+  confirmedUsedNames: Set<string>,
+): Set<string> => {
+  const peerSatisfied = new Set<string>();
+
+  for (const [packageName, peerNames] of Object.entries(STATIC_PEER_DEPENDENCY_MAP)) {
+    if (!confirmedUsedNames.has(packageName)) continue;
+    for (const peerName of peerNames) {
+      if (declaredNames.has(peerName)) {
+        peerSatisfied.add(peerName);
+      }
+    }
+  }
+
+  return peerSatisfied;
+};
+
+const IMPLICIT_COMPANION_DEPENDENCY_MAP: Record<string, string[]> = {
+  jest: ["jest-config"],
+  "jest-cli": ["jest-config"],
+};
+
+const collectImplicitCompanionPackages = (
+  declaredNames: Set<string>,
+  confirmedUsedNames: Set<string>,
+): Set<string> => {
+  const companions = new Set<string>();
+
+  for (const [packageName, companionNames] of Object.entries(IMPLICIT_COMPANION_DEPENDENCY_MAP)) {
+    if (!confirmedUsedNames.has(packageName)) continue;
+    for (const companionName of companionNames) {
+      if (declaredNames.has(companionName)) {
+        companions.add(companionName);
+      }
+    }
+  }
+
+  return companions;
+};
+
 const SHELL_SPLIT_PATTERN = /\s*(?:&&|\|\||[;&|])\s*/;
 
 const CLI_BINARY_TO_PACKAGE: Record<string, string> = {
+  "babel-node": "@babel/node",
+  "trigger.dev": "trigger.dev",
+  "@formatjs/cli": "@formatjs/cli",
   "react-scripts": "react-scripts",
   "webpack-cli": "webpack-cli",
   "webpack-dev-server": "webpack-dev-server",
+  babel: "@babel/cli",
+  chokidar: "chokidar-cli",
+  "replace-in-file": "replace-in-file",
+  tauri: "@tauri-apps/cli",
+  tinacms: "@tinacms/cli",
+  "tsc-alias": "tsc-alias",
+  formatjs: "@formatjs/cli",
+  prompt: "prompt",
   vitest: "vitest",
   jest: "jest",
   prisma: "prisma",
@@ -255,6 +357,11 @@ const CLI_BINARY_TO_PACKAGE: Record<string, string> = {
   "simple-git-hooks": "simple-git-hooks",
   "generate-arg-types": "@webstudio-is/generate-arg-types",
   email: "@react-email/preview-server",
+};
+
+const CLI_BINARY_FALLBACK_PACKAGES: Record<string, string[]> = {
+  babel: ["babel-cli"],
+  jest: ["jest-cli"],
 };
 
 const ENV_WRAPPER_BINARY_SET = new Set(["cross-env", "dotenv", "dotenv-flow", "env-cmd"]);
@@ -302,49 +409,70 @@ const collectScriptReferencedPackages = (
 
     for (const scriptCommand of Object.values(scripts)) {
       if (typeof scriptCommand !== "string") continue;
-
-      const segments = scriptCommand.split(SHELL_SPLIT_PATTERN);
-      for (const segment of segments) {
-        const tokens = segment.trim().split(/\s+/);
-        if (tokens.length === 0) continue;
-
-        let binaryIndex = 0;
-        const firstToken = tokens[0].replace(/^.*\//, "");
-        if (ENV_WRAPPER_BINARY_SET.has(firstToken)) {
-          const envPackage = binToPackage.get(firstToken);
-          if (envPackage && declaredNames.has(envPackage)) referenced.add(envPackage);
-          binaryIndex = 1;
-          while (binaryIndex < tokens.length && INLINE_ENV_VAR_PATTERN.test(tokens[binaryIndex])) {
-            binaryIndex++;
-          }
-          if (binaryIndex >= tokens.length) continue;
-        }
-
-        while (binaryIndex < tokens.length && INLINE_ENV_VAR_PATTERN.test(tokens[binaryIndex])) {
-          binaryIndex++;
-        }
-        if (binaryIndex >= tokens.length) continue;
-
-        const binaryToken = tokens[binaryIndex].replace(/^.*\//, "");
-        const effectiveBinary =
-          binaryToken === "npx" || binaryToken === "pnpx" || binaryToken === "bunx"
-            ? (tokens[binaryIndex + 1]?.replace(/^.*\//, "") ?? "")
-            : binaryToken;
-
-        for (const candidateBinary of [binaryToken, effectiveBinary]) {
-          if (!candidateBinary) continue;
-          const mappedPackage = binToPackage.get(candidateBinary);
-          if (mappedPackage && declaredNames.has(mappedPackage)) {
-            referenced.add(mappedPackage);
-          }
-          if (declaredNames.has(candidateBinary)) {
-            referenced.add(candidateBinary);
-          }
-        }
-      }
+      const commandReferenced = collectCommandReferencedPackages(
+        scriptCommand,
+        declaredNames,
+        binToPackage,
+      );
+      for (const packageName of commandReferenced) referenced.add(packageName);
     }
   } catch {
     return referenced;
+  }
+
+  return referenced;
+};
+
+const collectCommandReferencedPackages = (
+  command: string,
+  declaredNames: Set<string>,
+  binToPackage: Map<string, string>,
+): Set<string> => {
+  const referenced = new Set<string>();
+
+  const segments = command.split(SHELL_SPLIT_PATTERN);
+  for (const segment of segments) {
+    const tokens = segment.trim().split(/\s+/);
+    if (tokens.length === 0) continue;
+
+    let binaryIndex = 0;
+    const firstToken = tokens[0].replace(/^.*\//, "");
+    if (ENV_WRAPPER_BINARY_SET.has(firstToken)) {
+      const envPackage = binToPackage.get(firstToken);
+      if (envPackage && declaredNames.has(envPackage)) referenced.add(envPackage);
+      binaryIndex = 1;
+      while (binaryIndex < tokens.length && INLINE_ENV_VAR_PATTERN.test(tokens[binaryIndex])) {
+        binaryIndex++;
+      }
+      if (binaryIndex >= tokens.length) continue;
+    }
+
+    while (binaryIndex < tokens.length && INLINE_ENV_VAR_PATTERN.test(tokens[binaryIndex])) {
+      binaryIndex++;
+    }
+    if (binaryIndex >= tokens.length) continue;
+
+    const binaryToken = tokens[binaryIndex].replace(/^.*\//, "");
+    const effectiveBinary =
+      binaryToken === "npx" || binaryToken === "pnpx" || binaryToken === "bunx"
+        ? (tokens[binaryIndex + 1]?.replace(/^.*\//, "") ?? "")
+        : binaryToken;
+
+    for (const candidateBinary of [binaryToken, effectiveBinary]) {
+      if (!candidateBinary) continue;
+      const mappedPackage = binToPackage.get(candidateBinary);
+      if (mappedPackage && declaredNames.has(mappedPackage)) {
+        referenced.add(mappedPackage);
+      }
+      for (const fallbackPackage of CLI_BINARY_FALLBACK_PACKAGES[candidateBinary] ?? []) {
+        if (declaredNames.has(fallbackPackage)) {
+          referenced.add(fallbackPackage);
+        }
+      }
+      if (declaredNames.has(candidateBinary)) {
+        referenced.add(candidateBinary);
+      }
+    }
   }
 
   return referenced;
@@ -477,6 +605,55 @@ const collectPackageJsonConfigReferences = (
   }
 
   return referenced;
+};
+
+const collectNxProjectJsonReferences = (
+  rootDir: string,
+  declaredNames: Set<string>,
+  binToPackage: Map<string, string>,
+): Set<string> => {
+  const referenced = new Set<string>();
+
+  const projectJsonPaths = fg.sync(["project.json", "**/project.json"], {
+    cwd: rootDir,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
+    deep: 5,
+  });
+
+  for (const projectJsonPath of projectJsonPaths) {
+    try {
+      const content = readFileSync(projectJsonPath, "utf-8");
+      const projectJson = JSON.parse(content);
+      const projectText = JSON.stringify(projectJson);
+      for (const packageName of declaredNames) {
+        if (projectText.includes(packageName)) {
+          referenced.add(packageName);
+        }
+      }
+
+      for (const stringValue of collectStringValues(projectJson)) {
+        const commandReferenced = collectCommandReferencedPackages(
+          stringValue,
+          declaredNames,
+          binToPackage,
+        );
+        for (const packageName of commandReferenced) referenced.add(packageName);
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return referenced;
+};
+
+const collectStringValues = (value: unknown): string[] => {
+  if (typeof value === "string") return [value];
+  if (!value || typeof value !== "object") return [];
+  if (Array.isArray(value)) return value.flatMap(collectStringValues);
+  return Object.values(value).flatMap(collectStringValues);
 };
 
 const TSCONFIG_GLOBS = [

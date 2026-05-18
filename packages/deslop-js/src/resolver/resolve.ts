@@ -1,6 +1,7 @@
 import { ResolverFactory } from "oxc-resolver";
-import { dirname, resolve, join, basename, extname, sep } from "node:path";
+import { dirname, resolve, join, basename, extname, sep, relative, isAbsolute } from "node:path";
 import { existsSync, readFileSync, statSync } from "node:fs";
+import fg from "fast-glob";
 import type { DeslopConfig } from "../types.js";
 import {
   BUILTIN_MODULES,
@@ -116,6 +117,33 @@ const COMMON_RESOLVER_OPTIONS = {
   extensionAlias: EXTENSION_ALIAS,
 };
 
+interface WebpackAlias {
+  name: string;
+  targetDirectory: string;
+  isExact: boolean;
+}
+
+interface WebpackResolverConfig {
+  scopeDirectory: string;
+  aliases: WebpackAlias[];
+  moduleDirectories: string[];
+}
+
+const WEBPACK_CONFIG_GLOBS = [
+  "webpack.config.{js,ts,mjs,cjs}",
+  "**/webpack*.config.{js,ts,mjs,cjs}",
+  "**/webpack.config*.{js,ts,mjs,cjs}",
+  "**/webpack*.config*.babel.{js,ts}",
+];
+
+const WEBPACK_ALIAS_BLOCK_PATTERN = /alias\s*:\s*\{([\s\S]*?)\}/g;
+const WEBPACK_ALIAS_ENTRY_PATTERN =
+  /["']?([@\w$./-]+)["']?\s*:\s*(?:path\.(?:resolve|join)\(\s*__dirname\s*,\s*((?:["'][^"']+["']\s*,?\s*)+)\)|["']([^"']+)["'])/g;
+const WEBPACK_MODULES_BLOCK_PATTERN = /modules\s*:\s*\[([\s\S]*?)\]/g;
+const WEBPACK_PATH_CALL_PATTERN =
+  /path\.(?:resolve|join)\(\s*__dirname\s*,\s*((?:["'][^"']+["']\s*,?\s*)+)\)/g;
+const WEBPACK_STRING_LITERAL_PATTERN = /["']([^"']+)["']/g;
+
 const TSCONFIG_FILENAMES = [
   "tsconfig.json",
   "tsconfig.web.json",
@@ -186,6 +214,132 @@ const resolveScssPartial = (specifier: string, fromDirectory: string): string | 
   return undefined;
 };
 
+const isInsideDirectory = (filePath: string, directory: string): boolean => {
+  const relativePath = relative(directory, filePath);
+  return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
+};
+
+const extractQuotedSegments = (value: string): string[] => {
+  const segments: string[] = [];
+  let segmentMatch: RegExpExecArray | null;
+  WEBPACK_STRING_LITERAL_PATTERN.lastIndex = 0;
+  while ((segmentMatch = WEBPACK_STRING_LITERAL_PATTERN.exec(value)) !== null) {
+    segments.push(segmentMatch[1]);
+  }
+  return segments;
+};
+
+const resolveWebpackPathValue = (value: string, configDirectory: string): string => {
+  if (isAbsolute(value)) return value;
+  return resolve(configDirectory, value);
+};
+
+const findWebpackConfigScope = (configPath: string, rootDir: string): string => {
+  let currentDirectory = dirname(configPath);
+  const absoluteRoot = resolve(rootDir);
+
+  while (currentDirectory.length >= absoluteRoot.length) {
+    if (cachedExistsSync(join(currentDirectory, "package.json"))) {
+      return currentDirectory;
+    }
+    const parentDirectory = dirname(currentDirectory);
+    if (parentDirectory === currentDirectory) break;
+    currentDirectory = parentDirectory;
+  }
+
+  return absoluteRoot;
+};
+
+const extractWebpackAliases = (content: string, configDirectory: string): WebpackAlias[] => {
+  const aliases: WebpackAlias[] = [];
+  let aliasBlockMatch: RegExpExecArray | null;
+  WEBPACK_ALIAS_BLOCK_PATTERN.lastIndex = 0;
+
+  while ((aliasBlockMatch = WEBPACK_ALIAS_BLOCK_PATTERN.exec(content)) !== null) {
+    const aliasBlock = aliasBlockMatch[1];
+    let aliasEntryMatch: RegExpExecArray | null;
+    WEBPACK_ALIAS_ENTRY_PATTERN.lastIndex = 0;
+
+    while ((aliasEntryMatch = WEBPACK_ALIAS_ENTRY_PATTERN.exec(aliasBlock)) !== null) {
+      const rawName = aliasEntryMatch[1];
+      const pathCallSegments = aliasEntryMatch[2];
+      const stringTarget = aliasEntryMatch[3];
+      if (!pathCallSegments && !stringTarget) continue;
+      const isExact = rawName.endsWith("$");
+      const name = isExact ? rawName.slice(0, -1) : rawName.replace(/\/$/, "");
+
+      let targetDirectory: string;
+      if (pathCallSegments) {
+        targetDirectory = resolve(configDirectory, ...extractQuotedSegments(pathCallSegments));
+      } else if (stringTarget) {
+        targetDirectory = resolveWebpackPathValue(stringTarget, configDirectory);
+      } else {
+        continue;
+      }
+
+      aliases.push({ name, targetDirectory, isExact });
+    }
+  }
+
+  return aliases;
+};
+
+const extractWebpackModuleDirectories = (content: string, configDirectory: string): string[] => {
+  const moduleDirectories: string[] = [];
+  let modulesBlockMatch: RegExpExecArray | null;
+  WEBPACK_MODULES_BLOCK_PATTERN.lastIndex = 0;
+
+  while ((modulesBlockMatch = WEBPACK_MODULES_BLOCK_PATTERN.exec(content)) !== null) {
+    const modulesBlock = modulesBlockMatch[1];
+    let pathCallMatch: RegExpExecArray | null;
+    WEBPACK_PATH_CALL_PATTERN.lastIndex = 0;
+    while ((pathCallMatch = WEBPACK_PATH_CALL_PATTERN.exec(modulesBlock)) !== null) {
+      moduleDirectories.push(resolve(configDirectory, ...extractQuotedSegments(pathCallMatch[1])));
+    }
+
+    let stringMatch: RegExpExecArray | null;
+    WEBPACK_STRING_LITERAL_PATTERN.lastIndex = 0;
+    while ((stringMatch = WEBPACK_STRING_LITERAL_PATTERN.exec(modulesBlock)) !== null) {
+      const moduleDirectory = stringMatch[1];
+      if (moduleDirectory === "node_modules") continue;
+      moduleDirectories.push(resolveWebpackPathValue(moduleDirectory, configDirectory));
+    }
+  }
+
+  return [...new Set(moduleDirectories)];
+};
+
+const loadWebpackResolverConfigs = (rootDir: string): WebpackResolverConfig[] => {
+  const configPaths = fg.sync(WEBPACK_CONFIG_GLOBS, {
+    cwd: rootDir,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
+    deep: 4,
+  });
+
+  const configs: WebpackResolverConfig[] = [];
+  for (const configPath of configPaths) {
+    try {
+      const content = cachedReadFileSync(configPath);
+      const configDirectory = dirname(configPath);
+      const aliases = extractWebpackAliases(content, configDirectory);
+      const moduleDirectories = extractWebpackModuleDirectories(content, configDirectory);
+      if (aliases.length === 0 && moduleDirectories.length === 0) continue;
+
+      configs.push({
+        scopeDirectory: findWebpackConfigScope(configPath, rootDir),
+        aliases,
+        moduleDirectories,
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  return configs;
+};
+
 export interface ModuleResolverOptions {
   hasReactNative?: boolean;
   monorepoRoot?: string;
@@ -239,6 +393,17 @@ export const createResolver = (
   for (const workspacePackage of workspacePackages) {
     workspaceNameToDirectory.set(workspacePackage.name, workspacePackage.directory);
   }
+
+  const webpackConfigRoots =
+    options.monorepoRoot && options.monorepoRoot !== config.rootDir
+      ? [config.rootDir, options.monorepoRoot]
+      : [config.rootDir];
+  const webpackResolverConfigs = webpackConfigRoots
+    .flatMap(loadWebpackResolverConfigs)
+    .sort(
+      (leftConfig, rightConfig) =>
+        rightConfig.scopeDirectory.length - leftConfig.scopeDirectory.length,
+    );
 
   let rootTsconfigPath: string | undefined;
   if (config.tsConfigPath) {
@@ -355,6 +520,56 @@ export const createResolver = (
     }
   })();
 
+  const packageDependencyCache = new Map<string, Set<string>>();
+
+  const readPackageDependencies = (directory: string): Set<string> => {
+    const cached = packageDependencyCache.get(directory);
+    if (cached) return cached;
+
+    const dependencies = new Set<string>();
+    const packageJsonPath = join(directory, "package.json");
+    try {
+      const packageJson = JSON.parse(cachedReadFileSync(packageJsonPath));
+      const dependencySections = [
+        packageJson.dependencies,
+        packageJson.devDependencies,
+        packageJson.optionalDependencies,
+      ];
+      for (const dependencySection of dependencySections) {
+        if (!dependencySection || typeof dependencySection !== "object") continue;
+        for (const dependencyName of Object.keys(dependencySection)) {
+          dependencies.add(dependencyName);
+        }
+      }
+    } catch {}
+
+    packageDependencyCache.set(directory, dependencies);
+    return dependencies;
+  };
+
+  const findNearestPackageSrcDirectoryWithDependency = (
+    filePath: string,
+    dependencyNames: string[],
+  ): string | undefined => {
+    let currentDirectory = dirname(filePath);
+    const stopAt = options.monorepoRoot ? resolve(options.monorepoRoot) : resolve(config.rootDir);
+
+    while (currentDirectory.length >= stopAt.length) {
+      if (cachedExistsSync(join(currentDirectory, "package.json"))) {
+        const dependencies = readPackageDependencies(currentDirectory);
+        if (dependencyNames.some((dependencyName) => dependencies.has(dependencyName))) {
+          const srcDirectory = join(currentDirectory, "src");
+          return cachedExistsSync(srcDirectory) ? srcDirectory : undefined;
+        }
+      }
+      const parentDirectory = dirname(currentDirectory);
+      if (parentDirectory === currentDirectory) break;
+      currentDirectory = parentDirectory;
+    }
+
+    return undefined;
+  };
+
   const extractPathsFromTsconfig = (
     tsconfigFile: string,
     visitedFiles: Set<string>,
@@ -469,6 +684,43 @@ export const createResolver = (
         for (const ext of RESOLVER_EXTENSIONS) {
           if (cachedExistsSync(indexCandidate + ext)) return indexCandidate + ext;
         }
+      }
+    }
+
+    return undefined;
+  };
+
+  const tryResolveFromDirectory = (directory: string, specifier: string): string | undefined => {
+    const candidatePath = resolvePathWithExtensionFallback(resolve(directory, specifier));
+    if (existsAsFile(candidatePath)) return candidatePath;
+    return undefined;
+  };
+
+  const tryResolveViaWebpackConfig = (specifier: string, fromFile: string): string | undefined => {
+    if (webpackResolverConfigs.length === 0) return undefined;
+    if (!isBareSpecifier(specifier)) return undefined;
+
+    for (const webpackConfig of webpackResolverConfigs) {
+      if (!isInsideDirectory(fromFile, webpackConfig.scopeDirectory)) continue;
+
+      for (const alias of webpackConfig.aliases) {
+        if (alias.isExact && specifier !== alias.name) continue;
+
+        const suffix =
+          specifier === alias.name
+            ? ""
+            : specifier.startsWith(`${alias.name}/`)
+              ? specifier.slice(alias.name.length + 1)
+              : undefined;
+        if (suffix === undefined) continue;
+
+        const aliasCandidate = tryResolveFromDirectory(alias.targetDirectory, suffix);
+        if (aliasCandidate) return aliasCandidate;
+      }
+
+      for (const moduleDirectory of webpackConfig.moduleDirectories) {
+        const moduleCandidate = tryResolveFromDirectory(moduleDirectory, specifier);
+        if (moduleCandidate) return moduleCandidate;
       }
     }
 
@@ -708,6 +960,17 @@ export const createResolver = (
       return resolvedResult;
     }
 
+    const webpackResolved = tryResolveViaWebpackConfig(cleanedSpecifier, fromFile);
+    if (webpackResolved) {
+      const resolvedResult: ResolvedImport = {
+        resolvedPath: webpackResolved,
+        isExternal: false,
+        packageName: undefined,
+      };
+      resolveResultCache.set(cacheKey, resolvedResult);
+      return resolvedResult;
+    }
+
     if (isBareSpecifier(cleanedSpecifier)) {
       const tsconfigFile = findTsconfigForFile(fromFile);
       if (tsconfigFile) {
@@ -739,6 +1002,22 @@ export const createResolver = (
               return resolvedResult;
             }
           }
+        }
+      }
+      const createReactAppSrcDirectory = findNearestPackageSrcDirectoryWithDependency(fromFile, [
+        "react-scripts",
+        "react-app-rewired",
+      ]);
+      if (createReactAppSrcDirectory) {
+        const craResolved = tryResolveFromDirectory(createReactAppSrcDirectory, cleanedSpecifier);
+        if (craResolved) {
+          const resolvedResult: ResolvedImport = {
+            resolvedPath: craResolved,
+            isExternal: false,
+            packageName: undefined,
+          };
+          resolveResultCache.set(cacheKey, resolvedResult);
+          return resolvedResult;
         }
       }
       const packageName = extractPackageNameFromSpecifier(cleanedSpecifier);
