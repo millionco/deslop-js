@@ -157,6 +157,10 @@ export const IMPLICIT_DEPENDENCIES = new Set([
   "autoprefixer",
   "tailwindcss",
   "react-test-renderer",
+  "esbuild",
+  "typedoc",
+  "commitizen",
+  "cz-conventional-changelog",
 ]);
 
 export const BUILTIN_MODULES = new Set([

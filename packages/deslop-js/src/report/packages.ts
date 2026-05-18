@@ -482,6 +482,10 @@ const PACKAGE_JSON_CONFIG_SECTIONS = [
   "browserslist",
   "postcss",
   "ava",
+  "config",
+  "pnpm",
+  "resolutions",
+  "overrides",
 ] as const;
 
 const collectPackageJsonConfigReferences = (
@@ -666,6 +670,7 @@ const ALWAYS_USED_PREFIXES = [
   "postcss-",
   "@tailwindcss/",
   "rollup-plugin-",
+  "@rollup/",
   "vite-plugin-",
   "@vitejs/",
   "webpack-",

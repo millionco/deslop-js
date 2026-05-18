@@ -12,7 +12,13 @@ const EXCLUDED_EXTENSIONS = new Set([
   ".gql",
 ]);
 
-const TEST_FILE_PATTERN = /(?:\.(?:test|spec|stories|story)\.|(?:^|\/)__tests__\/)/;
+const TEST_FILE_PATTERN = /(?:\.(?:test|spec|stories|story|cy)\.|(?:^|\/)__tests__\/)/;
+
+const EXCLUDED_DIRECTORY_PATTERN =
+  /(?:^|\/)(?:e2e|cypress|playwright|__fixtures__|__snapshots__|scripts)\/(?!.*node_modules)/;
+
+const CONFIG_FILE_PATTERN =
+  /(?:^|\/)(?:[^/]+\.config\.[tj]sx?$|[^/]+\.setup\.[tj]sx?$|setupTests\.[tj]sx?$|jest\.setup\.[tj]sx?$|vitest\.setup\.[tj]sx?$)/;
 
 const hasExcludedExtension = (filePath: string): boolean => {
   const lastDot = filePath.lastIndexOf(".");
@@ -20,7 +26,10 @@ const hasExcludedExtension = (filePath: string): boolean => {
   return EXCLUDED_EXTENSIONS.has(filePath.slice(lastDot));
 };
 
-const isTestFile = (filePath: string): boolean => TEST_FILE_PATTERN.test(filePath);
+const isExcludedByPattern = (filePath: string): boolean =>
+  TEST_FILE_PATTERN.test(filePath) ||
+  EXCLUDED_DIRECTORY_PATTERN.test(filePath) ||
+  CONFIG_FILE_PATTERN.test(filePath);
 
 export const detectOrphanFiles = (graph: DependencyGraph): UnusedFile[] => {
   const unusedFiles: UnusedFile[] = [];
@@ -31,7 +40,7 @@ export const detectOrphanFiles = (graph: DependencyGraph): UnusedFile[] => {
     if (module.isDeclarationFile) continue;
     if (module.isConfigFile) continue;
     if (hasExcludedExtension(module.fileId.path)) continue;
-    if (isTestFile(module.fileId.path)) continue;
+    if (isExcludedByPattern(module.fileId.path)) continue;
     if (isBarrelWithReachableSources(module, graph)) continue;
     if (hasReachableDirectImporter(module.fileId.index, graph)) continue;
 
