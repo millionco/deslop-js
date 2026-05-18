@@ -1,1 +1,1 @@
-module.exports = { mockFn: () => 'mocked' };
+module.exports = { mockFn: () => "mocked" };

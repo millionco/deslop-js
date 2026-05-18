@@ -1,2 +1,2 @@
-import * as lib from './lib';
+import * as lib from "./lib";
 console.log(lib.helperA());

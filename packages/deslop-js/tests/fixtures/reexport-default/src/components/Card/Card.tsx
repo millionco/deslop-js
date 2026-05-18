@@ -1,3 +1,3 @@
 export default function Card() {
-  return 'card';
+  return "card";
 }

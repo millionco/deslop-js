@@ -40,9 +40,10 @@ const extractMdxImportsExports = (sourceText: string): string => {
         if (character === "{") braceDepth++;
         if (character === "}") braceDepth--;
       }
-      const hasFromClause = trimmedLine.includes(" from ")
-        || trimmedLine.includes(" from'")
-        || trimmedLine.includes(" from\"");
+      const hasFromClause =
+        trimmedLine.includes(" from ") ||
+        trimmedLine.includes(" from'") ||
+        trimmedLine.includes(' from"');
       if (braceDepth <= 0 || trimmedLine.endsWith(";") || hasFromClause) {
         isInMultiline = false;
         braceDepth = 0;
@@ -171,16 +172,21 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
         : isSvelte
           ? extractSvelteScriptContent(sourceText)
           : sourceText;
-  const parseFileName = (isMdx || isAstro || isVue || isSvelte)
-    ? filePath.replace(/\.(mdx|astro|vue|svelte)$/, ".tsx")
-    : filePath;
+  const parseFileName =
+    isMdx || isAstro || isVue || isSvelte
+      ? filePath.replace(/\.(mdx|astro|vue|svelte)$/, ".tsx")
+      : filePath;
 
   let result = parseSync(parseFileName, textToParse);
 
-  const isPlainJsFile = parseFileName.endsWith(".js") || parseFileName.endsWith(".mjs") || parseFileName.endsWith(".cjs");
-  const hasJsxError = result.errors.length > 0
-    && isPlainJsFile
-    && result.errors.some((parseError) => {
+  const isPlainJsFile =
+    parseFileName.endsWith(".js") ||
+    parseFileName.endsWith(".mjs") ||
+    parseFileName.endsWith(".cjs");
+  const hasJsxError =
+    result.errors.length > 0 &&
+    isPlainJsFile &&
+    result.errors.some((parseError) => {
       const errorMessage = String(parseError.message ?? "");
       return errorMessage.includes("JSX") || errorMessage.includes("Unexpected token");
     });
@@ -229,8 +235,13 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
 };
 
 const WHOLE_OBJECT_FUNCTION_NAMES = new Set([
-  "keys", "values", "entries", "assign", "freeze",
-  "getOwnPropertyNames", "getOwnPropertyDescriptors",
+  "keys",
+  "values",
+  "entries",
+  "assign",
+  "freeze",
+  "getOwnPropertyNames",
+  "getOwnPropertyDescriptors",
 ]);
 
 const collectNamespaceLocalNames = (imports: ImportReference[]): Set<string> => {
@@ -312,10 +323,7 @@ const collectMemberAccesses = (
 
     if (node.type === "CallExpression") {
       const callExpression = node as unknown as CallExpression;
-      if (
-        callExpression.callee.type === "MemberExpression" &&
-        !callExpression.callee.computed
-      ) {
+      if (callExpression.callee.type === "MemberExpression" && !callExpression.callee.computed) {
         const calleeMember = callExpression.callee as StaticMemberExpression;
         if (
           calleeMember.object.type === "Identifier" &&
@@ -481,9 +489,7 @@ const extractExportAllDeclaration = (
   const reExportSource = node.source.value;
   if (!reExportSource) return;
 
-  const exportedName = node.exported
-    ? getModuleExportNameValue(node.exported)
-    : undefined;
+  const exportedName = node.exported ? getModuleExportNameValue(node.exported) : undefined;
 
   exports.push({
     name: exportedName ?? "*",
@@ -645,26 +651,32 @@ const extractStringLiteralFromArgument = (
   return typeof literalValue === "string" ? literalValue : undefined;
 };
 
-const extractGlobPatterns = (
-  callArguments: CallExpression["arguments"],
-): string[] => {
+const extractGlobPatterns = (callArguments: CallExpression["arguments"]): string[] => {
   const firstArgument = callArguments[0];
   if (!firstArgument || firstArgument.type === "SpreadElement") return [];
 
   if (firstArgument.type === "Literal") {
     const literalValue = (firstArgument as StringLiteral).value;
-    if (typeof literalValue === "string" && (literalValue.startsWith("./") || literalValue.startsWith("../"))) {
+    if (
+      typeof literalValue === "string" &&
+      (literalValue.startsWith("./") || literalValue.startsWith("../"))
+    ) {
       return [literalValue];
     }
     return [];
   }
 
   if (firstArgument.type === "ArrayExpression") {
-    const arrayExpression = firstArgument as unknown as { elements: Array<{ type: string; value?: unknown }> };
+    const arrayExpression = firstArgument as unknown as {
+      elements: Array<{ type: string; value?: unknown }>;
+    };
     return arrayExpression.elements
-      .filter((element): element is { type: "Literal"; value: string } =>
-        element.type === "Literal" && typeof element.value === "string"
-        && ((element.value as string).startsWith("./") || (element.value as string).startsWith("../")),
+      .filter(
+        (element): element is { type: "Literal"; value: string } =>
+          element.type === "Literal" &&
+          typeof element.value === "string" &&
+          ((element.value as string).startsWith("./") ||
+            (element.value as string).startsWith("../")),
       )
       .map((element) => element.value);
   }
@@ -672,9 +684,7 @@ const extractGlobPatterns = (
   return [];
 };
 
-const extractRegexGlobSuffix = (
-  callArguments: CallExpression["arguments"],
-): string | undefined => {
+const extractRegexGlobSuffix = (callArguments: CallExpression["arguments"]): string | undefined => {
   const thirdArgument = callArguments[2];
   if (!thirdArgument || thirdArgument.type === "SpreadElement") return undefined;
   if (thirdArgument.type !== "Literal") return undefined;
@@ -740,7 +750,9 @@ const collectDynamicImports = (
           });
         }
       } else if (sourceExpression.type === "TemplateLiteral") {
-        const templateLiteral = sourceExpression as unknown as { quasis: Array<{ value: { cooked: string } }> };
+        const templateLiteral = sourceExpression as unknown as {
+          quasis: Array<{ value: { cooked: string } }>;
+        };
         if (templateLiteral.quasis.length >= 2) {
           const globPattern = templateLiteral.quasis.map((quasi) => quasi.value.cooked).join("*");
           if (globPattern.startsWith("./") || globPattern.startsWith("../")) {
@@ -857,16 +869,25 @@ const collectDynamicImports = (
           memberExpression.property.name === "context"
         ) {
           const directoryArgument = extractStringLiteralFromArgument(callExpression.arguments);
-          if (directoryArgument && (directoryArgument.startsWith("./") || directoryArgument.startsWith("../"))) {
-            const hasRegexArgument = callExpression.arguments.length >= 3
-              && callExpression.arguments[2].type !== "SpreadElement";
+          if (
+            directoryArgument &&
+            (directoryArgument.startsWith("./") || directoryArgument.startsWith("../"))
+          ) {
+            const hasRegexArgument =
+              callExpression.arguments.length >= 3 &&
+              callExpression.arguments[2].type !== "SpreadElement";
             const regexSuffix = extractRegexGlobSuffix(callExpression.arguments);
             const canResolveFilter = !hasRegexArgument || Boolean(regexSuffix);
             if (canResolveFilter) {
-              const isRecursive = callExpression.arguments[1]?.type === "Literal"
-                && (callExpression.arguments[1] as unknown as { value: unknown }).value === true;
-              const contextGlobPrefix = isRecursive ? `${directoryArgument}/**/` : `${directoryArgument}/`;
-              const contextGlobPattern = regexSuffix ? `${contextGlobPrefix}${regexSuffix}` : `${contextGlobPrefix}*`;
+              const isRecursive =
+                callExpression.arguments[1]?.type === "Literal" &&
+                (callExpression.arguments[1] as unknown as { value: unknown }).value === true;
+              const contextGlobPrefix = isRecursive
+                ? `${directoryArgument}/**/`
+                : `${directoryArgument}/`;
+              const contextGlobPattern = regexSuffix
+                ? `${contextGlobPrefix}${regexSuffix}`
+                : `${contextGlobPrefix}*`;
               imports.push({
                 specifier: contextGlobPattern,
                 importedNames: [createNamespaceImportBinding()],
@@ -884,7 +905,11 @@ const collectDynamicImports = (
     }
 
     if (node.type === "NewExpression") {
-      const newExpression = node as unknown as { callee: Expression; arguments: CallExpression["arguments"]; start: number };
+      const newExpression = node as unknown as {
+        callee: Expression;
+        arguments: CallExpression["arguments"];
+        start: number;
+      };
       if (
         newExpression.callee.type === "Identifier" &&
         (newExpression.callee as { name: string }).name === "URL" &&
@@ -915,18 +940,20 @@ const collectDynamicImports = (
     if (node.type === "Decorator") {
       const decoratorNode = node as unknown as { expression: WalkableNode };
       const expression = decoratorNode.expression;
-      if (
-        expression?.type === "CallExpression"
-      ) {
+      if (expression?.type === "CallExpression") {
         const callNode = expression as unknown as CallExpression;
         const callee = callNode.callee;
         if (callee.type === "Identifier" && (callee as { name: string }).name === "Component") {
           const objectArgument = callNode.arguments[0];
           if (objectArgument?.type === "ObjectExpression") {
-            const objectProperties = (objectArgument as unknown as { properties: Array<WalkableNode> }).properties;
+            const objectProperties = (
+              objectArgument as unknown as { properties: Array<WalkableNode> }
+            ).properties;
             for (const property of objectProperties) {
               if (property.type !== "ObjectProperty" && property.type !== "Property") continue;
-              const propertyKey = (property as unknown as { key: { name?: string; value?: string } }).key;
+              const propertyKey = (
+                property as unknown as { key: { name?: string; value?: string } }
+              ).key;
               const propertyName = propertyKey?.name ?? propertyKey?.value;
               const propertyValue = (property as unknown as { value: WalkableNode }).value;
               if (propertyName === "templateUrl" && propertyValue?.type === "Literal") {
@@ -949,7 +976,9 @@ const collectDynamicImports = (
                   const singleValue = (propertyValue as unknown as StringLiteral).value;
                   if (singleValue) styleUrlValues.push(singleValue);
                 } else if (propertyValue.type === "ArrayExpression") {
-                  const arrayElements = (propertyValue as unknown as { elements: Array<WalkableNode> }).elements;
+                  const arrayElements = (
+                    propertyValue as unknown as { elements: Array<WalkableNode> }
+                  ).elements;
                   for (const element of arrayElements) {
                     if (element?.type === "Literal") {
                       const elementValue = (element as unknown as StringLiteral).value;
@@ -1003,7 +1032,10 @@ const extractStringFromExpression = (expression: WalkableNode): string | undefin
     return typeof literalValue === "string" ? literalValue : undefined;
   }
   if (expression.type === "TemplateLiteral") {
-    const templateLiteral = expression as unknown as { quasis: Array<{ value: { cooked: string } }>; expressions: unknown[] };
+    const templateLiteral = expression as unknown as {
+      quasis: Array<{ value: { cooked: string } }>;
+      expressions: unknown[];
+    };
     if (templateLiteral.expressions.length === 0 && templateLiteral.quasis.length === 1) {
       return templateLiteral.quasis[0]?.value.cooked;
     }

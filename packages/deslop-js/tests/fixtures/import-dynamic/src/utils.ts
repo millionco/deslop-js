@@ -1,2 +1,2 @@
-export const greet = () => 'hello';
-export const unused = () => 'unused';
+export const greet = () => "hello";
+export const unused = () => "unused";

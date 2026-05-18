@@ -1,5 +1,7 @@
 export default class Gadget {
-  activate() { return "gadget"; }
+  activate() {
+    return "gadget";
+  }
 }
 
 export const gadgetHelper = () => "help";

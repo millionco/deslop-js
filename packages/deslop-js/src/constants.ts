@@ -40,11 +40,14 @@ export const DEFAULT_EXCLUSIONS = [
   "**/mockServiceWorker.js",
 ];
 
-export const SCRIPT_FILE_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|tsc|npx|bun|esr|esno|jiti|babel-node|zx)\s+(?:(?:-[\w-]+(?:[=\s][\w./@=-]+)?\s+)|(?:[\w/-]+\s+))*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:\s|$)/;
+export const SCRIPT_FILE_PATTERN =
+  /(?:^|\s)(?:node|tsx|ts-node|tsc|npx|bun|esr|esno|jiti|babel-node|zx)\s+(?:(?:-[\w-]+(?:[=\s][\w./@=-]+)?\s+)|(?:[\w/-]+\s+))*([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:\s|$)/;
 
-export const SCRIPT_EXTENSIONLESS_FILE_PATTERN = /(?:^|\s)(?:node|tsx|ts-node|bun|esr|esno|jiti|babel-node|zx)\s+(?:(?:-[\w-]+(?:[=\s][\w./@=-]+)?\s+))*((?:[./]|[\w@][\w@-]*\/)[\w./@-]+)(?:\s|$)/;
+export const SCRIPT_EXTENSIONLESS_FILE_PATTERN =
+  /(?:^|\s)(?:node|tsx|ts-node|bun|esr|esno|jiti|babel-node|zx)\s+(?:(?:-[\w-]+(?:[=\s][\w./@=-]+)?\s+))*((?:[./]|[\w@][\w@-]*\/)[\w./@-]+)(?:\s|$)/;
 
-export const SCRIPT_CONFIG_FILE_PATTERN = /--config\s+([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))/;
+export const SCRIPT_CONFIG_FILE_PATTERN =
+  /--config\s+([\w./@-]+\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))/;
 
 export const SCRIPT_ENTRY_PATTERNS: string[] = [];
 
@@ -123,6 +126,18 @@ export const IMPLICIT_DEPENDENCIES = new Set([
   "husky",
   "lint-staged",
   "tslib",
+  "@babel/core",
+  "postcss",
+  "cross-env",
+  "sass",
+  "node-sass",
+  "less",
+  "oxlint",
+  "biome",
+  "@biomejs/biome",
+  "patch-package",
+  "simple-git-hooks",
+  "lefthook",
 ]);
 
 export const BUILTIN_MODULES = new Set([
@@ -170,13 +185,34 @@ export const BUILTIN_MODULES = new Set([
   "zlib",
 ]);
 
-export const PLATFORM_SUFFIXES = [".web", ".native", ".ios", ".android", ".desktop", ".windows", ".macos", ".any"];
+export const PLATFORM_SUFFIXES = [
+  ".web",
+  ".native",
+  ".ios",
+  ".android",
+  ".desktop",
+  ".windows",
+  ".macos",
+  ".any",
+];
 
 export const REACT_NATIVE_PLATFORM_EXTENSIONS = [
-  ".web.ts", ".web.tsx", ".web.js", ".web.jsx",
-  ".native.ts", ".native.tsx", ".native.js", ".native.jsx",
-  ".ios.ts", ".ios.tsx", ".ios.js", ".ios.jsx",
-  ".android.ts", ".android.tsx", ".android.js", ".android.jsx",
+  ".web.ts",
+  ".web.tsx",
+  ".web.js",
+  ".web.jsx",
+  ".native.ts",
+  ".native.tsx",
+  ".native.js",
+  ".native.jsx",
+  ".ios.ts",
+  ".ios.tsx",
+  ".ios.js",
+  ".ios.jsx",
+  ".android.ts",
+  ".android.tsx",
+  ".android.js",
+  ".android.jsx",
 ];
 
 export const RESOLVER_EXTENSIONS = [

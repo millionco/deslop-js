@@ -1,3 +1,3 @@
-import { alpha, beta } from './barrel-a';
+import { alpha, beta } from "./barrel-a";
 
 console.log(alpha, beta);

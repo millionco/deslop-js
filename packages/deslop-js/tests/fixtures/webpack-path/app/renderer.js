@@ -1,1 +1,1 @@
-export const render = () => console.log('render');
+export const render = () => console.log("render");

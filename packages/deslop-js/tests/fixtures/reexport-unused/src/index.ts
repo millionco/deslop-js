@@ -1,6 +1,6 @@
-import { UsedComponent } from './components';
-import type { UsedType } from './components';
+import { UsedComponent } from "./components";
+import type { UsedType } from "./components";
 
 console.log(UsedComponent);
-const x: UsedType = { name: 'test' };
+const x: UsedType = { name: "test" };
 console.log(x);

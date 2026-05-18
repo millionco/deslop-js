@@ -1,3 +1,3 @@
-import { ColorPicker } from '../components';
+import { ColorPicker } from "../components";
 
 export const ColorPlugin = { component: ColorPicker };

@@ -1,8 +1,8 @@
-import mdx from './Alert.mdx';
-import { Alert } from './Alert';
+import mdx from "./Alert.mdx";
+import { Alert } from "./Alert";
 
 export default {
-  title: 'Components/Alert',
+  title: "Components/Alert",
   component: Alert,
   parameters: {
     docs: {

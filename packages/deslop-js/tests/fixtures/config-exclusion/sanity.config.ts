@@ -1,1 +1,1 @@
-export default { projectId: 'abc' };
+export default { projectId: "abc" };

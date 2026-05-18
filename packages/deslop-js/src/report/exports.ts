@@ -1,9 +1,13 @@
-import type { DependencyGraph, SourceModule, ExportReference, UnusedExport, DeslopConfig, MemberAccess } from "../types.js";
+import type {
+  DependencyGraph,
+  SourceModule,
+  ExportReference,
+  UnusedExport,
+  DeslopConfig,
+  MemberAccess,
+} from "../types.js";
 
-export const detectDeadExports = (
-  graph: DependencyGraph,
-  config: DeslopConfig,
-): UnusedExport[] => {
+export const detectDeadExports = (graph: DependencyGraph, config: DeslopConfig): UnusedExport[] => {
   const usageMap = buildUsageMap(graph);
   const unusedExports: UnusedExport[] = [];
 
@@ -36,6 +40,38 @@ export const detectDeadExports = (
 const buildUsageMap = (graph: DependencyGraph): Set<string> => {
   const usedExportKeys = new Set<string>();
   const sourceToTargetMap = buildSourceToTargetsMap(graph);
+
+  for (const module of graph.modules) {
+    if (!module.isEntryPoint) continue;
+
+    for (const edge of graph.edges) {
+      if (edge.source !== module.fileId.index || !edge.isReExportEdge) continue;
+      const targetModule = graph.modules[edge.target];
+      if (!targetModule) continue;
+
+      const isWildcardReExport = edge.reExportedNames.includes("*");
+      if (isWildcardReExport) {
+        markAllExportsUsedRecursive(
+          targetModule,
+          graph,
+          sourceToTargetMap,
+          usedExportKeys,
+          new Set(),
+        );
+      } else {
+        for (const mapping of edge.reExportMappings) {
+          markExportUsedRecursive(
+            targetModule.fileId.path,
+            mapping.originalName,
+            graph,
+            sourceToTargetMap,
+            usedExportKeys,
+            new Set(),
+          );
+        }
+      }
+    }
+  }
 
   for (const edge of graph.edges) {
     const targetModule = graph.modules[edge.target];
@@ -137,9 +173,7 @@ const extractAccessedMemberNames = (
   return memberNames;
 };
 
-const buildSourceToTargetsMap = (
-  graph: DependencyGraph,
-): Map<number, number[]> => {
+const buildSourceToTargetsMap = (graph: DependencyGraph): Map<number, number[]> => {
   const sourceToTargets = new Map<number, number[]>();
 
   for (const edge of graph.edges) {
@@ -210,14 +244,7 @@ const markExportUsedRecursive = (
     if (exportInfo.name !== exportName) continue;
 
     if (exportInfo.isReExport && exportInfo.reExportSource) {
-      followReExportChain(
-        moduleIndex,
-        exportInfo,
-        graph,
-        sourceToTargets,
-        usedKeys,
-        visited,
-      );
+      followReExportChain(moduleIndex, exportInfo, graph, sourceToTargets, usedKeys, visited);
     }
   }
 };

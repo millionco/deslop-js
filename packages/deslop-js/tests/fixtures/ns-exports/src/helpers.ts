@@ -7,5 +7,5 @@ export namespace BusinessHelper {
     return supplier;
   }
 
-  export const API_URL = 'https://example.com';
+  export const API_URL = "https://example.com";
 }

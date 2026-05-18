@@ -1,3 +1,3 @@
-import { usedHelper } from './barrel-top';
+import { usedHelper } from "./barrel-top";
 
 console.log(usedHelper);

@@ -2,7 +2,13 @@ import { ResolverFactory } from "oxc-resolver";
 import { dirname, resolve, join, basename, extname, sep } from "node:path";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import type { DeslopConfig } from "../types.js";
-import { BUILTIN_MODULES, RESOLVER_EXTENSIONS, REACT_NATIVE_PLATFORM_EXTENSIONS, OUTPUT_DIRECTORIES, SOURCE_EXTENSIONS } from "../constants.js";
+import {
+  BUILTIN_MODULES,
+  RESOLVER_EXTENSIONS,
+  REACT_NATIVE_PLATFORM_EXTENSIONS,
+  OUTPUT_DIRECTORIES,
+  SOURCE_EXTENSIONS,
+} from "../constants.js";
 import { resolveSourcePath } from "./source-path.js";
 
 const fileExistsCache = new Map<string, boolean>();
@@ -42,7 +48,9 @@ const trySourceFallback = (resolvedPath: string): string | undefined => {
   const segments = resolvedPath.split(sep);
 
   const isOutputDirectory = (segment: string): boolean =>
-    OUTPUT_DIRECTORIES.some((outputDirectory) => segment === outputDirectory || segment.startsWith(`${outputDirectory}-`));
+    OUTPUT_DIRECTORIES.some(
+      (outputDirectory) => segment === outputDirectory || segment.startsWith(`${outputDirectory}-`),
+    );
 
   let lastOutputPosition = -1;
   for (let index = segments.length - 1; index >= 0; index--) {
@@ -108,7 +116,12 @@ const COMMON_RESOLVER_OPTIONS = {
   extensionAlias: EXTENSION_ALIAS,
 };
 
-const TSCONFIG_FILENAMES = ["tsconfig.json", "tsconfig.web.json", "tsconfig.app.json", "tsconfig.base.json"];
+const TSCONFIG_FILENAMES = [
+  "tsconfig.json",
+  "tsconfig.web.json",
+  "tsconfig.app.json",
+  "tsconfig.base.json",
+];
 
 const findNearestTsconfig = (fromDir: string, rootDir: string): string | undefined => {
   let currentDirectory = fromDir;
@@ -172,7 +185,11 @@ export interface ModuleResolverOptions {
   hasReactNative?: boolean;
 }
 
-export const createResolver = (config: DeslopConfig, workspacePackages: WorkspacePackageMap[] = [], options: ModuleResolverOptions = {}) => {
+export const createResolver = (
+  config: DeslopConfig,
+  workspacePackages: WorkspacePackageMap[] = [],
+  options: ModuleResolverOptions = {},
+) => {
   const resolverCache = new Map<string, ResolverFactory>();
   const resolveResultCache = new Map<string, ResolvedImport>();
 
@@ -188,9 +205,8 @@ export const createResolver = (config: DeslopConfig, workspacePackages: Workspac
   };
 
   const getOrCreateResolver = (tsconfigPath: string | undefined): ResolverFactory => {
-    const effectivePath = tsconfigPath && !failedTsconfigPaths.has(tsconfigPath)
-      ? tsconfigPath
-      : undefined;
+    const effectivePath =
+      tsconfigPath && !failedTsconfigPaths.has(tsconfigPath) ? tsconfigPath : undefined;
     const cacheKey = effectivePath ?? "__no_tsconfig__";
     const existingResolver = resolverCache.get(cacheKey);
     if (existingResolver) return existingResolver;
@@ -198,9 +214,7 @@ export const createResolver = (config: DeslopConfig, workspacePackages: Workspac
     try {
       const newResolver = new ResolverFactory({
         ...resolverOptions,
-        tsconfig: effectivePath
-          ? { configFile: effectivePath, references: "auto" }
-          : undefined,
+        tsconfig: effectivePath ? { configFile: effectivePath, references: "auto" } : undefined,
       });
       resolverCache.set(cacheKey, newResolver);
       return newResolver;
@@ -269,15 +283,16 @@ export const createResolver = (config: DeslopConfig, workspacePackages: Workspac
         tsconfigBaseUrlCache.set(tsconfigFile, absoluteBaseUrl);
         return absoluteBaseUrl;
       }
-    } catch {
-    }
+    } catch {}
     tsconfigBaseUrlCache.set(tsconfigFile, undefined);
     return undefined;
   };
 
   const hasNextJsDependency = (() => {
     try {
-      const rootPackageJson = JSON.parse(cachedReadFileSync(resolve(config.rootDir, "package.json")));
+      const rootPackageJson = JSON.parse(
+        cachedReadFileSync(resolve(config.rootDir, "package.json")),
+      );
       const allDeps = { ...rootPackageJson.dependencies, ...rootPackageJson.devDependencies };
       return "next" in allDeps;
     } catch {
@@ -310,8 +325,7 @@ export const createResolver = (config: DeslopConfig, workspacePackages: Workspac
           }
         }
       }
-    } catch {
-    }
+    } catch {}
 
     if (aliasMap.size === 0 && hasNextJsDependency) {
       const srcDirectory = resolve(tsconfigDir, "src");
@@ -426,37 +440,64 @@ export const createResolver = (config: DeslopConfig, workspacePackages: Workspac
             const exportKey = `./${subpath}`;
             const exportValue = workspacePackageJson.exports[exportKey];
             if (typeof exportValue === "string") {
-              const candidatePath = resolvePathWithExtensionFallback(resolve(workspaceDirectory, exportValue));
-              resolvedEntryPath = existsAsFile(candidatePath) ? candidatePath : trySourceFallback(candidatePath);
+              const candidatePath = resolvePathWithExtensionFallback(
+                resolve(workspaceDirectory, exportValue),
+              );
+              resolvedEntryPath = existsAsFile(candidatePath)
+                ? candidatePath
+                : trySourceFallback(candidatePath);
             } else if (typeof exportValue === "object" && exportValue !== null) {
-              const conditionValue = exportValue.import ?? exportValue.require ?? exportValue.default ?? exportValue.types;
+              const conditionValue =
+                exportValue.import ??
+                exportValue.require ??
+                exportValue.default ??
+                exportValue.types;
               if (typeof conditionValue === "string") {
-                const candidatePath = resolvePathWithExtensionFallback(resolve(workspaceDirectory, conditionValue));
-                resolvedEntryPath = existsAsFile(candidatePath) ? candidatePath : trySourceFallback(candidatePath);
+                const candidatePath = resolvePathWithExtensionFallback(
+                  resolve(workspaceDirectory, conditionValue),
+                );
+                resolvedEntryPath = existsAsFile(candidatePath)
+                  ? candidatePath
+                  : trySourceFallback(candidatePath);
               }
             }
 
             if (!resolvedEntryPath) {
-              for (const [wildcardPattern, wildcardTarget] of Object.entries(workspacePackageJson.exports)) {
+              for (const [wildcardPattern, wildcardTarget] of Object.entries(
+                workspacePackageJson.exports,
+              )) {
                 if (typeof wildcardPattern !== "string" || !wildcardPattern.includes("*")) continue;
-                const wildcardTargetRecord = typeof wildcardTarget === "object" && wildcardTarget !== null
-                  ? wildcardTarget as Record<string, unknown>
-                  : undefined;
-                const wildcardTargetValue = typeof wildcardTarget === "string"
-                  ? wildcardTarget
-                  : (wildcardTargetRecord
-                    ? String(wildcardTargetRecord["import"] ?? wildcardTargetRecord["require"] ?? wildcardTargetRecord["default"] ?? wildcardTargetRecord["types"] ?? "")
-                    : undefined);
+                const wildcardTargetRecord =
+                  typeof wildcardTarget === "object" && wildcardTarget !== null
+                    ? (wildcardTarget as Record<string, unknown>)
+                    : undefined;
+                const wildcardTargetValue =
+                  typeof wildcardTarget === "string"
+                    ? wildcardTarget
+                    : wildcardTargetRecord
+                      ? String(
+                          wildcardTargetRecord["import"] ??
+                            wildcardTargetRecord["require"] ??
+                            wildcardTargetRecord["default"] ??
+                            wildcardTargetRecord["types"] ??
+                            "",
+                        )
+                      : undefined;
                 if (typeof wildcardTargetValue !== "string") continue;
 
                 const wildcardPrefix = wildcardPattern.slice(0, wildcardPattern.indexOf("*"));
                 const wildcardSuffix = wildcardPattern.slice(wildcardPattern.indexOf("*") + 1);
                 if (exportKey.startsWith(wildcardPrefix) && exportKey.endsWith(wildcardSuffix)) {
-                  const matchedSegment = exportKey.slice(wildcardPrefix.length, exportKey.length - wildcardSuffix.length || undefined);
+                  const matchedSegment = exportKey.slice(
+                    wildcardPrefix.length,
+                    exportKey.length - wildcardSuffix.length || undefined,
+                  );
                   const expandedTarget = wildcardTargetValue.replace("*", matchedSegment);
                   const candidateWildcardPath = resolve(workspaceDirectory, expandedTarget);
                   const candidatePath = resolvePathWithExtensionFallback(candidateWildcardPath);
-                  resolvedEntryPath = existsAsFile(candidatePath) ? candidatePath : trySourceFallback(candidatePath);
+                  resolvedEntryPath = existsAsFile(candidatePath)
+                    ? candidatePath
+                    : trySourceFallback(candidatePath);
                   break;
                 }
               }
@@ -493,12 +534,13 @@ export const createResolver = (config: DeslopConfig, workspacePackages: Workspac
             if (typeof mainField === "string") {
               resolvedEntryPath = resolve(workspaceDirectory, mainField);
             }
-            if (!resolvedEntryPath && workspacePackageJson.exports?.["."]){
+            if (!resolvedEntryPath && workspacePackageJson.exports?.["."]) {
               const dotExport = workspacePackageJson.exports["."];
               if (typeof dotExport === "string") {
                 resolvedEntryPath = resolve(workspaceDirectory, dotExport);
               } else if (typeof dotExport === "object" && dotExport !== null) {
-                const conditionValue = dotExport.import ?? dotExport.require ?? dotExport.default ?? dotExport.types;
+                const conditionValue =
+                  dotExport.import ?? dotExport.require ?? dotExport.default ?? dotExport.types;
                 if (typeof conditionValue === "string") {
                   resolvedEntryPath = resolve(workspaceDirectory, conditionValue);
                 }
@@ -529,8 +571,7 @@ export const createResolver = (config: DeslopConfig, workspacePackages: Workspac
               return resolvedResult;
             }
           }
-        } catch {
-        }
+        } catch {}
       }
     }
 
@@ -672,7 +713,11 @@ const stripJsonComments = (content: string): string => {
       }
       if (content[index + 1] === "*") {
         index += 2;
-        while (index + 1 < content.length && !(content[index] === "*" && content[index + 1] === "/")) index++;
+        while (
+          index + 1 < content.length &&
+          !(content[index] === "*" && content[index + 1] === "/")
+        )
+          index++;
         index += 2;
         continue;
       }
@@ -685,9 +730,7 @@ const stripJsonComments = (content: string): string => {
   return result.replace(/,(\s*[}\]])/g, "$1");
 };
 
-const BUILTIN_SUBPATH_MODULES = new Set([
-  "fs", "dns", "stream", "readline", "timers", "util",
-]);
+const BUILTIN_SUBPATH_MODULES = new Set(["fs", "dns", "stream", "readline", "timers", "util"]);
 
 const isBuiltinModule = (specifier: string): boolean => {
   if (specifier.startsWith("node:")) return true;

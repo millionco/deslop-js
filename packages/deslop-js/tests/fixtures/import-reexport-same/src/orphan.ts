@@ -1,1 +1,1 @@
-export const Orphan = 'never imported';
+export const Orphan = "never imported";

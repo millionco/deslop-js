@@ -1,2 +1,2 @@
-export const foo = 'used through barrel';
-export const fooUnused = 'not used';
+export const foo = "used through barrel";
+export const fooUnused = "not used";

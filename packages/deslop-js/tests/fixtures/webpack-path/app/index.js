@@ -1,2 +1,2 @@
-import { render } from './renderer';
+import { render } from "./renderer";
 render();

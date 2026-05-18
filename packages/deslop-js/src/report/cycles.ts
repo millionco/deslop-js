@@ -1,5 +1,9 @@
 import type { DependencyGraph, CircularDependency } from "../types.js";
-import { MAX_CYCLES_PER_SCC, MAX_TOTAL_CYCLES, MAX_SCC_SIZE_FOR_ENUMERATION } from "../constants.js";
+import {
+  MAX_CYCLES_PER_SCC,
+  MAX_TOTAL_CYCLES,
+  MAX_SCC_SIZE_FOR_ENUMERATION,
+} from "../constants.js";
 
 const UNDEFINED_INDEX = -1;
 
@@ -20,9 +24,7 @@ const buildAdjacencyList = (graph: DependencyGraph): number[][] => {
   const targetSets: Set<number>[] = Array.from({ length: graph.modules.length }, () => new Set());
 
   for (const edge of graph.edges) {
-    const isTypeOnlyEdge = edge.importedSymbols.every(
-      (symbol) => symbol.isTypeOnly,
-    );
+    const isTypeOnlyEdge = edge.importedSymbols.every((symbol) => symbol.isTypeOnly);
     if (isTypeOnlyEdge) {
       continue;
     }
@@ -35,9 +37,7 @@ const buildAdjacencyList = (graph: DependencyGraph): number[][] => {
   return targetSets.map((targets) => [...targets]);
 };
 
-const findStronglyConnectedComponents = (
-  adjacencyList: number[][],
-): number[][] => {
+const findStronglyConnectedComponents = (adjacencyList: number[][]): number[][] => {
   const nodeCount = adjacencyList.length;
   if (nodeCount === 0) {
     return [];
@@ -173,8 +173,7 @@ const enumerateElementaryCycles = (
 
     while (pathStack.length > 0 && cycles.length < MAX_CYCLES_PER_SCC) {
       const currentNode = pathStack[pathStack.length - 1];
-      const currentSuccessorPosition =
-        successorPositionStack[successorPositionStack.length - 1];
+      const currentSuccessorPosition = successorPositionStack[successorPositionStack.length - 1];
       const successors = adjacencyList[currentNode].filter((successor) =>
         componentSet.has(successor),
       );
@@ -205,9 +204,7 @@ const enumerateElementaryCycles = (
   return cycles;
 };
 
-export const detectCycles = (
-  graph: DependencyGraph,
-): CircularDependency[] => {
+export const detectCycles = (graph: DependencyGraph): CircularDependency[] => {
   const adjacencyList = buildAdjacencyList(graph);
   const components = findStronglyConnectedComponents(adjacencyList);
   const allCycles: number[][] = [];
@@ -226,11 +223,7 @@ export const detectCycles = (
       continue;
     }
 
-    const elementaryCycles = enumerateElementaryCycles(
-      component,
-      adjacencyList,
-      graph,
-    );
+    const elementaryCycles = enumerateElementaryCycles(component, adjacencyList, graph);
 
     for (const cycle of elementaryCycles) {
       const key = cycle.join(",");
@@ -249,11 +242,7 @@ export const detectCycles = (
     if (lengthDiff !== 0) {
       return lengthDiff;
     }
-    return (
-      graph.modules[cycleA[0]].fileId.path.localeCompare(
-        graph.modules[cycleB[0]].fileId.path,
-      )
-    );
+    return graph.modules[cycleA[0]].fileId.path.localeCompare(graph.modules[cycleB[0]].fileId.path);
   });
 
   return allCycles.map((cycle) => ({

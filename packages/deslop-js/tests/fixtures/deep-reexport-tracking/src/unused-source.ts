@@ -1,1 +1,1 @@
-export const unusedHelper = 'never consumed at root';
+export const unusedHelper = "never consumed at root";

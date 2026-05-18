@@ -22,15 +22,11 @@ export const detectOrphanFiles = (graph: DependencyGraph): UnusedFile[] => {
   return unusedFiles;
 };
 
-const isBarrelWithReachableSources = (
-  module: SourceModule,
-  graph: DependencyGraph,
-): boolean => {
+const isBarrelWithReachableSources = (module: SourceModule, graph: DependencyGraph): boolean => {
   if (module.exports.length === 0) return false;
 
   const hasOnlyReExports = module.exports.every(
-    (exportInfo) =>
-      exportInfo.isNamespaceReExport || exportInfo.isSynthetic,
+    (exportInfo) => exportInfo.isNamespaceReExport || exportInfo.isSynthetic,
   );
   if (!hasOnlyReExports) return false;
 
@@ -44,10 +40,7 @@ const isBarrelWithReachableSources = (
   return false;
 };
 
-const hasReachableDirectImporter = (
-  targetModuleIndex: number,
-  graph: DependencyGraph,
-): boolean => {
+const hasReachableDirectImporter = (targetModuleIndex: number, graph: DependencyGraph): boolean => {
   for (const edge of graph.edges) {
     if (edge.target !== targetModuleIndex) continue;
     if (edge.isReExportEdge) continue;

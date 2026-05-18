@@ -30,8 +30,7 @@ export const resolveReExportChains = (graph: DependencyGraph): void => {
 
             const isDuplicate = module.exports.some(
               (existingExport) =>
-                existingExport.name === targetExport.name &&
-                !existingExport.isNamespaceReExport,
+                existingExport.name === targetExport.name && !existingExport.isNamespaceReExport,
             );
 
             if (!isDuplicate) {

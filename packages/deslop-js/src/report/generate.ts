@@ -4,10 +4,7 @@ import { detectDeadExports } from "./exports.js";
 import { detectStalePackages } from "./packages.js";
 import { detectCycles } from "./cycles.js";
 
-export const generateReport = (
-  graph: DependencyGraph,
-  config: DeslopConfig,
-): ScanResult => {
+export const generateReport = (graph: DependencyGraph, config: DeslopConfig): ScanResult => {
   const analysisStartTime = performance.now();
 
   const unusedFiles = detectOrphanFiles(graph);

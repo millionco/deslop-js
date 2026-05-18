@@ -1,9 +1,9 @@
 module.exports = {
   entry: {
     app: "./src/index.js",
-    vendor: "./src/vendor.js"
+    vendor: "./src/vendor.js",
   },
   output: {
-    filename: "[name].bundle.js"
-  }
+    filename: "[name].bundle.js",
+  },
 };

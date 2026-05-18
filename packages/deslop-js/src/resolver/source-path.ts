@@ -4,16 +4,24 @@ import { existsSync } from "node:fs";
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs"];
 
 const OUTPUT_DIR_PREFIXES = [
-  "dist/esm/", "dist/cjs/", "dist/es/", "dist/lib/",
+  "dist/esm/",
+  "dist/cjs/",
+  "dist/es/",
+  "dist/lib/",
   "dist/",
-  "build/", "lib/", "lib-dist/", "esm/", "cjs/", "out/",
+  "build/",
+  "lib/",
+  "lib-dist/",
+  "esm/",
+  "cjs/",
+  "out/",
 ];
 const DIST_WILDCARD_PATTERN = /^dist-[^/]+\//;
 const SOURCE_INDEX_FALLBACK_STEMS = ["src/index", "src/main"];
 
 const matchesOutputDirectory = (relativePath: string): boolean =>
-  OUTPUT_DIR_PREFIXES.some((prefix) => relativePath.startsWith(prefix))
-  || DIST_WILDCARD_PATTERN.test(relativePath);
+  OUTPUT_DIR_PREFIXES.some((prefix) => relativePath.startsWith(prefix)) ||
+  DIST_WILDCARD_PATTERN.test(relativePath);
 
 export const resolveSourcePath = (distPath: string, directory: string): string | undefined => {
   if (existsSync(distPath)) return distPath;
@@ -30,7 +38,10 @@ export const resolveSourcePath = (distPath: string, directory: string): string |
   const sourceVariants = allPrefixes
     .flatMap((prefix) =>
       sourceReplacements.map((replacement) =>
-        relativeToDist.replace(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), replacement),
+        relativeToDist.replace(
+          new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+          replacement,
+        ),
       ),
     )
     .filter((variant) => variant !== relativeToDist);

@@ -1,2 +1,2 @@
-import { helper } from './index';
+import { helper } from "./index";
 console.log(helper());

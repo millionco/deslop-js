@@ -6,4 +6,6 @@ export const createUser = (name: string): User => ({
   role: "viewer",
 });
 
-export const deleteUser = (id: string) => { console.log("deleted", id); };
+export const deleteUser = (id: string) => {
+  console.log("deleted", id);
+};

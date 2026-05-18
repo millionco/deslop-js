@@ -1,1 +1,1 @@
-export const UnusedComponent = () => 'UnusedComponent';
+export const UnusedComponent = () => "UnusedComponent";

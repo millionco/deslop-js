@@ -53,7 +53,14 @@ export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph
     reExportedNames: string[] = [],
     reExportMappings: ReExportMapping[] = [],
   ): void => {
-    edges.push({ source: sourceIndex, target: targetIndex, importedSymbols: symbols, isReExportEdge, reExportedNames, reExportMappings });
+    edges.push({
+      source: sourceIndex,
+      target: targetIndex,
+      importedSymbols: symbols,
+      isReExportEdge,
+      reExportedNames,
+      reExportMappings,
+    });
 
     const existingReverseEdges = reverseEdges.get(targetIndex);
     if (existingReverseEdges) {
@@ -74,7 +81,9 @@ export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph
         const globPattern = importInfo.specifier;
         for (const [filePath] of fileIdMap) {
           const relativePath = path.relative(sourceDir, filePath);
-          const normalizedRelative = relativePath.startsWith(".") ? relativePath : `./${relativePath}`;
+          const normalizedRelative = relativePath.startsWith(".")
+            ? relativePath
+            : `./${relativePath}`;
           if (minimatch(normalizedRelative, globPattern)) {
             const targetIndex = fileIdMap.get(filePath);
             if (targetIndex !== undefined) {
@@ -91,15 +100,13 @@ export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph
       const targetIndex = fileIdMap.get(resolved.resolvedPath);
       if (targetIndex === undefined) continue;
 
-      const importedSymbols: LinkedSymbol[] = importInfo.importedNames.map(
-        (importedName) => ({
-          importedName: importedName.name,
-          localName: importedName.alias ?? importedName.name,
-          isTypeOnly: importedName.isTypeOnly,
-          isNamespace: importedName.isNamespace,
-          isDefault: importedName.isDefault,
-        }),
-      );
+      const importedSymbols: LinkedSymbol[] = importInfo.importedNames.map((importedName) => ({
+        importedName: importedName.name,
+        localName: importedName.alias ?? importedName.name,
+        isTypeOnly: importedName.isTypeOnly,
+        isNamespace: importedName.isNamespace,
+        isDefault: importedName.isDefault,
+      }));
 
       addEdge(sourceIndex, targetIndex, importedSymbols);
     }
@@ -131,7 +138,10 @@ export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph
       }
     }
 
-    for (const [targetIndex, { names: reExportedNames, mappings: reExportMappings }] of reExportsByTarget) {
+    for (const [
+      targetIndex,
+      { names: reExportedNames, mappings: reExportMappings },
+    ] of reExportsByTarget) {
       addEdge(sourceIndex, targetIndex, [], true, reExportedNames, reExportMappings);
     }
   }

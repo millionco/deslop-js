@@ -1,1 +1,3 @@
-export const main = (): void => { console.log("main"); };
+export const main = (): void => {
+  console.log("main");
+};

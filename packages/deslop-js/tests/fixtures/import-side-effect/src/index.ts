@@ -1,3 +1,3 @@
-import './setup';
+import "./setup";
 
-console.log('app started');
+console.log("app started");

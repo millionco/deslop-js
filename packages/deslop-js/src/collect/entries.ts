@@ -3,7 +3,17 @@ import { resolve, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { SourceFile, DeslopConfig, ResolvedEntries } from "../types.js";
-import { DEFAULT_EXTENSIONS, DEFAULT_EXCLUSIONS, HIDDEN_DIRECTORY_ALLOWLIST, SCRIPT_FILE_PATTERN, SCRIPT_EXTENSIONLESS_FILE_PATTERN, SCRIPT_CONFIG_FILE_PATTERN, SCRIPT_ENTRY_PATTERNS, SHALLOW_WORKSPACE_MAX_DEPTH, SOURCE_EXTENSIONS as IMPORTABLE_SOURCE_EXTENSIONS } from "../constants.js";
+import {
+  DEFAULT_EXTENSIONS,
+  DEFAULT_EXCLUSIONS,
+  HIDDEN_DIRECTORY_ALLOWLIST,
+  SCRIPT_FILE_PATTERN,
+  SCRIPT_EXTENSIONLESS_FILE_PATTERN,
+  SCRIPT_CONFIG_FILE_PATTERN,
+  SCRIPT_ENTRY_PATTERNS,
+  SHALLOW_WORKSPACE_MAX_DEPTH,
+  SOURCE_EXTENSIONS as IMPORTABLE_SOURCE_EXTENSIONS,
+} from "../constants.js";
 import { resolveWorkspaces, detectFrameworkEntries } from "./workspaces.js";
 import type { WorkspacePackage } from "./workspaces.js";
 import { resolveSourcePath } from "../resolver/source-path.js";
@@ -11,14 +21,10 @@ import { join } from "node:path";
 
 export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFile[]> => {
   const extensions =
-    config.includeExtensions.length > 0
-      ? config.includeExtensions
-      : DEFAULT_EXTENSIONS;
+    config.includeExtensions.length > 0 ? config.includeExtensions : DEFAULT_EXTENSIONS;
 
   const extensionGlob =
-    extensions.length === 1
-      ? `**/*${extensions[0]}`
-      : `**/*{${extensions.join(",")}}`;
+    extensions.length === 1 ? `**/*${extensions[0]}` : `**/*{${extensions.join(",")}}`;
 
   const ignorePatterns = [...DEFAULT_EXCLUSIONS, ...config.ignorePatterns];
   const absoluteRoot = resolve(config.rootDir);
@@ -31,21 +37,20 @@ export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFi
     onlyFiles: true,
   });
 
-  const allowedHiddenGlobs = HIDDEN_DIRECTORY_ALLOWLIST.flatMap(
-    (directory) => [
-      `${directory}/**/*{${extensions.join(",")}}`,
-      `**/${directory}/**/*{${extensions.join(",")}}`,
-    ],
-  );
-  const hiddenFiles = allowedHiddenGlobs.length > 0
-    ? await fg(allowedHiddenGlobs, {
-        cwd: absoluteRoot,
-        absolute: true,
-        ignore: ignorePatterns,
-        dot: true,
-        onlyFiles: true,
-      })
-    : [];
+  const allowedHiddenGlobs = HIDDEN_DIRECTORY_ALLOWLIST.flatMap((directory) => [
+    `${directory}/**/*{${extensions.join(",")}}`,
+    `**/${directory}/**/*{${extensions.join(",")}}`,
+  ]);
+  const hiddenFiles =
+    allowedHiddenGlobs.length > 0
+      ? await fg(allowedHiddenGlobs, {
+          cwd: absoluteRoot,
+          absolute: true,
+          ignore: ignorePatterns,
+          dot: true,
+          onlyFiles: true,
+        })
+      : [];
 
   const files = [...mainFiles, ...hiddenFiles];
 
@@ -60,7 +65,10 @@ export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFi
 export const getFrameworkExclusions = (rootDir: string): string[] => {
   const absoluteRoot = resolve(rootDir);
   const workspacePackages = resolveWorkspaces(absoluteRoot).packages;
-  const directoriesToCheck = [absoluteRoot, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
+  const directoriesToCheck = [
+    absoluteRoot,
+    ...workspacePackages.map((workspacePackage) => workspacePackage.directory),
+  ];
   const ignorePatterns: string[] = [];
 
   for (const directory of directoriesToCheck) {
@@ -96,13 +104,14 @@ export const getFrameworkExclusions = (rootDir: string): string[] => {
 export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntries> => {
   const absoluteRoot = resolve(config.rootDir);
 
-  const entryFiles = config.entryPatterns.length > 0
-    ? await fg(config.entryPatterns, {
-        cwd: absoluteRoot,
-        absolute: true,
-        onlyFiles: true,
-      })
-    : [];
+  const entryFiles =
+    config.entryPatterns.length > 0
+      ? await fg(config.entryPatterns, {
+          cwd: absoluteRoot,
+          absolute: true,
+          onlyFiles: true,
+        })
+      : [];
 
   const packageJsonPath = resolve(absoluteRoot, "package.json");
   const packageJsonEntries = await extractPackageJsonEntries(packageJsonPath);
@@ -114,25 +123,32 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
     return workspacePackage.depthFromRoot <= SHALLOW_WORKSPACE_MAX_DEPTH;
   };
 
-  const hasDeclaredWorkspaces = workspacePackages.some((workspacePackage) => workspacePackage.isDeclaredWorkspace);
+  const hasDeclaredWorkspaces = workspacePackages.some(
+    (workspacePackage) => workspacePackage.isDeclaredWorkspace,
+  );
 
   const workspaceEntries: string[] = [];
   for (const workspacePackage of workspacePackages) {
     const isEligible = isEntryEligible(workspacePackage);
 
-    const shouldRunFrameworkDetection = workspaceDiscovery.hasRootLevelWorkspacePatterns && hasDeclaredWorkspaces
-      ? workspacePackage.isDeclaredWorkspace && isEligible
-      : isEligible;
+    const shouldRunFrameworkDetection =
+      workspaceDiscovery.hasRootLevelWorkspacePatterns && hasDeclaredWorkspaces
+        ? workspacePackage.isDeclaredWorkspace && isEligible
+        : isEligible;
     if (shouldRunFrameworkDetection) {
       const workspaceFrameworkEntries = detectFrameworkEntries(workspacePackage.directory);
       workspaceEntries.push(...workspaceFrameworkEntries);
     }
 
-    const shouldExtractEntries = isEligible && (workspacePackage.isDeclaredWorkspace || !workspaceDiscovery.hasRootLevelWorkspacePatterns);
+    const shouldExtractEntries =
+      isEligible &&
+      (workspacePackage.isDeclaredWorkspace || !workspaceDiscovery.hasRootLevelWorkspacePatterns);
     if (shouldExtractEntries) {
       const workspacePackageJsonPath = resolve(workspacePackage.directory, "package.json");
       const workspacePackageJsonEntries = await extractPackageJsonEntries(workspacePackageJsonPath);
-      const hasValidEntries = workspacePackageJsonEntries.some((entryPath) => existsSync(entryPath));
+      const hasValidEntries = workspacePackageJsonEntries.some((entryPath) =>
+        existsSync(entryPath),
+      );
       if (hasValidEntries) {
         workspaceEntries.push(...workspacePackageJsonEntries);
       } else {
@@ -173,7 +189,12 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
     htmlScriptEntries.push(...extractHtmlScriptEntries(workspacePackage.directory));
   }
 
-  const allDiscoveredEntries = [...scriptEntries, ...webpackEntries, ...viteEntries, ...bundlerConfigEntries];
+  const allDiscoveredEntries = [
+    ...scriptEntries,
+    ...webpackEntries,
+    ...viteEntries,
+    ...bundlerConfigEntries,
+  ];
   for (const entryPath of allDiscoveredEntries) {
     if (entryPath.endsWith(".html") && existsSync(entryPath)) {
       htmlScriptEntries.push(...extractScriptTagsFromHtmlFile(entryPath));
@@ -201,19 +222,47 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
 
   const testEntries = [...new Set([...testRunnerDiscovery.entryFiles, ...testSetupEntries])];
   const testEntryPathSet = new Set(testEntries);
-  const productionEntries = [...new Set([...entryFiles, ...packageJsonEntries, ...workspaceEntries, ...frameworkEntries, ...scriptEntries, ...webpackEntries, ...viteEntries, ...bundlerConfigEntries, ...htmlScriptEntries, ...angularEntries, ...pluginFileEntries, ...toolingDiscovery.entryFiles, ...ciEntries])].filter(
-    (entryPath) => !testEntryPathSet.has(entryPath),
-  );
-  const alwaysUsedFiles = [...new Set([...toolingDiscovery.alwaysUsedFiles, ...testRunnerDiscovery.alwaysUsedFiles])];
+  const productionEntries = [
+    ...new Set([
+      ...entryFiles,
+      ...packageJsonEntries,
+      ...workspaceEntries,
+      ...frameworkEntries,
+      ...scriptEntries,
+      ...webpackEntries,
+      ...viteEntries,
+      ...bundlerConfigEntries,
+      ...htmlScriptEntries,
+      ...angularEntries,
+      ...pluginFileEntries,
+      ...toolingDiscovery.entryFiles,
+      ...ciEntries,
+    ]),
+  ].filter((entryPath) => !testEntryPathSet.has(entryPath));
+  const alwaysUsedFiles = [
+    ...new Set([...toolingDiscovery.alwaysUsedFiles, ...testRunnerDiscovery.alwaysUsedFiles]),
+  ];
 
   return { productionEntries, testEntries, alwaysUsedFiles };
 };
 
 const DEFAULT_INDEX_PATTERNS = [
-  "src/index.ts", "src/index.tsx", "src/index.js", "src/index.jsx",
-  "src/main.ts", "src/main.tsx", "src/main.js", "src/main.jsx",
-  "index.ts", "index.tsx", "index.js", "index.jsx",
-  "main.ts", "main.tsx", "main.js", "main.jsx",
+  "src/index.ts",
+  "src/index.tsx",
+  "src/index.js",
+  "src/index.jsx",
+  "src/main.ts",
+  "src/main.tsx",
+  "src/main.js",
+  "src/main.jsx",
+  "index.ts",
+  "index.tsx",
+  "index.js",
+  "index.jsx",
+  "main.ts",
+  "main.tsx",
+  "main.js",
+  "main.jsx",
 ];
 
 const findDefaultIndexEntry = (directory: string): string | undefined => {
@@ -227,7 +276,8 @@ const findDefaultIndexEntry = (directory: string): string | undefined => {
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
 
 const COMMON_SOURCE_DIRECTORIES = ["src", "lib", "main", "app", "source"];
-const BUILD_OUTPUT_DIRECTORY_PATTERN = /^(?:\.\/)?(?:dist(?:-[a-z]+)?|build|out|esm|cjs)\/(?:(?:esm|cjs|es|lib|commonjs|module)\/)?/;
+const BUILD_OUTPUT_DIRECTORY_PATTERN =
+  /^(?:\.\/)?(?:dist(?:-[a-z]+)?|build|out|esm|cjs)\/(?:(?:esm|cjs|es|lib|commonjs|module)\/)?/;
 
 const findSourceFile = (baseDir: string, relativePath: string): string | undefined => {
   const pathWithoutExtension = join(baseDir, relativePath).replace(/\.[cm]?js(x?)$/, "");
@@ -251,7 +301,10 @@ const findSourceFileStrict = (baseDir: string, relativePath: string): string | u
   return undefined;
 };
 
-const resolveBuiltPathToSource = (builtAbsolutePath: string, rootDir: string): string | undefined => {
+const resolveBuiltPathToSource = (
+  builtAbsolutePath: string,
+  rootDir: string,
+): string | undefined => {
   if (existsSync(builtAbsolutePath)) return undefined;
 
   try {
@@ -282,8 +335,7 @@ const resolveBuiltPathToSource = (builtAbsolutePath: string, rootDir: string): s
         if (candidate) return candidate;
       }
     }
-  } catch {
-  }
+  } catch {}
   return undefined;
 };
 
@@ -329,7 +381,7 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
     const packageJson = JSON.parse(content);
     const rootDir = packageJsonPath.replace(/\/package\.json$/, "");
 
-    const entryFields = ["main", "module", "browser", "types", "typings"];
+    const entryFields = ["main", "module", "browser", "types", "typings", "style", "source"];
     for (const field of entryFields) {
       if (typeof packageJson[field] === "string") {
         entries.push(resolveEntryPath(packageJson[field], rootDir));
@@ -371,9 +423,7 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
         }
       }
     }
-  } catch {
-
-  }
+  } catch {}
 
   return entries;
 };
@@ -381,49 +431,131 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
 const SHELL_OPERATORS_PATTERN = /\s*(?:&&|\|\||[;&|])\s*/;
 
 const SCRIPT_MULTIPLEXERS = new Set([
-  "concurrently", "run-s", "run-p", "npm-run-all", "npm-run-all2",
-  "wireit", "turbo", "lerna", "ultra",
+  "concurrently",
+  "run-s",
+  "run-p",
+  "npm-run-all",
+  "npm-run-all2",
+  "wireit",
+  "turbo",
+  "lerna",
+  "ultra",
 ]);
 
 const CONFIG_LIKE_FLAGS = new Set([
-  "--config", "-c", "--format", "--formatter",
-  "--tsconfig", "--project", "-p", "--setup", "--global-setup",
+  "--config",
+  "-c",
+  "--format",
+  "--formatter",
+  "--tsconfig",
+  "--project",
+  "-p",
+  "--setup",
+  "--global-setup",
 ]);
 
-const ENV_WRAPPER_BINARIES = new Set([
-  "cross-env", "dotenv", "dotenv-flow", "env-cmd",
-]);
+const ENV_WRAPPER_BINARIES = new Set(["cross-env", "dotenv", "dotenv-flow", "env-cmd"]);
 
 const IGNORED_CLI_TOOLS = new Set([
-  "prettier", "eslint", "tslint", "stylelint", "biome", "oxlint", "oxfmt",
-  "tsc", "tsup", "tsdown", "rollup", "webpack",
-  "rimraf", "del-cli", "shx", "cpy-cli", "cpx",
-  "echo", "cat", "mkdir", "rm", "cp", "mv", "ls", "pwd", "test",
+  "prettier",
+  "eslint",
+  "tslint",
+  "stylelint",
+  "biome",
+  "oxlint",
+  "oxfmt",
+  "tsc",
+  "tsup",
+  "tsdown",
+  "rollup",
+  "webpack",
+  "rimraf",
+  "del-cli",
+  "shx",
+  "cpy-cli",
+  "cpx",
+  "echo",
+  "cat",
+  "mkdir",
+  "rm",
+  "cp",
+  "mv",
+  "ls",
+  "pwd",
+  "test",
 
-  "husky", "lint-staged", "commitlint",
-  "changeset", "changesets",
-  "typedoc", "api-extractor",
-  "madge", "depcheck", "deslop",
+  "husky",
+  "lint-staged",
+  "commitlint",
+  "changeset",
+  "changesets",
+  "typedoc",
+  "api-extractor",
+  "madge",
+  "depcheck",
+  "deslop",
   "sort-package-json",
-  "pnpm", "npm", "yarn", "ni", "nr", "nun",
-  "next", "nuxt", "astro", "vite", "svelte-kit",
-  "prisma", "drizzle-kit",
-  "formatjs", "i18next", "i18next-parser", "lingui",
-  "storybook", "chromatic", "msw",
-  "patch-package", "syncpack", "manypkg",
-  "jest", "vitest", "mocha", "ava", "tap", "c8", "nyc",
-  "playwright", "cypress", "puppeteer", "webdriver",
-  "sequelize", "typeorm", "mikro-orm",
-  "wait-on", "start-server-and-test",
-  "remark", "markdownlint", "markdownlint-cli2", "textlint", "alex", "cspell",
-  "ncu", "npm-check-updates", "size-limit", "bundlewatch",
-  "dbdocs", "lobe-i18n", "lobe-seo",
+  "pnpm",
+  "npm",
+  "yarn",
+  "ni",
+  "nr",
+  "nun",
+  "next",
+  "nuxt",
+  "astro",
+  "vite",
+  "svelte-kit",
+  "prisma",
+  "drizzle-kit",
+  "formatjs",
+  "i18next",
+  "i18next-parser",
+  "lingui",
+  "storybook",
+  "chromatic",
+  "msw",
+  "patch-package",
+  "syncpack",
+  "manypkg",
+  "jest",
+  "vitest",
+  "mocha",
+  "ava",
+  "tap",
+  "c8",
+  "nyc",
+  "playwright",
+  "cypress",
+  "puppeteer",
+  "webdriver",
+  "sequelize",
+  "typeorm",
+  "mikro-orm",
+  "wait-on",
+  "start-server-and-test",
+  "remark",
+  "markdownlint",
+  "markdownlint-cli2",
+  "textlint",
+  "alex",
+  "cspell",
+  "ncu",
+  "npm-check-updates",
+  "size-limit",
+  "bundlewatch",
+  "dbdocs",
+  "lobe-i18n",
+  "lobe-seo",
 ]);
 
 const looksLikeFilePath = (token: string): boolean => {
   if (token.startsWith("-") || token.includes("${{") || token.includes("://")) return false;
   if (token.includes("}}") && !token.includes("{{")) return false;
-  const hasKnownExtension = /\.(?:[cm]?[jt]sx?|css|scss|json|yaml|yml|toml|html|mjs|cjs|mts|cts|graphql|gql|mdx|astro|vue|svelte)$/.test(token);
+  const hasKnownExtension =
+    /\.(?:[cm]?[jt]sx?|css|scss|json|yaml|yml|toml|html|mjs|cjs|mts|cts|graphql|gql|mdx|astro|vue|svelte)$/.test(
+      token,
+    );
   if (hasKnownExtension) return true;
   const hasGlobWithExtension = /\.\{[^}]+\}$/.test(token);
   if (hasGlobWithExtension) return true;
@@ -459,10 +591,12 @@ const extractScriptFileArguments = (scriptCommand: string, directory: string): s
     const binaryName = tokens[startIndex].replace(/^.*\//, "");
     if (SCRIPT_MULTIPLEXERS.has(binaryName)) continue;
 
-    const effectiveBinaryName = (binaryName === "npx" || binaryName === "pnpx" || binaryName === "bunx")
-      ? (tokens[startIndex + 1]?.replace(/^.*\//, "") ?? "")
-      : binaryName;
-    const isNonEntryBinary = IGNORED_CLI_TOOLS.has(binaryName) ||
+    const effectiveBinaryName =
+      binaryName === "npx" || binaryName === "pnpx" || binaryName === "bunx"
+        ? (tokens[startIndex + 1]?.replace(/^.*\//, "") ?? "")
+        : binaryName;
+    const isNonEntryBinary =
+      IGNORED_CLI_TOOLS.has(binaryName) ||
       (effectiveBinaryName !== "" && IGNORED_CLI_TOOLS.has(effectiveBinaryName));
 
     for (let tokenIndex = startIndex + 1; tokenIndex < tokens.length; tokenIndex++) {
@@ -588,9 +722,7 @@ const extractScriptEntries = (directory: string): string[] => {
         entries.push(...extractScriptFileArguments(scriptCommand, directory));
       }
     }
-  } catch {
-
-  }
+  } catch {}
 
   const scriptDirectoryFiles = fg.sync(SCRIPT_ENTRY_PATTERNS, {
     cwd: directory,
@@ -641,7 +773,12 @@ const extractCiRunCommands = (content: string): string[] => {
 
     if (trimmedLine.startsWith("- ")) {
       const listItem = trimmedLine.slice(2).trim();
-      if (listItem !== "" && !listItem.startsWith("{") && !listItem.startsWith("[") && !isYamlMapping(listItem)) {
+      if (
+        listItem !== "" &&
+        !listItem.startsWith("{") &&
+        !listItem.startsWith("[") &&
+        !isYamlMapping(listItem)
+      ) {
         commands.push(listItem);
       }
     }
@@ -680,15 +817,15 @@ const extractCiWorkflowEntries = (rootDir: string): string[] => {
           }
         }
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return entries;
 };
 
 const VITE_INPUT_BLOCK_PATTERN = /input\s*:\s*(?:\{[^}]*\}|\[[^\]]*\]|['"][^'"]+['"])/gs;
-const BUNDLER_ENTRY_FILE_PATTERN = /['"]([^'"]+\.(?:js|ts|tsx|jsx|mjs|mts|less|scss|css|sass|html))['"]/g;
+const BUNDLER_ENTRY_FILE_PATTERN =
+  /['"]([^'"]+\.(?:js|ts|tsx|jsx|mjs|mts|less|scss|css|sass|html))['"]/g;
 
 const extractViteEntryPoints = (directory: string): string[] => {
   const entries: string[] = [];
@@ -709,7 +846,11 @@ const extractViteEntryPoints = (directory: string): string[] => {
         BUNDLER_ENTRY_FILE_PATTERN.lastIndex = 0;
         while ((valueMatch = BUNDLER_ENTRY_FILE_PATTERN.exec(inputBlock)) !== null) {
           const entryPath = valueMatch[1];
-          if (entryPath.startsWith("./") || entryPath.startsWith("../") || !entryPath.startsWith("/")) {
+          if (
+            entryPath.startsWith("./") ||
+            entryPath.startsWith("../") ||
+            !entryPath.startsWith("/")
+          ) {
             const absoluteEntryPath = resolve(directory, entryPath);
             if (existsSync(absoluteEntryPath)) {
               entries.push(absoluteEntryPath);
@@ -717,8 +858,7 @@ const extractViteEntryPoints = (directory: string): string[] => {
           }
         }
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return entries;
@@ -729,10 +869,7 @@ const BUNDLER_CONFIG_ENTRY_STRING_PATTERN = /['"]([^'"]+)['"]/g;
 
 const extractBundlerConfigEntryPoints = (directory: string): string[] => {
   const entries: string[] = [];
-  const configPaths = fg.sync([
-    "tsdown.config.{ts,js,cjs,mjs}",
-    "tsup.config.{ts,js,cjs,mjs}",
-  ], {
+  const configPaths = fg.sync(["tsdown.config.{ts,js,cjs,mjs}", "tsup.config.{ts,js,cjs,mjs}"], {
     cwd: directory,
     absolute: true,
     onlyFiles: true,
@@ -756,16 +893,17 @@ const extractBundlerConfigEntryPoints = (directory: string): string[] => {
           }
         }
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return entries;
 };
 
-const WEBPACK_ENTRY_BLOCK_PATTERN = /entry\s*:\s*(?:\{[^}]*\}|\[[^\]]*\]|['"][^'"]+['"]|path\.(?:join|resolve)\([^)]*\))/gs;
+const WEBPACK_ENTRY_BLOCK_PATTERN =
+  /entry\s*:\s*(?:\{[^}]*\}|\[[^\]]*\]|['"][^'"]+['"]|path\.(?:join|resolve)\([^)]*\))/gs;
 const WEBPACK_ENTRY_FILE_PATTERN = /['"]([^'"]+)['"]/g;
-const WEBPACK_PATH_JOIN_PATTERN = /path\.(?:join|resolve)\(\s*__dirname\s*,\s*((?:['"][^'"]*['"]\s*,?\s*)+)\)/g;
+const WEBPACK_PATH_JOIN_PATTERN =
+  /path\.(?:join|resolve)\(\s*__dirname\s*,\s*((?:['"][^'"]*['"]\s*,?\s*)+)\)/g;
 const REQUIRE_RESOLVE_PATTERN = /require\.resolve\(\s*['"]([^'"]+)['"]\s*\)/g;
 const RESOLVABLE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts"];
 
@@ -775,7 +913,9 @@ const resolveEntryWithExtensions = (basePath: string): string | undefined => {
     const withExtension = basePath + extension;
     if (existsSync(withExtension)) return withExtension;
   }
-  const indexCandidates = RESOLVABLE_EXTENSIONS.map((extension) => resolve(basePath, `index${extension}`));
+  const indexCandidates = RESOLVABLE_EXTENSIONS.map((extension) =>
+    resolve(basePath, `index${extension}`),
+  );
   for (const candidate of indexCandidates) {
     if (existsSync(candidate)) return candidate;
   }
@@ -784,18 +924,21 @@ const resolveEntryWithExtensions = (basePath: string): string | undefined => {
 
 const extractWebpackEntryPoints = (directory: string): string[] => {
   const entries: string[] = [];
-  const webpackConfigPaths = fg.sync([
-    "webpack.config.{js,ts,mjs,cjs}",
-    "**/webpack*.config.{js,ts,mjs,cjs}",
-    "**/webpack.config*.{js,ts,mjs,cjs}",
-    "**/webpack*.config*.babel.{js,ts}",
-  ], {
-    cwd: directory,
-    absolute: true,
-    onlyFiles: true,
-    ignore: ["**/node_modules/**"],
-    deep: 3,
-  });
+  const webpackConfigPaths = fg.sync(
+    [
+      "webpack.config.{js,ts,mjs,cjs}",
+      "**/webpack*.config.{js,ts,mjs,cjs}",
+      "**/webpack.config*.{js,ts,mjs,cjs}",
+      "**/webpack*.config*.babel.{js,ts}",
+    ],
+    {
+      cwd: directory,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**"],
+      deep: 3,
+    },
+  );
 
   for (const configPath of webpackConfigPaths) {
     try {
@@ -838,7 +981,11 @@ const extractWebpackEntryPoints = (directory: string): string[] => {
         WEBPACK_ENTRY_FILE_PATTERN.lastIndex = 0;
         while ((valueMatch = WEBPACK_ENTRY_FILE_PATTERN.exec(entryBlock)) !== null) {
           const entryPath = valueMatch[1];
-          if (entryPath.startsWith("./") || entryPath.startsWith("../") || !entryPath.startsWith("/")) {
+          if (
+            entryPath.startsWith("./") ||
+            entryPath.startsWith("../") ||
+            !entryPath.startsWith("/")
+          ) {
             const absoluteEntryPath = resolve(directory, entryPath);
             const resolvedEntry = resolveEntryWithExtensions(absoluteEntryPath);
             if (resolvedEntry) {
@@ -847,14 +994,14 @@ const extractWebpackEntryPoints = (directory: string): string[] => {
           }
         }
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return entries;
 };
 
-const HTML_SCRIPT_SRC_PATTERN = /<script[^>]+src=["']([^"']+\.(?:ts|tsx|js|jsx|mts|mjs))["'][^>]*>/gi;
+const HTML_SCRIPT_SRC_PATTERN =
+  /<script[^>]+src=["']([^"']+\.(?:ts|tsx|js|jsx|mts|mjs))["'][^>]*>/gi;
 
 const extractHtmlScriptEntries = (directory: string): string[] => {
   const entries: string[] = [];
@@ -879,8 +1026,7 @@ const extractHtmlScriptEntries = (directory: string): string[] => {
           entries.push(absoluteScriptPath);
         }
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return entries;
@@ -900,8 +1046,7 @@ const extractScriptTagsFromHtmlFile = (htmlFilePath: string): string[] => {
         entries.push(absoluteScriptPath);
       }
     }
-  } catch {
-  }
+  } catch {}
   return entries;
 };
 
@@ -924,7 +1069,9 @@ const extractAngularEntryPoints = (directory: string): string[] => {
 
       for (const projectConfig of Object.values(projects)) {
         const projectRecord = projectConfig as Record<string, unknown>;
-        const architect = projectRecord.architect as Record<string, Record<string, unknown>> | undefined;
+        const architect = projectRecord.architect as
+          | Record<string, Record<string, unknown>>
+          | undefined;
         if (architect) {
           for (const targetConfig of Object.values(architect)) {
             const options = targetConfig.options as Record<string, unknown> | undefined;
@@ -976,14 +1123,14 @@ const extractAngularEntryPoints = (directory: string): string[] => {
           } catch {}
         }
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return entries;
 };
 
-const PLUGIN_FILE_ARGUMENT_PATTERN = /(?:createNextIntlPlugin|createMDX|withContentlayer|withPlaiceholder)\s*\(\s*['"]([^'"]+)['"]/g;
+const PLUGIN_FILE_ARGUMENT_PATTERN =
+  /(?:createNextIntlPlugin|createMDX|withContentlayer|withPlaiceholder)\s*\(\s*['"]([^'"]+)['"]/g;
 const NEXT_INTL_IMPORT_PATTERN = /createNextIntlPlugin/;
 const NEXT_INTL_DEFAULT_PATHS = [
   "src/i18n/request.ts",
@@ -1032,8 +1179,7 @@ const extractNextConfigPluginFiles = (directory: string): string[] => {
           }
         }
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return entries;
@@ -1045,9 +1191,7 @@ const TEST_MATCH_ARRAY_PATTERN = /testMatch\s*:\s*\[([^\]]*)\]/;
 const STRING_LITERAL_PATTERN = /['"]([^'"]+)['"]/g;
 
 const extractJestTestMatchPatterns = (directory: string): string[] => {
-  const configPaths = fg.sync([
-    "jest.config.{ts,js,mjs,cjs}",
-  ], {
+  const configPaths = fg.sync(["jest.config.{ts,js,mjs,cjs}"], {
     cwd: directory,
     absolute: true,
     onlyFiles: true,
@@ -1062,8 +1206,7 @@ const extractJestTestMatchPatterns = (directory: string): string[] => {
       if (packageJson.jest?.testMatch) {
         return convertJestTestMatchToGlobs(packageJson.jest.testMatch);
       }
-    } catch {
-    }
+    } catch {}
     return [];
   }
 
@@ -1083,8 +1226,7 @@ const extractJestTestMatchPatterns = (directory: string): string[] => {
       if (patterns.length > 0) {
         return convertJestTestMatchToGlobs(patterns);
       }
-    } catch {
-    }
+    } catch {}
   }
   return [];
 };
@@ -1108,15 +1250,15 @@ const convertJestTestMatchToGlobs = (patterns: string[]): string[] => {
 };
 
 const extractVitestIncludePatterns = (directory: string): string[] => {
-  const configPaths = fg.sync([
-    "vitest.config.{ts,js,mts,mjs}",
-    "vitest.web.config.{ts,js,mts,mjs}",
-  ], {
-    cwd: directory,
-    absolute: true,
-    onlyFiles: true,
-    ignore: ["**/node_modules/**"],
-  });
+  const configPaths = fg.sync(
+    ["vitest.config.{ts,js,mts,mjs}", "vitest.web.config.{ts,js,mts,mjs}"],
+    {
+      cwd: directory,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**"],
+    },
+  );
 
   const patterns: string[] = [];
   for (const configPath of configPaths) {
@@ -1140,8 +1282,7 @@ const extractVitestIncludePatterns = (directory: string): string[] => {
           patterns.push(itemMatch[1]);
         }
       }
-    } catch {
-    }
+    } catch {}
   }
   return patterns;
 };
@@ -1165,25 +1306,28 @@ const findNestedBlockRanges = (content: string, blockStartPattern: RegExp): [num
   return ranges;
 };
 
-const SETUP_FILES_PATTERN = /(?:setupFiles|setupFilesAfterEnv|globalSetup|globalTeardown)\s*:\s*(?:\[([^\]]*)\]|['"]([^'"]+)['"])/gs;
+const SETUP_FILES_PATTERN =
+  /(?:setupFiles|setupFilesAfterEnv|globalSetup|globalTeardown)\s*:\s*(?:\[([^\]]*)\]|['"]([^'"]+)['"])/gs;
 const SETUP_FILE_PATH_PATTERN = /['"]([^'"]+)['"]/g;
-
 
 const extractTestSetupFiles = (directory: string): string[] => {
   const entries: string[] = [];
-  const configPaths = fg.sync([
-    "vitest.config.{ts,js,mts,mjs}",
-    "vitest.web.config.{ts,js,mts,mjs}",
-    "vite.config.{ts,js,mts,mjs}",
-    "jest.config.{ts,js,mjs,cjs}",
-    "**/vitest.config.{ts,js,mts,mjs}",
-  ], {
-    cwd: directory,
-    absolute: true,
-    onlyFiles: true,
-    ignore: ["**/node_modules/**"],
-    deep: 3,
-  });
+  const configPaths = fg.sync(
+    [
+      "vitest.config.{ts,js,mts,mjs}",
+      "vitest.web.config.{ts,js,mts,mjs}",
+      "vite.config.{ts,js,mts,mjs}",
+      "jest.config.{ts,js,mjs,cjs}",
+      "**/vitest.config.{ts,js,mts,mjs}",
+    ],
+    {
+      cwd: directory,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**"],
+      deep: 3,
+    },
+  );
 
   for (const configPath of configPaths) {
     try {
@@ -1213,24 +1357,20 @@ const extractTestSetupFiles = (directory: string): string[] => {
           }
         }
       }
-
-
-    } catch {
-    }
+    } catch {}
   }
 
   return entries;
 };
 
-const IMPORTABLE_EXTENSION_SET = new Set(IMPORTABLE_SOURCE_EXTENSIONS.map((extension) => `.${extension}`));
+const IMPORTABLE_EXTENSION_SET = new Set(
+  IMPORTABLE_SOURCE_EXTENSIONS.map((extension) => `.${extension}`),
+);
 
 const isImportableSourceFile = (filePath: string): boolean =>
   IMPORTABLE_EXTENSION_SET.has(filePath.slice(filePath.lastIndexOf(".")));
 
-const expandWildcardExportPattern = (
-  pattern: string,
-  rootDir: string,
-): string[] => {
+const expandWildcardExportPattern = (pattern: string, rootDir: string): string[] => {
   const normalized = pattern.startsWith("./") ? pattern.slice(2) : pattern;
   const matchedFiles = fg.sync(normalized, {
     cwd: rootDir,
@@ -1241,11 +1381,7 @@ const expandWildcardExportPattern = (
   return matchedFiles.filter(isImportableSourceFile);
 };
 
-const collectExportPaths = (
-  exportValue: unknown,
-  rootDir: string,
-  entries: string[],
-): void => {
+const collectExportPaths = (exportValue: unknown, rootDir: string, entries: string[]): void => {
   if (typeof exportValue === "string") {
     if (exportValue.includes("*")) {
       const expandedFiles = expandWildcardExportPattern(exportValue, rootDir);
@@ -1275,7 +1411,10 @@ const TEST_FRAMEWORK_PATTERNS: TestRunnerDefinition[] = [
   {
     enablers: ["vitest", "@vitest/runner", "vite-plus"],
     configFileActivators: [
-      "vitest.config.ts", "vitest.config.js", "vitest.config.mts", "vitest.config.mjs",
+      "vitest.config.ts",
+      "vitest.config.js",
+      "vitest.config.mts",
+      "vitest.config.mjs",
     ],
     entryPatterns: [
       "**/*.test.{ts,tsx,js,jsx}",
@@ -1296,8 +1435,13 @@ const TEST_FRAMEWORK_PATTERNS: TestRunnerDefinition[] = [
     ],
   },
   {
-    enablers: ["jest", "@jest/core", "ts-jest"],
-    configFileActivators: ["jest.config.ts", "jest.config.js", "jest.config.mjs", "jest.config.cjs"],
+    enablers: ["jest", "@jest/core", "ts-jest", "react-scripts", "react-app-rewired"],
+    configFileActivators: [
+      "jest.config.ts",
+      "jest.config.js",
+      "jest.config.mjs",
+      "jest.config.cjs",
+    ],
     entryPatterns: [
       "**/*.test.{ts,tsx,js,jsx}",
       "**/*.spec.{ts,tsx,js,jsx}",
@@ -1308,10 +1452,7 @@ const TEST_FRAMEWORK_PATTERNS: TestRunnerDefinition[] = [
       "**/__fixtures__/**/*.{ts,tsx,js,jsx,json}",
       "**/fixtures/**/*.{ts,tsx,js,jsx,json}",
     ],
-    alwaysUsed: [
-      "jest.config.{ts,js,mjs,cjs}",
-      "jest.setup.{ts,js,tsx,jsx}",
-    ],
+    alwaysUsed: ["jest.config.{ts,js,mjs,cjs}", "jest.setup.{ts,js,tsx,jsx}"],
   },
   {
     enablers: ["@playwright/test", "playwright"],
@@ -1322,12 +1463,8 @@ const TEST_FRAMEWORK_PATTERNS: TestRunnerDefinition[] = [
       "tests/**/*.{ts,tsx,js,jsx}",
       "e2e/**/*.{ts,tsx,js,jsx}",
     ],
-    fixturePatterns: [
-      "**/fixtures/**/*.{ts,tsx,js,jsx,json}",
-    ],
-    alwaysUsed: [
-      "playwright.config.{ts,js}",
-    ],
+    fixturePatterns: ["**/fixtures/**/*.{ts,tsx,js,jsx,json}"],
+    alwaysUsed: ["playwright.config.{ts,js}"],
   },
   {
     enablers: ["mocha"],
@@ -1340,9 +1477,7 @@ const TEST_FRAMEWORK_PATTERNS: TestRunnerDefinition[] = [
       "**/*.spec.{ts,tsx,js,jsx}",
     ],
     fixturePatterns: [],
-    alwaysUsed: [
-      ".mocharc.*",
-    ],
+    alwaysUsed: [".mocharc.*"],
   },
   {
     enablers: ["ava", "@ava/typescript"],
@@ -1354,9 +1489,7 @@ const TEST_FRAMEWORK_PATTERNS: TestRunnerDefinition[] = [
       "**/*.spec.{ts,tsx,js,jsx}",
     ],
     fixturePatterns: [],
-    alwaysUsed: [
-      "ava.config.{js,cjs,mjs}",
-    ],
+    alwaysUsed: ["ava.config.{js,cjs,mjs}"],
   },
   {
     enablers: ["cypress"],
@@ -1366,13 +1499,8 @@ const TEST_FRAMEWORK_PATTERNS: TestRunnerDefinition[] = [
       "cypress/**/*.{ts,tsx,js,jsx}",
       "cypress/support/**/*.{ts,js}",
     ],
-    fixturePatterns: [
-      "**/fixtures/**/*.{ts,tsx,js,jsx,json}",
-    ],
-    alwaysUsed: [
-      "cypress.config.{ts,js}",
-      "cypress.config.*.{ts,js}",
-    ],
+    fixturePatterns: ["**/fixtures/**/*.{ts,tsx,js,jsx,json}"],
+    alwaysUsed: ["cypress.config.{ts,js}", "cypress.config.*.{ts,js}"],
   },
 ];
 
@@ -1388,10 +1516,7 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
   {
     enablers: ["storybook"],
     enablerPrefixes: ["@storybook/"],
-    entryPatterns: [
-      "**/*.stories.{ts,tsx,js,jsx,mdx}",
-      ".storybook/**/*.{ts,tsx,js,jsx}",
-    ],
+    entryPatterns: ["**/*.stories.{ts,tsx,js,jsx,mdx}", ".storybook/**/*.{ts,tsx,js,jsx}"],
     alwaysUsed: [
       ".storybook/main.{ts,js,mjs,cjs}",
       ".storybook/preview.{ts,tsx,js,jsx}",
@@ -1423,36 +1548,25 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
   {
     enablers: ["knex"],
     enablerPrefixes: [],
-    entryPatterns: [
-      "migrations/**/*.{ts,js}",
-      "seeds/**/*.{ts,js}",
-    ],
+    entryPatterns: ["migrations/**/*.{ts,js}", "seeds/**/*.{ts,js}"],
     alwaysUsed: ["knexfile.{ts,js}"],
   },
   {
     enablers: ["drizzle-orm"],
     enablerPrefixes: [],
-    entryPatterns: [
-      "drizzle/**/*.{ts,js}",
-    ],
+    entryPatterns: ["drizzle/**/*.{ts,js}"],
     alwaysUsed: ["drizzle.config.{ts,js,mjs}"],
   },
   {
     enablers: ["kysely"],
     enablerPrefixes: [],
-    entryPatterns: [
-      "migrations/**/*.{ts,js}",
-      "src/migrations/**/*.{ts,js}",
-    ],
+    entryPatterns: ["migrations/**/*.{ts,js}", "src/migrations/**/*.{ts,js}"],
     alwaysUsed: [],
   },
   {
     enablers: ["prisma", "@prisma/client"],
     enablerPrefixes: [],
-    entryPatterns: [
-      "prisma/**/*.{ts,js}",
-      "prisma/seed.{ts,js}",
-    ],
+    entryPatterns: ["prisma/**/*.{ts,js}", "prisma/seed.{ts,js}"],
     alwaysUsed: [
       "prisma/schema.prisma",
       "schema.prisma",
@@ -1483,11 +1597,7 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
   {
     enablers: ["wrangler"],
     enablerPrefixes: ["@cloudflare/"],
-    entryPatterns: [
-      "src/index.{ts,js}",
-      "src/worker.{ts,js}",
-      "functions/**/*.{ts,js}",
-    ],
+    entryPatterns: ["src/index.{ts,js}", "src/worker.{ts,js}", "functions/**/*.{ts,js}"],
     alwaysUsed: [],
   },
   {
@@ -1515,17 +1625,12 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
       "src/polyfills.ts",
       "src/test.ts",
     ],
-    alwaysUsed: [
-      "angular.json",
-      "**/karma.conf.js",
-    ],
+    alwaysUsed: ["angular.json", "**/karma.conf.js"],
   },
   {
     enablers: ["react-scripts", "react-app-rewired"],
     enablerPrefixes: [],
-    entryPatterns: [
-      "src/index.{ts,tsx,js,jsx}",
-    ],
+    entryPatterns: ["src/index.{ts,tsx,js,jsx}"],
     alwaysUsed: [
       "src/setupTests.{ts,tsx,js,jsx}",
       "src/reportWebVitals.{ts,tsx,js,jsx}",
@@ -1533,7 +1638,14 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
     ],
   },
   {
-    enablers: ["@remix-run/node", "@remix-run/react", "@remix-run/cloudflare", "@react-router/node", "@react-router/serve", "@react-router/dev"],
+    enablers: [
+      "@remix-run/node",
+      "@remix-run/react",
+      "@remix-run/cloudflare",
+      "@react-router/node",
+      "@react-router/serve",
+      "@react-router/dev",
+    ],
     enablerPrefixes: ["@remix-run/", "@react-router/"],
     entryPatterns: [
       "app/routes/**/*.{ts,tsx,js,jsx}",
@@ -1543,10 +1655,7 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
       "app/routes.{ts,js,mts,mjs}",
       "src/routes.{ts,js,mts,mjs}",
     ],
-    alwaysUsed: [
-      "react-router.config.{ts,js,mjs}",
-      "remix.config.{ts,js,mjs}",
-    ],
+    alwaysUsed: ["react-router.config.{ts,js,mjs}", "remix.config.{ts,js,mjs}"],
   },
   {
     enablers: ["@docusaurus/core"],
@@ -1567,27 +1676,48 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
       "*Sidebar*.{ts,js,mjs,cjs}",
       "*sidebar*.{ts,js,mjs,cjs}",
     ],
-    contentIgnorePatterns: [
-      "versioned_sidebars/**",
+    contentIgnorePatterns: ["versioned_sidebars/**"],
+  },
+  {
+    enablers: ["fumadocs-core", "fumadocs-ui", "fumadocs-mdx"],
+    enablerPrefixes: ["fumadocs-"],
+    entryPatterns: ["content/**/*.{md,mdx}", "content/**/*.{ts,tsx,js,jsx}"],
+    alwaysUsed: ["source.config.{ts,js,mjs}"],
+  },
+  {
+    enablers: ["nextra", "nextra-theme-docs", "nextra-theme-blog"],
+    enablerPrefixes: ["nextra-"],
+    entryPatterns: ["pages/**/*.{md,mdx}", "src/pages/**/*.{md,mdx}", "content/**/*.{md,mdx}"],
+    alwaysUsed: [],
+  },
+  {
+    enablers: ["contentlayer", "contentlayer2", "contentlayer-source-files"],
+    enablerPrefixes: ["contentlayer"],
+    entryPatterns: ["content/**/*.{md,mdx}", "posts/**/*.{md,mdx}"],
+    alwaysUsed: ["contentlayer.config.{ts,js,mjs}"],
+  },
+  {
+    enablers: ["@graphql-codegen/cli", "@graphql-codegen/core"],
+    enablerPrefixes: ["@graphql-codegen/"],
+    entryPatterns: ["**/*.graphql", "**/*.gql"],
+    alwaysUsed: [
+      "codegen.{ts,js,yml,yaml}",
+      "codegen.config.{ts,js}",
+      ".graphqlrc.{ts,js,json,yml,yaml}",
+      "graphql.config.{ts,js,json,yml,yaml}",
     ],
   },
   {
     enablers: ["eslint", "@eslint/js"],
     enablerPrefixes: [],
     entryPatterns: [],
-    alwaysUsed: [
-      "eslint.config.{js,mjs,cjs,ts,mts,cts}",
-      ".eslintrc.{js,cjs,mjs,json,yaml,yml}",
-    ],
+    alwaysUsed: ["eslint.config.{js,mjs,cjs,ts,mts,cts}", ".eslintrc.{js,cjs,mjs,json,yaml,yml}"],
   },
   {
     enablers: ["prettier"],
     enablerPrefixes: [],
     entryPatterns: [],
-    alwaysUsed: [
-      ".prettierrc.{js,cjs,mjs,json,yaml,yml}",
-      "prettier.config.{js,mjs,cjs,ts}",
-    ],
+    alwaysUsed: [".prettierrc.{js,cjs,mjs,json,yaml,yml}", "prettier.config.{js,mjs,cjs,ts}"],
   },
   {
     enablers: ["tailwindcss", "@tailwindcss/postcss"],
@@ -1611,10 +1741,7 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
     enablers: ["lint-staged"],
     enablerPrefixes: [],
     entryPatterns: [],
-    alwaysUsed: [
-      ".lintstagedrc.{js,cjs,mjs,json}",
-      "lint-staged.config.{js,mjs,cjs}",
-    ],
+    alwaysUsed: [".lintstagedrc.{js,cjs,mjs,json}", "lint-staged.config.{js,mjs,cjs}"],
   },
   {
     enablers: ["husky"],
@@ -1632,19 +1759,13 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
     enablers: ["@commitlint/cli"],
     enablerPrefixes: [],
     entryPatterns: [],
-    alwaysUsed: [
-      "commitlint.config.{js,cjs,mjs,ts}",
-      ".commitlintrc.{js,cjs,mjs,json,yaml,yml}",
-    ],
+    alwaysUsed: ["commitlint.config.{js,cjs,mjs,ts}", ".commitlintrc.{js,cjs,mjs,json,yaml,yml}"],
   },
   {
     enablers: ["semantic-release"],
     enablerPrefixes: [],
     entryPatterns: [],
-    alwaysUsed: [
-      ".releaserc.{js,cjs,mjs,json,yaml,yml}",
-      "release.config.{js,cjs,mjs,ts}",
-    ],
+    alwaysUsed: [".releaserc.{js,cjs,mjs,json,yaml,yml}", "release.config.{js,cjs,mjs,ts}"],
   },
   {
     enablers: ["@changesets/cli"],
@@ -1717,7 +1838,13 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
     ],
   },
   {
-    enablers: ["@tanstack/react-router", "@tanstack/react-start", "@tanstack/start", "@tanstack/solid-router", "@tanstack/solid-start"],
+    enablers: [
+      "@tanstack/react-router",
+      "@tanstack/react-start",
+      "@tanstack/start",
+      "@tanstack/solid-router",
+      "@tanstack/solid-start",
+    ],
     enablerPrefixes: ["@tanstack/router"],
     entryPatterns: [
       "src/routes/**/*.{ts,tsx,js,jsx}",
@@ -1732,20 +1859,13 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
   {
     enablers: ["vite", "rolldown-vite"],
     enablerPrefixes: ["@vitejs/"],
-    entryPatterns: [
-      "src/main.{ts,tsx,js,jsx}",
-      "src/index.{ts,tsx,js,jsx}",
-      "index.html",
-    ],
+    entryPatterns: ["src/main.{ts,tsx,js,jsx}", "src/index.{ts,tsx,js,jsx}", "index.html"],
     alwaysUsed: ["vite.config.{ts,js,mts,mjs}"],
   },
   {
     enablers: ["vue", "@vue/cli-service"],
     enablerPrefixes: ["@vue/"],
-    entryPatterns: [
-      "src/main.{ts,js}",
-      "src/App.vue",
-    ],
+    entryPatterns: ["src/main.{ts,js}", "src/App.vue"],
     alwaysUsed: ["vue.config.{ts,js,mjs,cjs}"],
   },
   {
@@ -1779,10 +1899,7 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
     enablers: ["webpack", "webpack-cli"],
     enablerPrefixes: [],
     entryPatterns: [],
-    alwaysUsed: [
-      "webpack.config.{ts,js,mjs,cjs}",
-      "webpack.*.config.{ts,js,mjs,cjs}",
-    ],
+    alwaysUsed: ["webpack.config.{ts,js,mjs,cjs}", "webpack.*.config.{ts,js,mjs,cjs}"],
   },
   {
     enablers: ["rollup"],
@@ -1794,10 +1911,7 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
     enablers: ["@rspack/core", "@rspack/cli"],
     enablerPrefixes: ["@rspack/"],
     entryPatterns: ["src/index.{ts,tsx,js,jsx}"],
-    alwaysUsed: [
-      "rspack.config.{ts,js,mjs,cjs}",
-      "rspack.*.config.{ts,js,mjs,cjs}",
-    ],
+    alwaysUsed: ["rspack.config.{ts,js,mjs,cjs}", "rspack.*.config.{ts,js,mjs,cjs}"],
   },
   {
     enablers: ["@rsbuild/core"],
@@ -1833,19 +1947,13 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
     enablers: ["@babel/core"],
     enablerPrefixes: [],
     entryPatterns: [],
-    alwaysUsed: [
-      "babel.config.{js,cjs,mjs,json}",
-      ".babelrc.{js,cjs,mjs,json}",
-    ],
+    alwaysUsed: ["babel.config.{js,cjs,mjs,json}", ".babelrc.{js,cjs,mjs,json}"],
   },
   {
     enablers: ["sanity", "@sanity/cli"],
     enablerPrefixes: ["@sanity/"],
     entryPatterns: [],
-    alwaysUsed: [
-      "sanity.config.{ts,js}",
-      "sanity.cli.{ts,js}",
-    ],
+    alwaysUsed: ["sanity.config.{ts,js}", "sanity.cli.{ts,js}"],
   },
   {
     enablers: ["astro"],
@@ -1916,16 +2024,8 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
   {
     enablers: ["react-native"],
     enablerPrefixes: ["@react-native/", "@react-native-community/"],
-    entryPatterns: [
-      "index.{ts,tsx,js,jsx}",
-      "App.{ts,tsx,js,jsx}",
-      "src/App.{ts,tsx,js,jsx}",
-    ],
-    alwaysUsed: [
-      "metro.config.{ts,js}",
-      "react-native.config.{ts,js}",
-      "app.json",
-    ],
+    entryPatterns: ["index.{ts,tsx,js,jsx}", "App.{ts,tsx,js,jsx}", "src/App.{ts,tsx,js,jsx}"],
+    alwaysUsed: ["metro.config.{ts,js}", "react-native.config.{ts,js}", "app.json"],
   },
   {
     enablers: ["expo"],
@@ -1940,15 +2040,17 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
   {
     enablers: ["wrangler"],
     enablerPrefixes: ["@cloudflare/"],
-    entryPatterns: [
-      "src/index.{ts,js}",
-      "src/worker.{ts,js}",
-      "functions/**/*.{ts,js}",
-    ],
+    entryPatterns: ["src/index.{ts,js}", "src/worker.{ts,js}", "functions/**/*.{ts,js}"],
     alwaysUsed: ["wrangler.toml", "wrangler.json", "wrangler.jsonc"],
   },
   {
-    enablers: ["electron", "electron-builder", "@electron-forge/cli", "electron-vite", "electron-webpack"],
+    enablers: [
+      "electron",
+      "electron-builder",
+      "@electron-forge/cli",
+      "electron-vite",
+      "electron-webpack",
+    ],
     enablerPrefixes: ["@electron-forge/", "@electron/"],
     entryPatterns: [
       "src/main/**/*.{ts,tsx,js,jsx}",
@@ -1974,7 +2076,7 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
     entryPatterns: [],
     alwaysUsed: [".syncpackrc", ".syncpackrc.{json,yaml,yml}", "syncpack.config.{js,mjs,cjs}"],
   },
-  
+
   {
     enablers: ["@capacitor/core", "@capacitor/cli"],
     enablerPrefixes: ["@capacitor/"],
@@ -1991,7 +2093,7 @@ const detectNodeTestRunner = (directory: string): boolean => {
     const packageJson = JSON.parse(content);
     const scripts = packageJson.scripts ?? {};
     return Object.values(scripts).some(
-      (scriptValue) => typeof scriptValue === "string" && /\bnode\b.*\s--test\b/.test(scriptValue)
+      (scriptValue) => typeof scriptValue === "string" && /\bnode\b.*\s--test\b/.test(scriptValue),
     );
   } catch {
     return false;
@@ -2006,16 +2108,12 @@ const detectBunTestRunner = (directory: string): boolean => {
     const packageJson = JSON.parse(content);
     const scripts = packageJson.scripts ?? {};
     return Object.values(scripts).some(
-      (scriptValue) => typeof scriptValue === "string" && /\bbun\s+test\b/.test(scriptValue)
+      (scriptValue) => typeof scriptValue === "string" && /\bbun\s+test\b/.test(scriptValue),
     );
   } catch {
     return false;
   }
 };
-
-
-
-
 
 interface TestRunnerDiscoveryResult {
   entryFiles: string[];
@@ -2028,7 +2126,10 @@ const discoverTestRunnerEntryPoints = (
 ): TestRunnerDiscoveryResult => {
   const allEntries: string[] = [];
   const allAlwaysUsed: string[] = [];
-  const directoriesToCheck = [rootDir, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
+  const directoriesToCheck = [
+    rootDir,
+    ...workspacePackages.map((workspacePackage) => workspacePackage.directory),
+  ];
 
   for (const directory of directoriesToCheck) {
     const packageJsonPath = join(directory, "package.json");
@@ -2051,12 +2152,18 @@ const discoverTestRunnerEntryPoints = (
     const activatedFixturePatterns: string[] = [];
     const activatedAlwaysUsed: string[] = [];
 
-    const isRunnerEnabled = (runner: TestRunnerDefinition, dependencies: Record<string, string>, checkDirectory: string): boolean => {
+    const isRunnerEnabled = (
+      runner: TestRunnerDefinition,
+      dependencies: Record<string, string>,
+      checkDirectory: string,
+    ): boolean => {
       const hasDependency = runner.enablers.some((enabler) => {
         return enabler in dependencies;
       });
       if (hasDependency) return true;
-      return runner.configFileActivators.some((configFile) => existsSync(join(checkDirectory, configFile)));
+      return runner.configFileActivators.some((configFile) =>
+        existsSync(join(checkDirectory, configFile)),
+      );
     };
 
     for (const runner of TEST_FRAMEWORK_PATTERNS) {
@@ -2097,8 +2204,7 @@ const discoverTestRunnerEntryPoints = (
               activatedAlwaysUsed.push(...runner.alwaysUsed);
             }
           }
-        } catch {
-        }
+        } catch {}
       }
     }
 
@@ -2185,7 +2291,10 @@ const discoverToolingEntryPoints = (
 ): ToolingDiscoveryResult => {
   const allEntries: string[] = [];
   const allAlwaysUsed: string[] = [];
-  const directoriesToCheck = [rootDir, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
+  const directoriesToCheck = [
+    rootDir,
+    ...workspacePackages.map((workspacePackage) => workspacePackage.directory),
+  ];
 
   let rootDependencies: Record<string, string> = {};
   const rootPackageJsonPath = join(rootDir, "package.json");
@@ -2198,8 +2307,7 @@ const discoverToolingEntryPoints = (
         ...rootPackageJson.devDependencies,
         ...rootPackageJson.optionalDependencies,
       };
-    } catch {
-    }
+    } catch {}
   }
 
   for (const directory of directoriesToCheck) {
@@ -2219,9 +2327,7 @@ const discoverToolingEntryPoints = (
       continue;
     }
 
-    const mergedDependencies = directory === rootDir
-      ? rootDependencies
-      : workspaceDependencies;
+    const mergedDependencies = directory === rootDir ? rootDependencies : workspaceDependencies;
 
     const activatedPatterns: string[] = [];
     const activatedAlwaysUsed: string[] = [];

@@ -4,13 +4,13 @@
   "description": "Deslop JavaScript code",
   "keywords": [
     "dead-code",
-    "unused",
+    "dependencies",
     "exports",
     "files",
-    "dependencies",
-    "typescript",
     "javascript",
-    "oxc"
+    "oxc",
+    "typescript",
+    "unused"
   ],
   "license": "MIT",
   "author": {

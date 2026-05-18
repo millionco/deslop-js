@@ -1,2 +1,2 @@
-export const usedHelper = () => 'used';
-export const unusedHelper = () => 'unused';
+export const usedHelper = () => "used";
+export const unusedHelper = () => "unused";

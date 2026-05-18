@@ -17,15 +17,25 @@ const STYLE_EXTENSIONS = [".css", ".scss"];
 
 const REACT_NATIVE_ENABLERS = ["react-native", "expo"];
 
-const detectReactNative = (rootDir: string, workspacePackages: Array<{ directory: string }>): boolean => {
-  const directoriesToCheck = [rootDir, ...workspacePackages.map((workspacePackage) => workspacePackage.directory)];
+const detectReactNative = (
+  rootDir: string,
+  workspacePackages: Array<{ directory: string }>,
+): boolean => {
+  const directoriesToCheck = [
+    rootDir,
+    ...workspacePackages.map((workspacePackage) => workspacePackage.directory),
+  ];
   for (const directory of directoriesToCheck) {
     const packageJsonPath = resolve(directory, "package.json");
     if (!existsSync(packageJsonPath)) continue;
     try {
       const content = readFileSync(packageJsonPath, "utf-8");
       const packageJson = JSON.parse(content);
-      const allDependencies = { ...packageJson.dependencies, ...packageJson.devDependencies, ...packageJson.optionalDependencies };
+      const allDependencies = {
+        ...packageJson.dependencies,
+        ...packageJson.devDependencies,
+        ...packageJson.optionalDependencies,
+      };
       if (REACT_NATIVE_ENABLERS.some((enabler) => enabler in allDependencies)) return true;
     } catch {
       continue;
@@ -34,7 +44,14 @@ const detectReactNative = (rootDir: string, workspacePackages: Array<{ directory
   return false;
 };
 
-export type { ScanResult, DeslopConfig, UnusedFile, UnusedExport, UnusedDependency, CircularDependency } from "./types.js";
+export type {
+  ScanResult,
+  DeslopConfig,
+  UnusedFile,
+  UnusedExport,
+  UnusedDependency,
+  CircularDependency,
+} from "./types.js";
 
 export const defineConfig = (
   options: Partial<DeslopConfig> & { rootDir: string },
@@ -71,15 +88,13 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
     ...outputDirectoryExclusions,
   ];
 
-  const configWithExclusions = allExclusionPatterns.length > 0
-    ? {
-        ...config,
-        ignorePatterns: [
-          ...config.ignorePatterns,
-          ...allExclusionPatterns,
-        ],
-      }
-    : config;
+  const configWithExclusions =
+    allExclusionPatterns.length > 0
+      ? {
+          ...config,
+          ignorePatterns: [...config.ignorePatterns, ...allExclusionPatterns],
+        }
+      : config;
 
   const files = await collectSourceFiles(configWithExclusions);
   const discoveredEntries = await resolveEntries(configWithExclusions);
@@ -87,18 +102,19 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
   const testEntrySet = new Set(discoveredEntries.testEntries);
   const alwaysUsedFileSet = new Set(discoveredEntries.alwaysUsedFiles);
   const hasReactNative = detectReactNative(config.rootDir, workspacePackages);
-  const moduleResolver = createResolver(config, workspacePackages.map((workspacePackage) => ({
-    name: workspacePackage.name,
-    directory: workspacePackage.directory,
-  })), { hasReactNative });
+  const moduleResolver = createResolver(
+    config,
+    workspacePackages.map((workspacePackage) => ({
+      name: workspacePackage.name,
+      directory: workspacePackage.directory,
+    })),
+    { hasReactNative },
+  );
   const graphInputs: ModuleLinkInput[] = [];
 
   for (const file of files) {
     const parsedModule = parseSourceFile(file.path);
-    const resolvedImportMap = new Map<
-      string,
-      ReturnType<typeof moduleResolver.resolveModule>
-    >();
+    const resolvedImportMap = new Map<string, ReturnType<typeof moduleResolver.resolveModule>>();
 
     for (const importInfo of parsedModule.imports) {
       if (importInfo.isGlob) {
@@ -123,20 +139,14 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
         });
         continue;
       }
-      const resolvedImport = moduleResolver.resolveModule(
-        importInfo.specifier,
-        file.path,
-      );
+      const resolvedImport = moduleResolver.resolveModule(importInfo.specifier, file.path);
       resolvedImportMap.set(importInfo.specifier, resolvedImport);
     }
 
     for (const exportInfo of parsedModule.exports) {
       if (exportInfo.isReExport && exportInfo.reExportSource) {
         if (!resolvedImportMap.has(exportInfo.reExportSource)) {
-          const resolvedImport = moduleResolver.resolveModule(
-            exportInfo.reExportSource,
-            file.path,
-          );
+          const resolvedImport = moduleResolver.resolveModule(exportInfo.reExportSource, file.path);
           resolvedImportMap.set(exportInfo.reExportSource, resolvedImport);
         }
       }
@@ -147,7 +157,8 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
       fileId: file,
       parsed: parsedModule,
       resolvedImports: resolvedImportMap,
-      isEntryPoint: isAlwaysUsed || productionEntrySet.has(file.path) || testEntrySet.has(file.path),
+      isEntryPoint:
+        isAlwaysUsed || productionEntrySet.has(file.path) || testEntrySet.has(file.path),
       isTestEntry: testEntrySet.has(file.path),
     });
   }
@@ -159,7 +170,9 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
     for (const [, resolvedImport] of input.resolvedImports) {
       if (!resolvedImport.resolvedPath || resolvedImport.isExternal) continue;
       if (discoveredFilePaths.has(resolvedImport.resolvedPath)) continue;
-      const isStyleFile = STYLE_EXTENSIONS.some((ext) => resolvedImport.resolvedPath!.endsWith(ext));
+      const isStyleFile = STYLE_EXTENSIONS.some((ext) =>
+        resolvedImport.resolvedPath!.endsWith(ext),
+      );
       if (isStyleFile && existsSync(resolvedImport.resolvedPath)) {
         styleFilesToAdd.add(resolvedImport.resolvedPath);
       }
@@ -171,13 +184,18 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
   for (const styleFilePath of sortedStyleFiles) {
     const styleSourceFile = { index: nextFileIndex, path: styleFilePath };
     const parsedStyleModule = parseSourceFile(styleFilePath);
-    const resolvedStyleImportMap = new Map<string, ReturnType<typeof moduleResolver.resolveModule>>();
+    const resolvedStyleImportMap = new Map<
+      string,
+      ReturnType<typeof moduleResolver.resolveModule>
+    >();
 
     for (const importInfo of parsedStyleModule.imports) {
       const resolvedImport = moduleResolver.resolveModule(importInfo.specifier, styleFilePath);
       resolvedStyleImportMap.set(importInfo.specifier, resolvedImport);
       if (resolvedImport.resolvedPath && !discoveredFilePaths.has(resolvedImport.resolvedPath)) {
-        const isNestedStyle = STYLE_EXTENSIONS.some((ext) => resolvedImport.resolvedPath!.endsWith(ext));
+        const isNestedStyle = STYLE_EXTENSIONS.some((ext) =>
+          resolvedImport.resolvedPath!.endsWith(ext),
+        );
         if (isNestedStyle && existsSync(resolvedImport.resolvedPath)) {
           styleFilesToAdd.add(resolvedImport.resolvedPath);
         }

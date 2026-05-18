@@ -1,1 +1,1 @@
-export const BaseTextField = { type: 'text' };
+export const BaseTextField = { type: "text" };

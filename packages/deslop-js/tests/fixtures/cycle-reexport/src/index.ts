@@ -1,4 +1,4 @@
-import { fromA } from './module-a';
-import { fromB } from './module-b';
+import { fromA } from "./module-a";
+import { fromB } from "./module-b";
 
 console.log(fromA, fromB);

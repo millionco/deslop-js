@@ -1,1 +1,1 @@
-export * from './barrel-c';
+export * from "./barrel-c";

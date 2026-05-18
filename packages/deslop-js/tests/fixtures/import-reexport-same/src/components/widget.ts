@@ -1,3 +1,3 @@
 export const Widget = {
-  render: () => '<div>widget</div>',
+  render: () => "<div>widget</div>",
 };

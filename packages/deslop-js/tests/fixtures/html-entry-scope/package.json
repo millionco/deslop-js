@@ -1,4 +1,6 @@
 {
   "name": "html-entry-scoping",
-  "workspaces": ["packages/*"]
+  "workspaces": [
+    "packages/*"
+  ]
 }

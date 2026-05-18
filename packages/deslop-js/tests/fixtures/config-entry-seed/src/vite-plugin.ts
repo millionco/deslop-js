@@ -1,1 +1,1 @@
-export const myPlugin = () => ({ name: 'my-plugin' });
+export const myPlugin = () => ({ name: "my-plugin" });

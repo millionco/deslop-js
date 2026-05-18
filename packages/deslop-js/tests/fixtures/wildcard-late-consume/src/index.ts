@@ -1,3 +1,3 @@
-import { ColorPlugin } from './plugins';
+import { ColorPlugin } from "./plugins";
 
 export const app = { plugins: [ColorPlugin] };

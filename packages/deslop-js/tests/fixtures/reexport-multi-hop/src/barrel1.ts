@@ -1,1 +1,1 @@
-export { used, unused1 } from './barrel2';
+export { used, unused1 } from "./barrel2";

@@ -19,8 +19,8 @@ import { analyze, defineConfig } from "deslop-js";
 const config = defineConfig({ rootDir: "./my-project" });
 const result = await analyze(config);
 
-result.unusedFiles;        // files not reachable from any entry point
-result.unusedExports;      // exported symbols never imported
+result.unusedFiles; // files not reachable from any entry point
+result.unusedExports; // exported symbols never imported
 result.unusedDependencies; // package.json deps not imported anywhere
 result.circularDependencies; // import cycles
 ```
@@ -40,15 +40,15 @@ const config = defineConfig({
 });
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `rootDir` | `string` | required | Project root directory |
-| `entryPatterns` | `string[]` | auto-detected | Entry point glob patterns |
-| `ignorePatterns` | `string[]` | `[]` | Glob patterns to exclude from analysis |
-| `includeExtensions` | `string[]` | `[".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".cjs", ".cts"]` | File extensions to scan |
-| `tsConfigPath` | `string \| undefined` | `undefined` | Path to tsconfig.json for path alias resolution |
-| `reportTypes` | `boolean` | `false` | Include type-only exports in results |
-| `includeEntryExports` | `boolean` | `false` | Report unused exports from entry files |
+| Option                | Type                  | Default                                                          | Description                                     |
+| --------------------- | --------------------- | ---------------------------------------------------------------- | ----------------------------------------------- |
+| `rootDir`             | `string`              | required                                                         | Project root directory                          |
+| `entryPatterns`       | `string[]`            | auto-detected                                                    | Entry point glob patterns                       |
+| `ignorePatterns`      | `string[]`            | `[]`                                                             | Glob patterns to exclude from analysis          |
+| `includeExtensions`   | `string[]`            | `[".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".cjs", ".cts"]` | File extensions to scan                         |
+| `tsConfigPath`        | `string \| undefined` | `undefined`                                                      | Path to tsconfig.json for path alias resolution |
+| `reportTypes`         | `boolean`             | `false`                                                          | Include type-only exports in results            |
+| `includeEntryExports` | `boolean`             | `false`                                                          | Report unused exports from entry files          |
 
 ### Result
 

@@ -1,7 +1,15 @@
 import type { DependencyGraph, Edge } from "../types.js";
 import { PLATFORM_SUFFIXES } from "../constants.js";
 
-const PLATFORM_DIRECTORY_NAMES = new Set(["web", "native", "ios", "android", "desktop", "windows", "macos"]);
+const PLATFORM_DIRECTORY_NAMES = new Set([
+  "web",
+  "native",
+  "ios",
+  "android",
+  "desktop",
+  "windows",
+  "macos",
+]);
 
 const stripPlatformSuffix = (filePath: string): string | undefined => {
   for (const suffix of PLATFORM_SUFFIXES) {
@@ -20,7 +28,10 @@ const stripPlatformDirectory = (filePath: string): string | undefined => {
   const segments = filePath.split("/");
   for (let segmentIndex = segments.length - 2; segmentIndex >= 0; segmentIndex--) {
     if (PLATFORM_DIRECTORY_NAMES.has(segments[segmentIndex])) {
-      const withoutPlatformDir = [...segments.slice(0, segmentIndex), ...segments.slice(segmentIndex + 1)].join("/");
+      const withoutPlatformDir = [
+        ...segments.slice(0, segmentIndex),
+        ...segments.slice(segmentIndex + 1),
+      ].join("/");
       return withoutPlatformDir;
     }
   }
@@ -105,7 +116,9 @@ export const traceReachability = (graph: DependencyGraph): void => {
           }
         }
 
-        const symbolDemand: Set<string> | "all" = isNamespaceOrSideEffect ? "all" : importSymbolNames;
+        const symbolDemand: Set<string> | "all" = isNamespaceOrSideEffect
+          ? "all"
+          : importSymbolNames;
 
         if (!visited[targetIndex]) {
           visited[targetIndex] = 1;

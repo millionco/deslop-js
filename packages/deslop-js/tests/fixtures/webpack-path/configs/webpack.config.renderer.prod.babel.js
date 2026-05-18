@@ -1,5 +1,5 @@
-const path = require('path');
+const path = require("path");
 module.exports = {
-  entry: path.join(__dirname, '..', 'app/index'),
-  output: { path: path.resolve(__dirname, 'dist') }
+  entry: path.join(__dirname, "..", "app/index"),
+  output: { path: path.resolve(__dirname, "dist") },
 };

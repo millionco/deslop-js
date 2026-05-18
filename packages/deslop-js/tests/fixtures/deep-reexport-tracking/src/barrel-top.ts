@@ -1,2 +1,2 @@
-export { usedHelper } from './barrel-mid';
-export { unusedHelper } from './barrel-mid';
+export { usedHelper } from "./barrel-mid";
+export { unusedHelper } from "./barrel-mid";

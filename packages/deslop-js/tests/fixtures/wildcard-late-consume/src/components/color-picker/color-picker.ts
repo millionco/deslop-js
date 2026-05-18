@@ -1,2 +1,2 @@
-export const ColorPicker = { type: 'color' };
-export const ColorUtils = { format: 'hex' };
+export const ColorPicker = { type: "color" };
+export const ColorUtils = { format: "hex" };

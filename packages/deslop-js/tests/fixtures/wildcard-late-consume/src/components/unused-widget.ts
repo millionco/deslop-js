@@ -1,1 +1,1 @@
-export const UnusedWidget = { type: 'unused' };
+export const UnusedWidget = { type: "unused" };

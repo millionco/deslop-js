@@ -9,4 +9,3 @@ export const extractPackageName = (specifier: string): string | undefined => {
 
   return specifier.split("/")[0];
 };
-

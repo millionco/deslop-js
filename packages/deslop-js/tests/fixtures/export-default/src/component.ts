@@ -1,5 +1,5 @@
 export default function Component() {
-  return 'component';
+  return "component";
 }
 
 export const usedNamed = 1;

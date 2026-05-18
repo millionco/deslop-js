@@ -24,10 +24,7 @@ const orphanPaths = (result: ScanResult, fixtureDir: string): string[] =>
 const deadExportNames = (result: ScanResult): string[] =>
   result.unusedExports.map((unusedExport) => unusedExport.name).sort();
 
-const deadExportsByFile = (
-  result: ScanResult,
-  fixtureDir: string,
-): Record<string, string[]> => {
+const deadExportsByFile = (result: ScanResult, fixtureDir: string): Record<string, string[]> => {
   const byFile: Record<string, string[]> = {};
   for (const unusedExport of result.unusedExports) {
     const relativePath = relative(fixtureDir, unusedExport.path);
@@ -48,7 +45,10 @@ describe("simple-app", () => {
     const result = await scanFixture("simple-app");
     const fixtureDir = resolve(FIXTURES_DIR, "simple-app");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
   });
 
   it("should detect unused exports in utils", async () => {
@@ -90,7 +90,10 @@ describe("reexport-star", () => {
   it("should flag fooUnused as unused", async () => {
     const result = await scanFixture("reexport-star");
     const allUnusedNames = deadExportNames(result);
-    assert.ok(allUnusedNames.includes("fooUnused"), `fooUnused should be unused, got: ${allUnusedNames}`);
+    assert.ok(
+      allUnusedNames.includes("fooUnused"),
+      `fooUnused should be unused, got: ${allUnusedNames}`,
+    );
   });
 
   it("should not flag module-b.ts as unused file (file-level: re-exported by barrel makes it reachable)", async () => {
@@ -162,21 +165,33 @@ describe("ns-partial", () => {
 describe("ns-whole", () => {
   it("should not flag any exports when Object.values is used on namespace", async () => {
     const result = await scanFixture("ns-whole");
-    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${deadExportNames(result)}`);
+    assert.equal(
+      result.unusedExports.length,
+      0,
+      `expected 0 unused exports, got: ${deadExportNames(result)}`,
+    );
   });
 });
 
 describe("ns-spread", () => {
   it("should not flag any exports when namespace is spread into object", async () => {
     const result = await scanFixture("ns-spread");
-    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${deadExportNames(result)}`);
+    assert.equal(
+      result.unusedExports.length,
+      0,
+      `expected 0 unused exports, got: ${deadExportNames(result)}`,
+    );
   });
 });
 
 describe("ns-forin", () => {
   it("should not flag any exports when namespace is used in for..in", async () => {
     const result = await scanFixture("ns-forin");
-    assert.equal(result.unusedExports.length, 0, `expected 0 unused exports, got: ${deadExportNames(result)}`);
+    assert.equal(
+      result.unusedExports.length,
+      0,
+      `expected 0 unused exports, got: ${deadExportNames(result)}`,
+    );
   });
 });
 
@@ -234,7 +249,10 @@ describe("import-side-effect", () => {
     const result = await scanFixture("import-side-effect");
     const fixtureDir = resolve(FIXTURES_DIR, "import-side-effect");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
   });
 });
 
@@ -262,7 +280,10 @@ describe("star-reexport-chain", () => {
   it("should flag unused export in source", async () => {
     const result = await scanFixture("star-reexport-chain");
     const allUnusedNames = deadExportNames(result);
-    assert.ok(allUnusedNames.includes("unused"), `unused should be flagged, got: ${allUnusedNames}`);
+    assert.ok(
+      allUnusedNames.includes("unused"),
+      `unused should be flagged, got: ${allUnusedNames}`,
+    );
   });
 });
 
@@ -277,8 +298,14 @@ describe("star-selective", () => {
   it("should flag unusedThree and unusedFour", async () => {
     const result = await scanFixture("star-selective");
     const allUnusedNames = deadExportNames(result);
-    assert.ok(allUnusedNames.includes("unusedThree"), `unusedThree should be flagged, got: ${allUnusedNames}`);
-    assert.ok(allUnusedNames.includes("unusedFour"), `unusedFour should be flagged, got: ${allUnusedNames}`);
+    assert.ok(
+      allUnusedNames.includes("unusedThree"),
+      `unusedThree should be flagged, got: ${allUnusedNames}`,
+    );
+    assert.ok(
+      allUnusedNames.includes("unusedFour"),
+      `unusedFour should be flagged, got: ${allUnusedNames}`,
+    );
   });
 });
 
@@ -292,8 +319,14 @@ describe("reexport-multi-hop", () => {
   it("should flag unused1 and unused2", async () => {
     const result = await scanFixture("reexport-multi-hop");
     const allUnusedNames = deadExportNames(result);
-    assert.ok(allUnusedNames.includes("unused1"), `unused1 should be unused, got: ${allUnusedNames}`);
-    assert.ok(allUnusedNames.includes("unused2"), `unused2 should be unused, got: ${allUnusedNames}`);
+    assert.ok(
+      allUnusedNames.includes("unused1"),
+      `unused1 should be unused, got: ${allUnusedNames}`,
+    );
+    assert.ok(
+      allUnusedNames.includes("unused2"),
+      `unused2 should be unused, got: ${allUnusedNames}`,
+    );
   });
 });
 
@@ -320,7 +353,10 @@ describe("reexport-multi-level", () => {
   it("should flag epsilon (not re-exported at all)", async () => {
     const result = await scanFixture("reexport-multi-level");
     const allUnusedNames = deadExportNames(result);
-    assert.ok(allUnusedNames.includes("epsilon"), `epsilon should be unused, got: ${allUnusedNames}`);
+    assert.ok(
+      allUnusedNames.includes("epsilon"),
+      `epsilon should be unused, got: ${allUnusedNames}`,
+    );
   });
 });
 
@@ -330,10 +366,7 @@ describe("reexport-default", () => {
     const fixtureDir = resolve(FIXTURES_DIR, "reexport-default");
     const exportsByFile = deadExportsByFile(result, fixtureDir);
     const buttonExports = exportsByFile["src/components/Button.ts"];
-    assert.ok(
-      !buttonExports?.includes("default"),
-      "Button default export is used",
-    );
+    assert.ok(!buttonExports?.includes("default"), "Button default export is used");
   });
 });
 
@@ -508,13 +541,19 @@ describe("import-dynamic", () => {
     const result = await scanFixture("import-dynamic");
     const fixtureDir = resolve(FIXTURES_DIR, "import-dynamic");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
   });
 
   it("should flag unused export in utils", async () => {
     const result = await scanFixture("import-dynamic");
     const allUnusedNames = deadExportNames(result);
-    assert.ok(allUnusedNames.includes("unused"), `unused should be flagged, got: ${allUnusedNames}`);
+    assert.ok(
+      allUnusedNames.includes("unused"),
+      `unused should be flagged, got: ${allUnusedNames}`,
+    );
   });
 });
 
@@ -564,8 +603,14 @@ describe("reexport-mixed", () => {
   it("should flag namedUnused and starUnused", async () => {
     const result = await scanFixture("reexport-mixed");
     const allUnusedNames = deadExportNames(result);
-    assert.ok(allUnusedNames.includes("namedUnused"), `namedUnused should be flagged, got: ${allUnusedNames}`);
-    assert.ok(allUnusedNames.includes("starUnused"), `starUnused should be flagged, got: ${allUnusedNames}`);
+    assert.ok(
+      allUnusedNames.includes("namedUnused"),
+      `namedUnused should be flagged, got: ${allUnusedNames}`,
+    );
+    assert.ok(
+      allUnusedNames.includes("starUnused"),
+      `starUnused should be flagged, got: ${allUnusedNames}`,
+    );
   });
 });
 
@@ -621,7 +666,10 @@ describe("commonjs-app", () => {
     const result = await scanFixture("commonjs-app");
     const fixtureDir = resolve(FIXTURES_DIR, "commonjs-app");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/orphan.js"), `orphan.js should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.js"),
+      `orphan.js should be unused, got: ${unusedFilePaths}`,
+    );
   });
 });
 
@@ -630,13 +678,19 @@ describe("config-detection", () => {
     const result = await scanFixture("config-detection");
     const fixtureDir = resolve(FIXTURES_DIR, "config-detection");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
   });
 
   it("should flag unusedFunction as unused export", async () => {
     const result = await scanFixture("config-detection");
     const allUnusedNames = deadExportNames(result);
-    assert.ok(allUnusedNames.includes("unusedFunction"), `unusedFunction should be unused, got: ${allUnusedNames}`);
+    assert.ok(
+      allUnusedNames.includes("unusedFunction"),
+      `unusedFunction should be unused, got: ${allUnusedNames}`,
+    );
   });
 });
 
@@ -652,7 +706,10 @@ describe("import-dynamic-literal", () => {
     const result = await scanFixture("import-dynamic-literal");
     const fixtureDir = resolve(FIXTURES_DIR, "import-dynamic-literal");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
   });
 });
 
@@ -670,14 +727,20 @@ describe("arrow-wrapped-import-dynamic", () => {
     const result = await scanFixture("arrow-wrapped-import-dynamic");
     const fixtureDir = resolve(FIXTURES_DIR, "arrow-wrapped-import-dynamic");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(!unusedFilePaths.includes("src/feature.routes.ts"), "feature.routes.ts is dynamically imported");
+    assert.ok(
+      !unusedFilePaths.includes("src/feature.routes.ts"),
+      "feature.routes.ts is dynamically imported",
+    );
   });
 
   it("should flag orphan.ts as unused", async () => {
     const result = await scanFixture("arrow-wrapped-import-dynamic");
     const fixtureDir = resolve(FIXTURES_DIR, "arrow-wrapped-import-dynamic");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
   });
 });
 
@@ -708,8 +771,14 @@ describe("orphan-dynamic-subtree", () => {
     const result = await scanFixture("orphan-dynamic-subtree");
     const fixtureDir = resolve(FIXTURES_DIR, "orphan-dynamic-subtree");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/subtree/setup.ts"), `setup.ts should be unused, got: ${unusedFilePaths}`);
-    assert.ok(unusedFilePaths.includes("src/subtree/lazy.ts"), `lazy.ts should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/subtree/setup.ts"),
+      `setup.ts should be unused, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/subtree/lazy.ts"),
+      `lazy.ts should be unused, got: ${unusedFilePaths}`,
+    );
   });
 });
 
@@ -718,8 +787,14 @@ describe("orphan-shared-child", () => {
     const result = await scanFixture("orphan-shared-child");
     const fixtureDir = resolve(FIXTURES_DIR, "orphan-shared-child");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/subtree/setup.ts"), `setup.ts should be unused, got: ${unusedFilePaths}`);
-    assert.ok(unusedFilePaths.includes("src/subtree/helpers.ts"), `helpers.ts should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/subtree/setup.ts"),
+      `setup.ts should be unused, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/subtree/helpers.ts"),
+      `helpers.ts should be unused, got: ${unusedFilePaths}`,
+    );
   });
 
   it("should not flag shared/utils.ts as unused (imported by entry)", async () => {
@@ -735,7 +810,10 @@ describe("style-tracking", () => {
     const result = await scanFixture("style-tracking");
     const fixtureDir = resolve(FIXTURES_DIR, "style-tracking");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(!unusedFilePaths.includes("src/styles.css"), "styles.css is imported and should be reachable");
+    assert.ok(
+      !unusedFilePaths.includes("src/styles.css"),
+      "styles.css is imported and should be reachable",
+    );
   });
 
   it("should flag unimported CSS files as unused", async () => {
@@ -749,7 +827,10 @@ describe("style-tracking", () => {
     const result = await scanFixture("style-tracking");
     const fixtureDir = resolve(FIXTURES_DIR, "style-tracking");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
   });
 });
 
@@ -776,7 +857,10 @@ describe("config-mixed-formats", () => {
     const result = await scanFixture("config-mixed-formats");
     const fixtureDir = resolve(FIXTURES_DIR, "config-mixed-formats");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
   });
 });
 
@@ -851,14 +935,23 @@ describe("alias-mixed-exports", () => {
     const result = await scanFixture("alias-mixed-exports");
     const fixtureDir = resolve(FIXTURES_DIR, "alias-mixed-exports");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
-    assert.ok(unusedFilePaths.includes("src/orphan.ts"), `orphan.ts should be unused, got: ${unusedFilePaths}`);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
   });
 
   it("should flag unusedExport and unusedHelper", async () => {
     const result = await scanFixture("alias-mixed-exports");
     const allUnusedNames = deadExportNames(result);
-    assert.ok(allUnusedNames.includes("unusedExport"), `unusedExport should be unused, got: ${allUnusedNames}`);
-    assert.ok(allUnusedNames.includes("unusedHelper"), `unusedHelper should be unused, got: ${allUnusedNames}`);
+    assert.ok(
+      allUnusedNames.includes("unusedExport"),
+      `unusedExport should be unused, got: ${allUnusedNames}`,
+    );
+    assert.ok(
+      allUnusedNames.includes("unusedHelper"),
+      `unusedHelper should be unused, got: ${allUnusedNames}`,
+    );
   });
 });
 
@@ -2262,7 +2355,9 @@ test("should not treat all .github files as entries, only CI-referenced scripts"
     `run.js should NOT be unused (referenced in CI workflow), got: ${unusedFilePaths}`,
   );
   assert.ok(
-    unusedFilePaths.some((filePath) => filePath.endsWith(".github/actions/deploy/unused-helper.js")),
+    unusedFilePaths.some((filePath) =>
+      filePath.endsWith(".github/actions/deploy/unused-helper.js"),
+    ),
     `unused-helper.js should be unused (not referenced anywhere), got: ${unusedFilePaths}`,
   );
 });
@@ -3285,7 +3380,10 @@ describe("cycle-simple", () => {
     const hasCycle = cyclePaths.some(
       (paths) => paths.includes("src/a.ts") && paths.includes("src/b.ts"),
     );
-    assert.ok(hasCycle, `should find cycle between a.ts and b.ts, got: ${JSON.stringify(cyclePaths)}`);
+    assert.ok(
+      hasCycle,
+      `should find cycle between a.ts and b.ts, got: ${JSON.stringify(cyclePaths)}`,
+    );
   });
 });
 
@@ -3344,10 +3442,7 @@ describe("reexport-default-named", () => {
       !unusedFiles.includes("gadget.ts"),
       "gadget.ts should be reachable via re-export { default as Gadget }",
     );
-    assert.ok(
-      !unusedFiles.includes("index.ts"),
-      "index.ts should be reachable as entry",
-    );
+    assert.ok(!unusedFiles.includes("index.ts"), "index.ts should be reachable as entry");
     assert.ok(
       unusedFiles.includes("consumer.ts"),
       "consumer.ts should be unused (not an entry point, not imported by entry)",
@@ -3373,14 +3468,8 @@ describe("import-mixed", () => {
     const result = await scanFixture("import-mixed");
     const fixtureDir = resolve(FIXTURES_DIR, "import-mixed");
     const unusedFiles = orphanPaths(result, fixtureDir);
-    assert.ok(
-      unusedFiles.includes("orphan.ts"),
-      "orphan.ts should be unused (not imported)",
-    );
-    assert.ok(
-      !unusedFiles.includes("lib.ts"),
-      "lib.ts should be reachable via mixed import",
-    );
+    assert.ok(unusedFiles.includes("orphan.ts"), "orphan.ts should be unused (not imported)");
+    assert.ok(!unusedFiles.includes("lib.ts"), "lib.ts should be reachable via mixed import");
     assert.ok(
       !unusedFiles.includes("utils.ts"),
       "utils.ts should be reachable via namespace import",
@@ -3390,10 +3479,7 @@ describe("import-mixed", () => {
   it("should detect unused exports across import patterns", async () => {
     const result = await scanFixture("import-mixed");
     const exportNames = deadExportNames(result);
-    assert.ok(
-      exportNames.includes("unused"),
-      "unused export from lib.ts should be detected",
-    );
+    assert.ok(exportNames.includes("unused"), "unused export from lib.ts should be detected");
     assert.ok(
       exportNames.includes("unusedUtil"),
       "unusedUtil export from utils.ts should be detected",
@@ -3406,10 +3492,7 @@ describe("ns-chain", () => {
     const result = await scanFixture("ns-chain");
     const fixtureDir = resolve(FIXTURES_DIR, "ns-chain");
     const unusedFiles = orphanPaths(result, fixtureDir);
-    assert.ok(
-      unusedFiles.includes("unused-module.ts"),
-      "unused-module.ts should be unused",
-    );
+    assert.ok(unusedFiles.includes("unused-module.ts"), "unused-module.ts should be unused");
     assert.ok(
       !unusedFiles.includes("helpers.ts"),
       "helpers.ts should be reachable via namespace re-export chain",
@@ -3430,10 +3513,7 @@ describe("type-reexport-filter", () => {
       !unusedFiles.includes("types.ts"),
       "types.ts should be reachable via type-only re-export",
     );
-    assert.ok(
-      !unusedFiles.includes("user.ts"),
-      "user.ts should be reachable via named re-export",
-    );
+    assert.ok(!unusedFiles.includes("user.ts"), "user.ts should be reachable via named re-export");
     assert.ok(
       unusedFiles.includes("consumer.ts"),
       "consumer.ts should be unused (not an entry point)",
@@ -3524,10 +3604,7 @@ describe("enum-export", () => {
   it("should detect unused enum exports", async () => {
     const result = await scanFixture("enum-export");
     const exportNames = deadExportNames(result);
-    assert.ok(
-      exportNames.includes("UnusedEnum"),
-      "UnusedEnum should be detected as unused",
-    );
+    assert.ok(exportNames.includes("UnusedEnum"), "UnusedEnum should be detected as unused");
     assert.ok(
       !exportNames.includes("Status"),
       "Status should NOT be detected as unused (it is imported)",
@@ -3569,10 +3646,7 @@ describe("module-side-effect", () => {
       !unusedFiles.includes("register.ts"),
       "register.ts should be reachable via side-effect import",
     );
-    assert.ok(
-      unusedFiles.includes("orphan.ts"),
-      "orphan.ts should be unused",
-    );
+    assert.ok(unusedFiles.includes("orphan.ts"), "orphan.ts should be unused");
   });
 });
 
@@ -3581,10 +3655,7 @@ describe("reexport-star-named", () => {
     const result = await scanFixture("reexport-star-named");
     const fixtureDir = resolve(FIXTURES_DIR, "reexport-star-named");
     const unusedFiles = orphanPaths(result, fixtureDir);
-    assert.ok(
-      !unusedFiles.includes("utils.ts"),
-      "utils.ts should be reachable via star re-export",
-    );
+    assert.ok(!unusedFiles.includes("utils.ts"), "utils.ts should be reachable via star re-export");
     assert.ok(
       !unusedFiles.includes("special.ts"),
       "special.ts should be reachable via named re-export",
@@ -3604,5 +3675,3 @@ describe("reexport-star-named", () => {
     );
   });
 });
-
-

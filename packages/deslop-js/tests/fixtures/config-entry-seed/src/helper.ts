@@ -1,1 +1,1 @@
-export const helper = () => 'used';
+export const helper = () => "used";

@@ -1,3 +1,3 @@
 export default function Button() {
-  return 'button';
+  return "button";
 }

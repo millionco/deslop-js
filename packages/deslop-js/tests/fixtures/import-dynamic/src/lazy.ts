@@ -1,1 +1,1 @@
-export const lazyValue = 'loaded lazily';
+export const lazyValue = "loaded lazily";

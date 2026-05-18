@@ -1,5 +1,8 @@
 {
   "name": "standalone-root",
   "version": "1.0.0",
-  "workspaces": ["app", "app/packages/*"]
+  "workspaces": [
+    "app",
+    "app/packages/*"
+  ]
 }
