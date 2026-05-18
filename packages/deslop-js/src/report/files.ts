@@ -1,7 +1,11 @@
 import type { DependencyGraph, UnusedFile, SourceModule } from "../types.js";
 
-const isHtmlFile = (filePath: string): boolean => {
-  return filePath.endsWith(".html");
+const EXCLUDED_EXTENSIONS = new Set([".html", ".mdx", ".md"]);
+
+const hasExcludedExtension = (filePath: string): boolean => {
+  const lastDot = filePath.lastIndexOf(".");
+  if (lastDot === -1) return false;
+  return EXCLUDED_EXTENSIONS.has(filePath.slice(lastDot));
 };
 
 export const detectOrphanFiles = (graph: DependencyGraph): UnusedFile[] => {
@@ -12,7 +16,7 @@ export const detectOrphanFiles = (graph: DependencyGraph): UnusedFile[] => {
     if (module.isEntryPoint) continue;
     if (module.isDeclarationFile) continue;
     if (module.isConfigFile) continue;
-    if (isHtmlFile(module.fileId.path)) continue;
+    if (hasExcludedExtension(module.fileId.path)) continue;
     if (isBarrelWithReachableSources(module, graph)) continue;
     if (hasReachableDirectImporter(module.fileId.index, graph)) continue;
 

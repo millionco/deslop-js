@@ -1,5 +1,5 @@
-import { resolve, join } from "node:path";
-import { readFileSync } from "node:fs";
+import { resolve, join, dirname } from "node:path";
+import { readFileSync, existsSync } from "node:fs";
 import fg from "fast-glob";
 import type { DependencyGraph, UnusedDependency, DeslopConfig } from "../types.js";
 import { IMPLICIT_DEPENDENCIES } from "../constants.js";
@@ -9,6 +9,54 @@ interface PackageJsonDependencies {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 }
+
+const MONOREPO_ROOT_MARKERS = [
+  "pnpm-workspace.yaml",
+  "pnpm-workspace.yml",
+  "lerna.json",
+  "nx.json",
+  "turbo.json",
+  "rush.json",
+];
+
+const LOCKFILE_MARKERS = [
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  "package-lock.json",
+  "bun.lockb",
+  "bun.lock",
+];
+
+const findMonorepoRoot = (rootDir: string): string | undefined => {
+  let currentDirectory = resolve(rootDir);
+
+  while (true) {
+    const parentDirectory = dirname(currentDirectory);
+    if (parentDirectory === currentDirectory) break;
+    currentDirectory = parentDirectory;
+
+    for (const marker of MONOREPO_ROOT_MARKERS) {
+      if (existsSync(join(currentDirectory, marker))) return currentDirectory;
+    }
+
+    const packageJsonPath = join(currentDirectory, "package.json");
+    if (existsSync(packageJsonPath)) {
+      try {
+        const content = readFileSync(packageJsonPath, "utf-8");
+        const packageJson = JSON.parse(content);
+        if (packageJson.workspaces) return currentDirectory;
+      } catch {
+        continue;
+      }
+    }
+
+    for (const lockfile of LOCKFILE_MARKERS) {
+      if (existsSync(join(currentDirectory, lockfile))) return currentDirectory;
+    }
+  }
+
+  return undefined;
+};
 
 const discoverAllPackageJsonPaths = (rootDir: string): string[] => {
   const paths = [join(rootDir, "package.json")];
@@ -55,8 +103,18 @@ export const detectStalePackages = (
   const declaredNames = new Set(declaredDependencies.keys());
   const usedPackageNames = collectUsedPackages(graph);
 
+  const monorepoRoot = findMonorepoRoot(config.rootDir);
+  const nodeModulesRoot = monorepoRoot ?? config.rootDir;
+
   const allPackageJsonPaths = discoverAllPackageJsonPaths(config.rootDir);
-  const binToPackage = buildBinToPackageMap(config.rootDir, declaredNames);
+  if (monorepoRoot) {
+    const monorepoPackageJson = join(monorepoRoot, "package.json");
+    if (!allPackageJsonPaths.includes(monorepoPackageJson) && existsSync(monorepoPackageJson)) {
+      allPackageJsonPaths.push(monorepoPackageJson);
+    }
+  }
+
+  const binToPackage = buildBinToPackageMap(nodeModulesRoot, declaredNames);
 
   for (const workspacePackageJsonPath of allPackageJsonPaths) {
     const scriptReferenced = collectScriptReferencedPackages(
@@ -73,11 +131,21 @@ export const detectStalePackages = (
     for (const packageName of packageJsonConfigReferenced) usedPackageNames.add(packageName);
   }
 
-  const configReferenced = collectConfigReferencedPackages(config.rootDir, graph, declaredNames);
-  for (const packageName of configReferenced) usedPackageNames.add(packageName);
+  const configSearchRoots =
+    monorepoRoot && monorepoRoot !== config.rootDir
+      ? [config.rootDir, monorepoRoot]
+      : [config.rootDir];
+  for (const configSearchRoot of configSearchRoots) {
+    const configReferenced = collectConfigReferencedPackages(
+      configSearchRoot,
+      graph,
+      declaredNames,
+    );
+    for (const packageName of configReferenced) usedPackageNames.add(packageName);
 
-  const tsconfigReferenced = collectTsconfigReferencedPackages(config.rootDir);
-  for (const packageName of tsconfigReferenced) usedPackageNames.add(packageName);
+    const tsconfigReferenced = collectTsconfigReferencedPackages(configSearchRoot);
+    for (const packageName of tsconfigReferenced) usedPackageNames.add(packageName);
+  }
 
   if (hasJsxFiles(graph)) {
     if (declaredNames.has("react")) usedPackageNames.add("react");
@@ -87,7 +155,7 @@ export const detectStalePackages = (
   }
 
   const peerSatisfied = collectPeerSatisfiedPackages(
-    config.rootDir,
+    nodeModulesRoot,
     declaredNames,
     usedPackageNames,
   );
@@ -290,9 +358,12 @@ const CONFIG_FILE_GLOBS = [
   "eslint.config.{js,cjs,mjs,ts,mts,cts}",
   "webpack.config.{js,ts,mjs,cjs}",
   "**/webpack*.config.{js,ts,mjs,cjs}",
+  "**/webpack*.config*.{js,ts,mjs,cjs}",
+  "**/webpack*.babel.{js,ts}",
   "vite.config.{js,ts,mjs,mts}",
   "rollup.config.{js,ts,mjs,cjs}",
   ".storybook/main.{js,ts,mjs,cjs}",
+  ".storybook/preview.{js,ts,mjs,cjs,tsx,jsx}",
   "docusaurus.config.{js,ts,mjs}",
   "next.config.{js,ts,mjs,mts}",
   "tailwind.config.{js,ts,cjs,mjs}",
@@ -306,6 +377,13 @@ const CONFIG_FILE_GLOBS = [
   "metro.config.{js,ts}",
   "electron.vite.config.{js,ts,mjs}",
   "api-extractor.json",
+  "codegen.{ts,js,yml,yaml}",
+  ".graphqlrc.{ts,js,json,yml,yaml}",
+  "graphql.config.{ts,js,json,yml,yaml}",
+  ".lintstagedrc.{js,cjs,mjs,json}",
+  "commitlint.config.{js,cjs,mjs,ts}",
+  ".commitlintrc.{js,cjs,mjs,json,yaml,yml}",
+  "tslint.json",
 ];
 
 const collectConfigReferencedPackages = (
@@ -480,6 +558,37 @@ const ALWAYS_USED_PREFIXES = [
   "@docusaurus/",
   "stylelint-config-",
   "stylelint-plugin-",
+  "@testing-library/",
+  "@vitest/",
+  "@playwright/",
+  "@storybook/",
+  "jest-environment-",
+  "@graphql-codegen/",
+  "@size-limit/",
+  "@nestjs/",
+  "@swc/",
+  "@electron-forge/",
+  "@parcel/",
+  "@wyw-in-js/",
+  "@typescript-eslint/",
+  "@react-native/",
+  "@react-native-community/",
+  "postcss-",
+  "@tailwindcss/",
+  "rollup-plugin-",
+  "vite-plugin-",
+  "@vitejs/",
+  "webpack-",
+  "esbuild-",
+  "@esbuild-plugins/",
+  "@lingui/",
+  "@emotion/",
+  "tslint-config-",
+  "@changesets/",
+  "@vercel/",
+  "@expo/",
+  "expo-",
+  "react-native-",
 ];
 
 const isAlwaysConsideredUsed = (dependencyName: string): boolean => {

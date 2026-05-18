@@ -1402,13 +1402,13 @@ describe("graphql-schema", () => {
 });
 
 describe("next-pages-mdx", () => {
-  it("should not treat standalone MDX files in pages/ as entry points", async () => {
+  it("should exclude MDX files from unused-file detection", async () => {
     const result = await scanFixture("next-pages-mdx");
     const fixtureDir = resolve(FIXTURES_DIR, "next-pages-mdx");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
-      unusedFilePaths.includes("pages/about.mdx"),
-      `about.mdx should be unused (not auto-discovered as page entry), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("pages/about.mdx"),
+      `about.mdx should be excluded from unused-file (MDX files are excluded by default)`,
     );
   });
 
@@ -2656,12 +2656,12 @@ describe("remark-glob-skip", () => {
       `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("docs/intro.mdx"),
-      `docs/intro.mdx should be unused (remark glob should not seed entries), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("docs/intro.mdx"),
+      `docs/intro.mdx should be excluded (MDX files are excluded from unused-file by default)`,
     );
     assert.ok(
-      unusedFilePaths.includes("docs/guide.mdx"),
-      `docs/guide.mdx should be unused (remark glob should not seed entries), got: ${unusedFilePaths}`,
+      !unusedFilePaths.includes("docs/guide.mdx"),
+      `docs/guide.mdx should be excluded (MDX files are excluded from unused-file by default)`,
     );
   });
 });
