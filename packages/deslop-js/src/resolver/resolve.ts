@@ -275,6 +275,36 @@ export const createResolver = (
 
   const tsconfigBaseUrlCache = new Map<string, string | undefined>();
 
+  const resolveExtendsPath = (extendsValue: string, fromDir: string): string | undefined => {
+    if (extendsValue.startsWith(".")) {
+      const absolutePath = resolve(fromDir, extendsValue);
+      if (cachedExistsSync(absolutePath)) return absolutePath;
+      if (cachedExistsSync(absolutePath + ".json")) return absolutePath + ".json";
+      return undefined;
+    }
+
+    const nodeModulesRoot = options.monorepoRoot ?? config.rootDir;
+    const packagePath = join(nodeModulesRoot, "node_modules", extendsValue);
+    if (cachedExistsSync(packagePath)) return packagePath;
+    if (cachedExistsSync(packagePath + ".json")) return packagePath + ".json";
+
+    const localPackagePath = join(fromDir, "node_modules", extendsValue);
+    if (cachedExistsSync(localPackagePath)) return localPackagePath;
+    if (cachedExistsSync(localPackagePath + ".json")) return localPackagePath + ".json";
+
+    return undefined;
+  };
+
+  const collectExtendsEntries = (tsconfigJson: Record<string, unknown>): string[] => {
+    if (typeof tsconfigJson.extends === "string") return [tsconfigJson.extends];
+    if (Array.isArray(tsconfigJson.extends)) {
+      return tsconfigJson.extends.filter(
+        (entry: unknown): entry is string => typeof entry === "string",
+      );
+    }
+    return [];
+  };
+
   const extractBaseUrlFromTsconfig = (
     tsconfigFile: string,
     visitedFiles: Set<string>,
@@ -291,15 +321,11 @@ export const createResolver = (
       const baseUrl = tsconfigJson.compilerOptions?.baseUrl;
       if (baseUrl) return resolve(tsconfigDir, baseUrl);
 
-      if (typeof tsconfigJson.extends === "string" && tsconfigJson.extends.startsWith(".")) {
-        const extendsPath = resolve(tsconfigDir, tsconfigJson.extends);
-        const resolvedExtendsPath = cachedExistsSync(extendsPath)
-          ? extendsPath
-          : cachedExistsSync(extendsPath + ".json")
-            ? extendsPath + ".json"
-            : undefined;
-        if (resolvedExtendsPath) {
-          return extractBaseUrlFromTsconfig(resolvedExtendsPath, visitedFiles);
+      for (const extendsEntry of collectExtendsEntries(tsconfigJson)) {
+        const resolvedPath = resolveExtendsPath(extendsEntry, tsconfigDir);
+        if (resolvedPath) {
+          const result = extractBaseUrlFromTsconfig(resolvedPath, visitedFiles);
+          if (result) return result;
         }
       }
     } catch {
@@ -350,20 +376,11 @@ export const createResolver = (
         return { paths, baseUrl: baseUrl ?? ".", tsconfigDir };
       }
 
-      if (typeof tsconfigJson.extends === "string") {
-        const extendsPath = tsconfigJson.extends.startsWith(".")
-          ? resolve(tsconfigDir, tsconfigJson.extends)
-          : undefined;
-
-        if (extendsPath) {
-          const resolvedExtendsPath = cachedExistsSync(extendsPath)
-            ? extendsPath
-            : cachedExistsSync(extendsPath + ".json")
-              ? extendsPath + ".json"
-              : undefined;
-          if (resolvedExtendsPath) {
-            return extractPathsFromTsconfig(resolvedExtendsPath, visitedFiles);
-          }
+      for (const extendsEntry of collectExtendsEntries(tsconfigJson)) {
+        const resolvedPath = resolveExtendsPath(extendsEntry, tsconfigDir);
+        if (resolvedPath) {
+          const result = extractPathsFromTsconfig(resolvedPath, visitedFiles);
+          if (result) return result;
         }
       }
     } catch {
