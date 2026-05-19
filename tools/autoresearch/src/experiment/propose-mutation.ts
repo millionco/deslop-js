@@ -10,8 +10,6 @@ interface ConstantsExtension {
   applyTransform: (sourceText: string) => string;
 }
 
-const CONSTANTS_PATH = resolve(DESLOP_SRC_DIR, "constants.ts");
-
 const insertIntoSet = (sourceText: string, setExportName: string, items: string[]): string => {
   const exportLineRegex = new RegExp(
     `export const ${setExportName}\\s*=\\s*new Set\\(\\[([\\s\\S]*?)\\]\\);`,
@@ -24,11 +22,15 @@ const insertIntoSet = (sourceText: string, setExportName: string, items: string[
   );
   const newlyAdded = items.filter((item) => !existingItems.has(item));
   if (newlyAdded.length === 0) return sourceText;
-  const replacementBlock = existingBlock.trimEnd() +
+  const replacementBlock =
+    existingBlock.trimEnd() +
     "\n  " +
     newlyAdded.map((item) => `"${item}",`).join("\n  ") +
     "\n";
-  return sourceText.replace(exportLineRegex, `export const ${setExportName} = new Set([${replacementBlock}]);`);
+  return sourceText.replace(
+    exportLineRegex,
+    `export const ${setExportName} = new Set([${replacementBlock}]);`,
+  );
 };
 
 const insertIntoArray = (sourceText: string, arrayExportName: string, items: string[]): string => {
@@ -48,17 +50,15 @@ const insertIntoArray = (sourceText: string, arrayExportName: string, items: str
     "\n  " +
     newlyAdded.map((item) => `"${item}",`).join("\n  ") +
     "\n";
-  return sourceText.replace(
-    exportLineRegex,
-    (full) =>
-      full.replace(/=\s*\[[\s\S]*?\];/, `= [${replacementBlock}];`),
+  return sourceText.replace(exportLineRegex, (fullMatch) =>
+    fullMatch.replace(/=\s*\[[\s\S]*?\];/, `= [${replacementBlock}];`),
   );
 };
 
 const HYPOTHESIS_CATALOG: ConstantsExtension[] = [
   {
-    id: "broaden-implicit-deps-types",
-    description: "treat additional @types/* packages as implicit deps to avoid FPs",
+    id: "implicit-deps-types-batch-1",
+    description: "add common @types/* packages to implicit deps",
     pathRelative: "constants.ts",
     applyTransform: (sourceText) =>
       insertIntoSet(sourceText, "IMPLICIT_DEPENDENCIES", [
@@ -74,6 +74,14 @@ const HYPOTHESIS_CATALOG: ConstantsExtension[] = [
         "@types/multer",
         "@types/uuid",
         "@types/jsonwebtoken",
+      ]),
+  },
+  {
+    id: "implicit-deps-types-batch-2",
+    description: "add more @types/* (bcrypt, glob, yargs, ...)",
+    pathRelative: "constants.ts",
+    applyTransform: (sourceText) =>
+      insertIntoSet(sourceText, "IMPLICIT_DEPENDENCIES", [
         "@types/bcrypt",
         "@types/bcryptjs",
         "@types/glob",
@@ -81,11 +89,16 @@ const HYPOTHESIS_CATALOG: ConstantsExtension[] = [
         "@types/minimist",
         "@types/prop-types",
         "@types/styled-components",
+        "@types/three",
+        "@types/dompurify",
+        "@types/file-saver",
+        "@types/markdown-it",
+        "@types/morgan",
       ]),
   },
   {
-    id: "broaden-implicit-deps-tooling",
-    description: "include common build/CLI tooling that's invoked without imports",
+    id: "implicit-deps-build-tooling",
+    description: "common build/CLI tooling invoked without imports",
     pathRelative: "constants.ts",
     applyTransform: (sourceText) =>
       insertIntoSet(sourceText, "IMPLICIT_DEPENDENCIES", [
@@ -103,6 +116,14 @@ const HYPOTHESIS_CATALOG: ConstantsExtension[] = [
         "mini-css-extract-plugin",
         "terser-webpack-plugin",
         "fork-ts-checker-webpack-plugin",
+      ]),
+  },
+  {
+    id: "implicit-deps-babel-presets",
+    description: "babel presets and plugins resolved via config files",
+    pathRelative: "constants.ts",
+    applyTransform: (sourceText) =>
+      insertIntoSet(sourceText, "IMPLICIT_DEPENDENCIES", [
         "@babel/preset-env",
         "@babel/preset-typescript",
         "@babel/preset-react",
@@ -110,11 +131,13 @@ const HYPOTHESIS_CATALOG: ConstantsExtension[] = [
         "@babel/plugin-transform-runtime",
         "@babel/plugin-proposal-decorators",
         "@babel/plugin-proposal-class-properties",
+        "babel-plugin-module-resolver",
+        "babel-plugin-istanbul",
       ]),
   },
   {
-    id: "broaden-implicit-deps-test-runners",
-    description: "include test/runtime tooling commonly only referenced from config files",
+    id: "implicit-deps-vite-vitest-extras",
+    description: "vitest/vite ecosystem packages used implicitly via config",
     pathRelative: "constants.ts",
     applyTransform: (sourceText) =>
       insertIntoSet(sourceText, "IMPLICIT_DEPENDENCIES", [
@@ -127,54 +150,97 @@ const HYPOTHESIS_CATALOG: ConstantsExtension[] = [
         "jest-environment-node",
         "jest-environment-happy-dom",
         "@swc/jest",
-        "@types/jest",
         "esbuild-jest",
-        "ts-essentials",
-        "babel-plugin-istanbul",
-        "vitest-canvas-mock",
         "@testing-library/jest-dom",
         "@testing-library/react",
         "@testing-library/user-event",
       ]),
   },
   {
-    id: "broaden-skip-export-names-react",
-    description: "skip framework/Next exports we know are auto-discovered",
-    pathRelative: "report/exports.ts",
-    applyTransform: (sourceText) => extendReactFrameworkExports(sourceText),
+    id: "implicit-deps-react-native-tooling",
+    description: "react native / expo / metro tooling",
+    pathRelative: "constants.ts",
+    applyTransform: (sourceText) =>
+      insertIntoSet(sourceText, "IMPLICIT_DEPENDENCIES", [
+        "@react-native/metro-config",
+        "@react-native/babel-preset",
+        "@react-native/eslint-config",
+        "@react-native/typescript-config",
+        "@react-native-community/cli",
+        "@react-native-community/cli-platform-ios",
+        "@react-native-community/cli-platform-android",
+        "metro-react-native-babel-preset",
+        "babel-preset-expo",
+      ]),
   },
   {
-    id: "add-hidden-allowlist-dirs",
-    description: "allow scanning .config and other tool directories deslop ignored",
+    id: "hidden-allowlist-config-dirs",
+    description: "scan dot-config directories deslop currently ignores",
     pathRelative: "constants.ts",
     applyTransform: (sourceText) =>
       insertIntoArray(sourceText, "HIDDEN_DIRECTORY_ALLOWLIST", [
         ".config",
         ".vscode",
-        ".idea",
         ".dev",
+        ".husky",
       ]),
   },
   {
-    id: "broaden-source-extensions-include-svg",
-    description: "treat .svg / .json as referenced when imported (not flagged as dep FP)",
+    id: "platform-suffixes-add-server",
+    description: "add .server/.client platform suffixes (remix/react router)",
     pathRelative: "constants.ts",
-    applyTransform: (sourceText) => sourceText,
+    applyTransform: (sourceText) =>
+      insertIntoArray(sourceText, "PLATFORM_SUFFIXES", [
+        ".server",
+        ".client",
+      ]),
+  },
+  {
+    id: "implicit-deps-prettier-eslint-plugins",
+    description: "prettier and eslint plugins invoked via config",
+    pathRelative: "constants.ts",
+    applyTransform: (sourceText) =>
+      insertIntoSet(sourceText, "IMPLICIT_DEPENDENCIES", [
+        "prettier-plugin-tailwindcss",
+        "prettier-plugin-organize-imports",
+        "prettier-plugin-svelte",
+        "prettier-plugin-astro",
+        "@trivago/prettier-plugin-sort-imports",
+        "@ianvs/prettier-plugin-sort-imports",
+        "eslint-config-prettier",
+        "eslint-config-next",
+        "eslint-config-turbo",
+        "eslint-plugin-import",
+        "eslint-plugin-react",
+        "eslint-plugin-react-hooks",
+        "eslint-plugin-jsx-a11y",
+        "eslint-plugin-tailwindcss",
+        "eslint-plugin-prettier",
+        "@typescript-eslint/eslint-plugin",
+        "@typescript-eslint/parser",
+      ]),
+  },
+  {
+    id: "implicit-deps-postcss-plugins",
+    description: "postcss/tailwind plugins loaded via config",
+    pathRelative: "constants.ts",
+    applyTransform: (sourceText) =>
+      insertIntoSet(sourceText, "IMPLICIT_DEPENDENCIES", [
+        "@tailwindcss/forms",
+        "@tailwindcss/typography",
+        "@tailwindcss/aspect-ratio",
+        "@tailwindcss/container-queries",
+        "@tailwindcss/postcss",
+        "tailwindcss-animate",
+        "postcss-nested",
+        "postcss-import",
+        "postcss-preset-env",
+      ]),
   },
 ];
 
-const extendReactFrameworkExports = (sourceText: string): string => {
-  return sourceText;
-};
-
 const fingerprintForTimestamp = (): string => {
   return new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
-};
-
-const writeMutationLog = (id: string, description: string, changedFiles: string[]): void => {
-  void id;
-  void description;
-  void changedFiles;
 };
 
 export const buildScriptedProposals = (): MutationProposal[] => {
@@ -192,7 +258,6 @@ export const buildScriptedProposals = (): MutationProposal[] => {
           return { changedFiles: [], notes: "no-op (already applied)" };
         }
         writeFileSync(filePath, afterText, "utf-8");
-        writeMutationLog(proposalId, extension.description, [filePath]);
         return { changedFiles: [filePath], notes: undefined };
       },
     });
