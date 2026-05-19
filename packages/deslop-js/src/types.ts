@@ -33,6 +33,7 @@ export interface ExportReference {
   isNamespaceReExport: boolean;
   line: number;
   column: number;
+  defaultExportLocalName?: string;
 }
 
 export interface MemberAccess {

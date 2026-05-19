@@ -3,7 +3,11 @@ import type {
   VerificationVerdict,
   VerifiedExport,
 } from "../types.js";
-import { queryIdentifierLineMatches } from "./grep-corpus.js";
+import {
+  escapeRipgrepLiteral,
+  queryIdentifierLineMatches,
+  ripgrepFilesWithMatches,
+} from "./grep-corpus.js";
 import { filterImportOnlyMatches } from "./identifier-context.js";
 import { SKIP_EXPORT_NAMES, VERIFIABLE_EXPORT_MIN_NAME_LENGTH } from "../constants.js";
 
@@ -30,12 +34,45 @@ const isNoisyMatchPath = (filePath: string): boolean => {
   return false;
 };
 
+const countExportDeclarationsForIdentifier = async (
+  identifier: string,
+  searchDir: string,
+): Promise<number> => {
+  const escaped = escapeRipgrepLiteral(identifier);
+  const declarationPattern =
+    `^\\s*export\\s+(?:async\\s+)?(?:const|let|var|function|class|interface|type|enum|abstract\\s+class|default\\s+)?\\s*\\{?[^=;\\n]*\\b${escaped}\\b`;
+  const result = await ripgrepFilesWithMatches(declarationPattern, searchDir, {
+    timeoutMs: 15_000,
+    extraArgs: [
+      "--type-add",
+      "tsjs:*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+      "--type",
+      "tsjs",
+    ],
+  });
+  return result.files.size;
+};
+
 export const verifyUnusedExport = async (
   flaggedExport: AnalyzeFlaggedExport,
   searchDir: string,
 ): Promise<VerifiedExport> => {
   if (!isVerifiableExportName(flaggedExport.name)) {
     return { ...flaggedExport, verdict: SKIPPED_VERDICT };
+  }
+
+  const declarationCount = await countExportDeclarationsForIdentifier(
+    flaggedExport.name,
+    searchDir,
+  );
+  if (declarationCount >= 2) {
+    return {
+      ...flaggedExport,
+      verdict: {
+        kind: "skipped",
+        reason: `${declarationCount} sibling files export the same identifier (ambiguous)`,
+      },
+    };
   }
 
   const lineMatches = await queryIdentifierLineMatches(

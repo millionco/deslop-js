@@ -467,6 +467,18 @@ const extractDefaultExportDeclaration = (
   sourceText: string,
   exports: ExportReference[],
 ): void => {
+  const defaultExpression = (node as unknown as { declaration: { type: string; name?: string; id?: { name?: string } } }).declaration;
+  let defaultExportLocalName: string | undefined;
+  if (defaultExpression?.type === "Identifier" && typeof defaultExpression.name === "string") {
+    defaultExportLocalName = defaultExpression.name;
+  } else if (
+    (defaultExpression?.type === "FunctionDeclaration" ||
+      defaultExpression?.type === "ClassDeclaration") &&
+    defaultExpression.id?.name
+  ) {
+    defaultExportLocalName = defaultExpression.id.name;
+  }
+
   exports.push({
     name: "default",
     isDefault: true,
@@ -478,6 +490,7 @@ const extractDefaultExportDeclaration = (
     isNamespaceReExport: false,
     line: getLineFromOffset(sourceText, node.start),
     column: getColumnFromOffset(sourceText, node.start),
+    defaultExportLocalName,
   });
 };
 

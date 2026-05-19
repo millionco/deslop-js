@@ -16,21 +16,39 @@ export const detectDeadExports = (graph: DependencyGraph, config: DeslopConfig):
     if (module.isDeclarationFile) continue;
     if (module.isEntryPoint && !config.includeEntryExports) continue;
 
+    const defaultExportLinkedNames = new Set<string>();
+    for (const exportInfo of module.exports) {
+      if (
+        exportInfo.isDefault &&
+        exportInfo.defaultExportLocalName &&
+        usageMap.has(`${module.fileId.path}::default`)
+      ) {
+        defaultExportLinkedNames.add(exportInfo.defaultExportLocalName);
+      }
+    }
+
     for (const exportInfo of module.exports) {
       if (exportInfo.name === "*" && exportInfo.isNamespaceReExport) continue;
       if (exportInfo.isReExport && exportInfo.reExportOriginalName) continue;
       if (!config.reportTypes && exportInfo.isTypeOnly) continue;
 
       const usageKey = `${module.fileId.path}::${exportInfo.name}`;
-      if (!usageMap.has(usageKey)) {
-        unusedExports.push({
-          path: module.fileId.path,
-          name: exportInfo.name,
-          line: exportInfo.line,
-          column: exportInfo.column,
-          isTypeOnly: exportInfo.isTypeOnly,
-        });
+      if (usageMap.has(usageKey)) continue;
+
+      if (
+        !exportInfo.isDefault &&
+        defaultExportLinkedNames.has(exportInfo.name)
+      ) {
+        continue;
       }
+
+      unusedExports.push({
+        path: module.fileId.path,
+        name: exportInfo.name,
+        line: exportInfo.line,
+        column: exportInfo.column,
+        isTypeOnly: exportInfo.isTypeOnly,
+      });
     }
   }
 
