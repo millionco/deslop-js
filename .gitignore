@@ -14,3 +14,5 @@ tools/autoresearch/results.tsv
 tools/autoresearch/status.json
 tools/autoresearch/hypotheses.log
 tools/autoresearch/corpus-samples/
+tools/autoresearch/loop.log
+tools/autoresearch/loop.pid
