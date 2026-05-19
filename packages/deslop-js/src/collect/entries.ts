@@ -206,6 +206,11 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
     angularEntries.push(...extractAngularEntryPoints(workspacePackage.directory));
   }
 
+  const browserExtensionEntries = extractBrowserExtensionEntries(absoluteRoot);
+  for (const workspacePackage of entryEligiblePackages) {
+    browserExtensionEntries.push(...extractBrowserExtensionEntries(workspacePackage.directory));
+  }
+
   const testSetupEntries = extractTestSetupFiles(absoluteRoot);
   for (const workspacePackage of entryEligiblePackages) {
     testSetupEntries.push(...extractTestSetupFiles(workspacePackage.directory));
@@ -234,6 +239,7 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
       ...bundlerConfigEntries,
       ...htmlScriptEntries,
       ...angularEntries,
+      ...browserExtensionEntries,
       ...pluginFileEntries,
       ...toolingDiscovery.entryFiles,
       ...ciEntries,
@@ -1047,6 +1053,137 @@ const extractScriptTagsFromHtmlFile = (htmlFilePath: string): string[] => {
       }
     }
   } catch {}
+  return entries;
+};
+
+const collectBrowserExtensionManifestPaths = (manifest: unknown): string[] => {
+  const candidatePaths: string[] = [];
+  if (typeof manifest !== "object" || manifest === null) return candidatePaths;
+  const manifestRecord = manifest as Record<string, unknown>;
+
+  const background = manifestRecord.background;
+  if (typeof background === "object" && background !== null) {
+    const backgroundRecord = background as Record<string, unknown>;
+    if (typeof backgroundRecord.service_worker === "string") {
+      candidatePaths.push(backgroundRecord.service_worker);
+    }
+    if (typeof backgroundRecord.page === "string") {
+      candidatePaths.push(backgroundRecord.page);
+    }
+    if (typeof backgroundRecord.scripts === "string") {
+      candidatePaths.push(backgroundRecord.scripts);
+    }
+    if (Array.isArray(backgroundRecord.scripts)) {
+      for (const scriptPath of backgroundRecord.scripts) {
+        if (typeof scriptPath === "string") candidatePaths.push(scriptPath);
+      }
+    }
+  }
+
+  const contentScripts = manifestRecord.content_scripts;
+  if (Array.isArray(contentScripts)) {
+    for (const contentScript of contentScripts) {
+      if (typeof contentScript !== "object" || contentScript === null) continue;
+      const contentScriptRecord = contentScript as Record<string, unknown>;
+      if (Array.isArray(contentScriptRecord.js)) {
+        for (const scriptPath of contentScriptRecord.js) {
+          if (typeof scriptPath === "string") candidatePaths.push(scriptPath);
+        }
+      }
+      if (Array.isArray(contentScriptRecord.css)) {
+        for (const stylePath of contentScriptRecord.css) {
+          if (typeof stylePath === "string") candidatePaths.push(stylePath);
+        }
+      }
+    }
+  }
+
+  const action = manifestRecord.action ?? manifestRecord.browser_action ?? manifestRecord.page_action;
+  if (typeof action === "object" && action !== null) {
+    const actionRecord = action as Record<string, unknown>;
+    if (typeof actionRecord.default_popup === "string") {
+      candidatePaths.push(actionRecord.default_popup);
+    }
+  }
+
+  if (typeof manifestRecord.devtools_page === "string") {
+    candidatePaths.push(manifestRecord.devtools_page);
+  }
+  if (typeof manifestRecord.options_page === "string") {
+    candidatePaths.push(manifestRecord.options_page);
+  }
+  if (typeof manifestRecord.options_ui === "object" && manifestRecord.options_ui !== null) {
+    const optionsRecord = manifestRecord.options_ui as Record<string, unknown>;
+    if (typeof optionsRecord.page === "string") {
+      candidatePaths.push(optionsRecord.page);
+    }
+  }
+  if (typeof manifestRecord.sandbox === "object" && manifestRecord.sandbox !== null) {
+    const sandboxRecord = manifestRecord.sandbox as Record<string, unknown>;
+    if (Array.isArray(sandboxRecord.pages)) {
+      for (const pagePath of sandboxRecord.pages) {
+        if (typeof pagePath === "string") candidatePaths.push(pagePath);
+      }
+    }
+  }
+
+  return candidatePaths;
+};
+
+const isLikelyBrowserExtensionManifest = (manifest: unknown): boolean => {
+  if (typeof manifest !== "object" || manifest === null) return false;
+  const manifestRecord = manifest as Record<string, unknown>;
+  return typeof manifestRecord.manifest_version === "number";
+};
+
+const extractBrowserExtensionEntries = (directory: string): string[] => {
+  const entries: string[] = [];
+  const manifestPaths = fg.sync(
+    [
+      "manifest.json",
+      "manifest.*.json",
+      "src/manifest.json",
+      "src/manifest.*.json",
+      "public/manifest.json",
+      "public/manifest.*.json",
+      "static/manifest.json",
+    ],
+    {
+      cwd: directory,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
+      deep: 3,
+    },
+  );
+
+  for (const manifestPath of manifestPaths) {
+    try {
+      const content = readFileSync(manifestPath, "utf-8");
+      const manifest = JSON.parse(content);
+      if (!isLikelyBrowserExtensionManifest(manifest)) continue;
+
+      const manifestDir = dirname(manifestPath);
+      const candidatePaths = collectBrowserExtensionManifestPaths(manifest);
+      const resolutionRoots = [manifestDir, resolve(manifestDir, ".."), directory];
+
+      for (const candidatePath of candidatePaths) {
+        for (const resolutionRoot of resolutionRoots) {
+          const candidateAbsolutePath = resolve(resolutionRoot, candidatePath);
+          if (existsSync(candidateAbsolutePath)) {
+            entries.push(candidateAbsolutePath);
+            break;
+          }
+          const sourceFile = resolveSourcePath(candidateAbsolutePath, resolutionRoot);
+          if (sourceFile) {
+            entries.push(sourceFile);
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+
   return entries;
 };
 
