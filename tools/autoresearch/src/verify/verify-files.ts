@@ -1,7 +1,11 @@
 import { basename, extname, relative } from "node:path";
 import { readFileSync } from "node:fs";
 import type { AnalyzeFlaggedFile, VerifiedFile, VerificationVerdict } from "../types.js";
-import { ripgrepFilesWithMatches, escapeRipgrepLiteral } from "./grep-corpus.js";
+import {
+  ripgrepFilesWithMatches,
+  ripgrepLineMatches,
+  escapeRipgrepLiteral,
+} from "./grep-corpus.js";
 
 const SKIPPED_VERDICT: VerificationVerdict = {
   kind: "skipped",
@@ -118,6 +122,42 @@ const isDocumentationPath = (filePath: string): boolean => {
   );
 };
 
+const IMPORT_PATH_PATTERN = /(?:from|require)\s*\(?\s*['"`]([^'"`\n]+)['"`]/g;
+
+const extractImportPaths = (lineText: string): string[] => {
+  const paths: string[] = [];
+  let match: RegExpExecArray | null;
+  IMPORT_PATH_PATTERN.lastIndex = 0;
+  while ((match = IMPORT_PATH_PATTERN.exec(lineText)) !== null) {
+    paths.push(match[1]);
+  }
+  if (paths.length === 0) {
+    const importMatch = lineText.match(/import\s+['"`]([^'"`\n]+)['"`]/);
+    if (importMatch) paths.push(importMatch[1]);
+  }
+  return paths;
+};
+
+const doesImportPathPlausiblyTargetFlagged = (
+  lineText: string,
+  flaggedRelativeWithoutExt: string,
+): boolean => {
+  const importPaths = extractImportPaths(lineText);
+  if (importPaths.length === 0) return false;
+  for (const importPath of importPaths) {
+    const strippedSpecifier = importPath
+      .replace(/^@[\w-]+\/[\w-]+\//, "")
+      .replace(/^\.{1,2}\//, "")
+      .replace(/\.[cm]?[jt]sx?$/, "");
+    if (!strippedSpecifier) continue;
+    if (flaggedRelativeWithoutExt.endsWith(strippedSpecifier)) return true;
+    const flaggedTail = flaggedRelativeWithoutExt.split("/").slice(-2).join("/");
+    const importTail = strippedSpecifier.split("/").slice(-2).join("/");
+    if (flaggedTail === importTail && flaggedTail.includes("/")) return true;
+  }
+  return false;
+};
+
 const findOtherFilesWithSameBasename = async (
   flaggedPath: string,
   basenameWithoutExt: string,
@@ -226,23 +266,29 @@ export const verifyUnusedFile = async (
         searchDir,
       );
 
-      if (sameBasenameFiles.length === 0) {
-        const importContextPattern = `(?:from|import|require)\\s*\\(?\\s*['"\`][^'"\`\\n]*?${escapedBasename}(?:\\.[cm]?[jt]sx?)?['"\`]`;
-        const importHits = await ripgrepFilesWithMatches(importContextPattern, searchDir, {
-          timeoutMs: 15_000,
-        });
-        for (const filePath of importHits.files) {
-          if (exclude.has(filePath)) continue;
-          if (isDocumentationPath(filePath)) continue;
-          return {
-            ...flaggedFile,
-            verdict: {
-              kind: "likely_fp",
-              reason: "basename imported from non-flagged source",
-              evidence: filePath,
-            },
-          };
+      const importContextPattern = `(?:from|import|require)\\s*\\(?\\s*['"\`][^'"\`\\n]*?${escapedBasename}(?:\\.[cm]?[jt]sx?)?['"\`]`;
+      const lineMatches = await ripgrepLineMatches(importContextPattern, searchDir, {
+        timeoutMs: 15_000,
+      });
+      const relativeWithoutExt = relativeFromSearchDir.slice(
+        0,
+        relativeFromSearchDir.length - extension.length,
+      );
+      for (const lineMatch of lineMatches) {
+        if (exclude.has(lineMatch.filePath)) continue;
+        if (isDocumentationPath(lineMatch.filePath)) continue;
+        if (!doesImportPathPlausiblyTargetFlagged(lineMatch.lineText, relativeWithoutExt)) {
+          continue;
         }
+        if (sameBasenameFiles.length > 0) continue;
+        return {
+          ...flaggedFile,
+          verdict: {
+            kind: "likely_fp",
+            reason: "basename imported from non-flagged source",
+            evidence: lineMatch.filePath,
+          },
+        };
       }
 
     const tsConfigPattern = `['"\`](?:[^'"\`\\n]*?[/.])?${escapedBasename}\\.[cm]?[jt]sx?['"\`]`;

@@ -86,12 +86,14 @@ const main = async (): Promise<void> => {
       10,
     );
     const verifyConcurrency = Number.parseInt(parseFlag(argv, "--verify-concurrency", "3"), 10);
+    const branchTag = parseFlag(argv, "--tag", "");
     await runExperimentLoop({
       corpus: corpusFlag,
       maxIterations,
       totalBudgetMs,
       analysisConcurrency,
       verifyConcurrency,
+      branchTag: branchTag || undefined,
     });
     return;
   }

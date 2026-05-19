@@ -11,6 +11,7 @@ import { runOneCorpusPass } from "./baseline.js";
 import { buildScriptedProposals } from "./propose-mutation.js";
 import { decideKeepOrDiscard } from "../metrics/compare-metrics.js";
 import {
+  ensureBranch,
   getCurrentBranch,
   getCurrentCommitSha,
   getWorkingTreeStatus,
@@ -96,6 +97,7 @@ export interface RunLoopOptions {
   totalBudgetMs: number;
   analysisConcurrency?: number;
   verifyConcurrency?: number;
+  branchTag?: string;
 }
 
 export const runExperimentLoop = async (options: RunLoopOptions): Promise<void> => {
@@ -103,21 +105,29 @@ export const runExperimentLoop = async (options: RunLoopOptions): Promise<void> 
 
   const workingStatus = await getWorkingTreeStatus();
   if (!workingStatus.isClean) {
-    const trackedDirty = workingStatus.changedFiles.filter(
-      (filePath) => !filePath.startsWith("repos.json") && !filePath.startsWith("tools/autoresearch/"),
+    process.stderr.write(
+      `[autoresearch] aborting: working tree is dirty (${workingStatus.changedFiles.slice(0, 8).join(", ")})\n`,
     );
-    if (trackedDirty.length > 0) {
-      process.stderr.write(
-        `[autoresearch] working tree has unrelated changes: ${trackedDirty.slice(0, 8).join(", ")}\n`,
-      );
-      process.stderr.write(
-        "[autoresearch] proceeding anyway (will commit them with baseline)\n",
-      );
-    }
+    process.stderr.write("[autoresearch] commit or stash changes before running the loop.\n");
+    process.exitCode = 1;
+    return;
   }
 
-  const branchName = await getCurrentBranch();
-  process.stderr.write(`[autoresearch] running on branch: ${branchName}\n`);
+  const originalBranch = await getCurrentBranch();
+  const tag =
+    options.branchTag ?? new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 12);
+  const branchName = `autoresearch/${tag}`;
+  const branchOutcome = await ensureBranch(branchName);
+  if (!branchOutcome.ok) {
+    process.stderr.write(
+      `[autoresearch] failed to create/checkout branch ${branchName}: ${branchOutcome.stderr}\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  process.stderr.write(
+    `[autoresearch] running on branch: ${branchName} (parent: ${originalBranch})\n`,
+  );
 
   const buildOutcome = await buildDeslop();
   if (!buildOutcome.ok) {

@@ -1,6 +1,12 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  writeFileSync,
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import type { AnalyzeResult, CorpusEntry, EntryRunOutcome } from "../types.js";
 import { DESLOP_DIST_INDEX, PER_ENTRY_ANALYSIS_TIMEOUT_MS } from "../constants.js";
@@ -9,11 +15,13 @@ const buildWorkerScript = (rootDir: string, distIndex: string): string => {
   const escapedRootDir = JSON.stringify(rootDir);
   const escapedIndex = JSON.stringify(distIndex);
   return `
+import { writeFileSync } from "node:fs";
 import { defineConfig, analyze } from ${escapedIndex};
+const outputPath = process.argv[process.argv.length - 1];
 const config = defineConfig({ rootDir: ${escapedRootDir} });
 analyze(config)
   .then((result) => {
-    process.stdout.write(JSON.stringify(result));
+    writeFileSync(outputPath, JSON.stringify(result), "utf-8");
     process.exit(0);
   })
   .catch((error) => {
@@ -39,32 +47,35 @@ export const runAnalysisForEntry = (entry: CorpusEntry): Promise<EntryRunOutcome
     const scriptText = buildWorkerScript(entry.analyzeDir, DESLOP_DIST_INDEX);
     const scratchDir = mkdtempSync(resolve(tmpdir(), "deslop-autoresearch-"));
     const scriptPath = resolve(scratchDir, "worker.mjs");
+    const outputPath = resolve(scratchDir, "result.json");
     writeFileSync(scriptPath, scriptText, "utf-8");
 
-    const child = spawn(process.execPath, ["--no-warnings", scriptPath], {
-      stdio: ["ignore", "pipe", "pipe"],
+    const child = spawn(process.execPath, ["--no-warnings", scriptPath, outputPath], {
+      stdio: ["ignore", "ignore", "pipe"],
       env: process.env,
     });
 
-    const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let didTimeout = false;
+
+    const cleanupScratch = (): void => {
+      try {
+        rmSync(scratchDir, { recursive: true, force: true });
+      } catch {}
+    };
 
     const timeoutHandle = setTimeout(() => {
       didTimeout = true;
       child.kill("SIGKILL");
     }, PER_ENTRY_ANALYSIS_TIMEOUT_MS);
 
-    child.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
     child.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
     child.on("close", (exitCode) => {
       clearTimeout(timeoutHandle);
-      try {
-        rmSync(scratchDir, { recursive: true, force: true });
-      } catch {}
 
       if (didTimeout) {
+        cleanupScratch();
         resolvePromise({
           entry,
           status: "timeout",
@@ -75,20 +86,32 @@ export const runAnalysisForEntry = (entry: CorpusEntry): Promise<EntryRunOutcome
       }
 
       if (exitCode !== 0) {
+        const stderrText = Buffer.concat(stderrChunks).toString("utf-8").slice(0, 4000);
+        cleanupScratch();
         resolvePromise({
           entry,
           status: "crash",
-          errorMessage:
-            Buffer.concat(stderrChunks).toString("utf-8").slice(0, 4000) ||
-            `worker exited with code ${exitCode}`,
+          errorMessage: stderrText || `worker exited with code ${exitCode}`,
+          durationMs: Date.now() - startedAt,
+        });
+        return;
+      }
+
+      if (!existsSync(outputPath)) {
+        cleanupScratch();
+        resolvePromise({
+          entry,
+          status: "crash",
+          errorMessage: "worker exited 0 but did not write output file",
           durationMs: Date.now() - startedAt,
         });
         return;
       }
 
       try {
-        const stdoutText = Buffer.concat(stdoutChunks).toString("utf-8");
-        const parsed = JSON.parse(stdoutText) as AnalyzeResult;
+        const jsonText = readFileSync(outputPath, "utf-8");
+        const parsed = JSON.parse(jsonText) as AnalyzeResult;
+        cleanupScratch();
         resolvePromise({
           entry,
           status: "ok",
@@ -96,6 +119,7 @@ export const runAnalysisForEntry = (entry: CorpusEntry): Promise<EntryRunOutcome
           result: parsed,
         });
       } catch (parseError) {
+        cleanupScratch();
         resolvePromise({
           entry,
           status: "crash",
@@ -107,9 +131,7 @@ export const runAnalysisForEntry = (entry: CorpusEntry): Promise<EntryRunOutcome
 
     child.on("error", (childError) => {
       clearTimeout(timeoutHandle);
-      try {
-        rmSync(scratchDir, { recursive: true, force: true });
-      } catch {}
+      cleanupScratch();
       resolvePromise({
         entry,
         status: "crash",
