@@ -1,4 +1,5 @@
 import { basename, extname, relative } from "node:path";
+import { readFileSync } from "node:fs";
 import type { AnalyzeFlaggedFile, VerifiedFile, VerificationVerdict } from "../types.js";
 import { ripgrepFilesWithMatches, escapeRipgrepLiteral } from "./grep-corpus.js";
 
@@ -110,8 +111,33 @@ const isDocumentationPath = (filePath: string): boolean => {
     lowered.includes("/.snap") ||
     lowered.endsWith(".snap") ||
     lowered.includes("/docs/") ||
-    lowered.includes("/__snapshots__/")
+    lowered.includes("/__snapshots__/") ||
+    lowered.endsWith(".d.ts") ||
+    lowered.endsWith(".d.mts") ||
+    lowered.endsWith(".d.cts")
   );
+};
+
+const isTsConfigPathsOnlyReference = (
+  filePath: string,
+  basenameWithoutExt: string,
+): boolean => {
+  const isTsconfig = filePath.endsWith("tsconfig.json") || /tsconfig\.[\w-]+\.json$/.test(filePath);
+  if (!isTsconfig) return false;
+  try {
+    const text = readFileSync(filePath, "utf-8");
+    const pathsBlockMatch = text.match(/"paths"\s*:\s*\{[\s\S]*?\}/);
+    if (!pathsBlockMatch || !pathsBlockMatch[0].includes(basenameWithoutExt)) return false;
+    const includeBlockMatch = text.match(/"include"\s*:\s*\[[\s\S]*?\]/);
+    const filesBlockMatch = text.match(/"files"\s*:\s*\[[\s\S]*?\]/);
+    const inIncludeOrFiles =
+      (includeBlockMatch && includeBlockMatch[0].includes(basenameWithoutExt)) ||
+      (filesBlockMatch && filesBlockMatch[0].includes(basenameWithoutExt));
+    if (inIncludeOrFiles) return false;
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 export const verifyUnusedFile = async (
@@ -139,6 +165,7 @@ export const verifyUnusedFile = async (
     for (const filePath of explicitPathHits.files) {
       if (exclude.has(filePath)) continue;
       if (isDocumentationPath(filePath)) continue;
+      if (isTsConfigPathsOnlyReference(filePath, basenameWithoutExt)) continue;
       return {
         ...flaggedFile,
         verdict: {
@@ -175,11 +202,12 @@ export const verifyUnusedFile = async (
     });
     for (const filePath of tsConfigHits.files) {
       if (exclude.has(filePath)) continue;
+      if (isTsConfigPathsOnlyReference(filePath, basenameWithoutExt)) continue;
       return {
         ...flaggedFile,
         verdict: {
           kind: "likely_fp",
-          reason: "referenced from tsconfig/package.json",
+          reason: "referenced from tsconfig include/files or package.json",
           evidence: filePath,
         },
       };
