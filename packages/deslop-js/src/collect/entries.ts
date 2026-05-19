@@ -211,6 +211,11 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
     browserExtensionEntries.push(...extractBrowserExtensionEntries(workspacePackage.directory));
   }
 
+  const webWorkerEntries = extractWebWorkerEntries(absoluteRoot);
+  for (const workspacePackage of entryEligiblePackages) {
+    webWorkerEntries.push(...extractWebWorkerEntries(workspacePackage.directory));
+  }
+
   const testSetupEntries = extractTestSetupFiles(absoluteRoot);
   for (const workspacePackage of entryEligiblePackages) {
     testSetupEntries.push(...extractTestSetupFiles(workspacePackage.directory));
@@ -240,6 +245,7 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
       ...htmlScriptEntries,
       ...angularEntries,
       ...browserExtensionEntries,
+      ...webWorkerEntries,
       ...pluginFileEntries,
       ...toolingDiscovery.entryFiles,
       ...ciEntries,
@@ -1054,6 +1060,24 @@ const extractScriptTagsFromHtmlFile = (htmlFilePath: string): string[] => {
     }
   } catch {}
   return entries;
+};
+
+const WORKER_FILE_GLOBS = [
+  "**/*.worker.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+  "**/*.sw.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+  "**/sw.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+  "**/service-worker.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+];
+
+const extractWebWorkerEntries = (directory: string): string[] => {
+  const workerFiles = fg.sync(WORKER_FILE_GLOBS, {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.next/**", "**/out/**"],
+    deep: 8,
+  });
+  return workerFiles;
 };
 
 const collectBrowserExtensionManifestPaths = (manifest: unknown): string[] => {
