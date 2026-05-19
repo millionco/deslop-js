@@ -159,6 +159,27 @@ const isTsConfigPathsOnlyReference = (
   }
 };
 
+const isTsConfigExcludeOnlyReference = (
+  filePath: string,
+  basenameWithoutExt: string,
+): boolean => {
+  const isTsconfig = filePath.endsWith("tsconfig.json") || /tsconfig\.[\w-]+\.json$/.test(filePath);
+  if (!isTsconfig) return false;
+  try {
+    const text = readFileSync(filePath, "utf-8");
+    const excludeBlockMatch = text.match(/"exclude"\s*:\s*\[[\s\S]*?\]/);
+    if (!excludeBlockMatch || !excludeBlockMatch[0].includes(basenameWithoutExt)) return false;
+    const includeBlockMatch = text.match(/"include"\s*:\s*\[[\s\S]*?\]/);
+    const filesBlockMatch = text.match(/"files"\s*:\s*\[[\s\S]*?\]/);
+    const inIncludeOrFiles =
+      (includeBlockMatch && includeBlockMatch[0].includes(basenameWithoutExt)) ||
+      (filesBlockMatch && filesBlockMatch[0].includes(basenameWithoutExt));
+    return !inIncludeOrFiles;
+  } catch {
+    return false;
+  }
+};
+
 export const verifyUnusedFile = async (
   flaggedFile: AnalyzeFlaggedFile,
   searchDir: string,
@@ -185,6 +206,7 @@ export const verifyUnusedFile = async (
       if (exclude.has(filePath)) continue;
       if (isDocumentationPath(filePath)) continue;
       if (isTsConfigPathsOnlyReference(filePath, basenameWithoutExt)) continue;
+      if (isTsConfigExcludeOnlyReference(filePath, basenameWithoutExt)) continue;
       return {
         ...flaggedFile,
         verdict: {
@@ -223,7 +245,7 @@ export const verifyUnusedFile = async (
         }
       }
 
-    const tsConfigPattern = `['"\`][^'"\`\\n]*?${escapedBasename}['"\`]`;
+    const tsConfigPattern = `['"\`](?:[^'"\`\\n]*?[/.])?${escapedBasename}\\.[cm]?[jt]sx?['"\`]`;
     const tsConfigHits = await ripgrepFilesWithMatches(tsConfigPattern, searchDir, {
       timeoutMs: 15_000,
       extraArgs: ["--glob", "tsconfig*.json", "--glob", "package.json"],
@@ -231,6 +253,7 @@ export const verifyUnusedFile = async (
     for (const filePath of tsConfigHits.files) {
       if (exclude.has(filePath)) continue;
       if (isTsConfigPathsOnlyReference(filePath, basenameWithoutExt)) continue;
+      if (isTsConfigExcludeOnlyReference(filePath, basenameWithoutExt)) continue;
       return {
         ...flaggedFile,
         verdict: {

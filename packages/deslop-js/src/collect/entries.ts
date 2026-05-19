@@ -217,6 +217,18 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
     webWorkerEntries.push(...extractWebWorkerEntries(workspacePackage.directory));
   }
 
+  const tsConfigIncludeEntries = extractTsConfigIncludeFilesEntries(absoluteRoot);
+  for (const workspacePackage of entryEligiblePackages) {
+    tsConfigIncludeEntries.push(
+      ...extractTsConfigIncludeFilesEntries(workspacePackage.directory),
+    );
+  }
+
+  const wranglerEntries = extractWranglerEntries(absoluteRoot);
+  for (const workspacePackage of entryEligiblePackages) {
+    wranglerEntries.push(...extractWranglerEntries(workspacePackage.directory));
+  }
+
   const testSetupEntries = extractTestSetupFiles(absoluteRoot);
   for (const workspacePackage of entryEligiblePackages) {
     testSetupEntries.push(...extractTestSetupFiles(workspacePackage.directory));
@@ -247,6 +259,8 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
       ...angularEntries,
       ...browserExtensionEntries,
       ...webWorkerEntries,
+      ...tsConfigIncludeEntries,
+      ...wranglerEntries,
       ...pluginFileEntries,
       ...toolingDiscovery.entryFiles,
       ...ciEntries,
@@ -1060,6 +1074,133 @@ const extractScriptTagsFromHtmlFile = (htmlFilePath: string): string[] => {
       }
     }
   } catch {}
+  return entries;
+};
+
+const TSCONFIG_FILENAME_GLOBS = [
+  "tsconfig.json",
+  "tsconfig.*.json",
+];
+
+const stripJsoncCommentsLocal = (sourceText: string): string => {
+  let result = "";
+  let insideString = false;
+  let index = 0;
+  while (index < sourceText.length) {
+    const ch = sourceText[index];
+    if (insideString) {
+      if (ch === "\\" && index + 1 < sourceText.length) {
+        result += sourceText[index] + sourceText[index + 1];
+        index += 2;
+        continue;
+      }
+      if (ch === '"') insideString = false;
+      result += ch;
+      index++;
+      continue;
+    }
+    if (ch === '"') {
+      insideString = true;
+      result += ch;
+      index++;
+      continue;
+    }
+    if (ch === "/" && index + 1 < sourceText.length) {
+      if (sourceText[index + 1] === "/") {
+        while (index < sourceText.length && sourceText[index] !== "\n") index++;
+        continue;
+      }
+      if (sourceText[index + 1] === "*") {
+        index += 2;
+        while (
+          index + 1 < sourceText.length &&
+          !(sourceText[index] === "*" && sourceText[index + 1] === "/")
+        )
+          index++;
+        index += 2;
+        continue;
+      }
+    }
+    result += ch;
+    index++;
+  }
+  return result.replace(/,(\s*[}\]])/g, "$1");
+};
+
+const extractTsConfigIncludeFilesEntries = (directory: string): string[] => {
+  const entries: string[] = [];
+  const tsconfigPaths = fg.sync(TSCONFIG_FILENAME_GLOBS, {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
+    deep: 1,
+  });
+
+  for (const tsconfigPath of tsconfigPaths) {
+    try {
+      const rawText = readFileSync(tsconfigPath, "utf-8");
+      const cleaned = stripJsoncCommentsLocal(rawText);
+      const tsconfigJson = JSON.parse(cleaned);
+      const tsconfigDir = dirname(tsconfigPath);
+      const collectPaths = (rawList: unknown): void => {
+        if (!Array.isArray(rawList)) return;
+        for (const item of rawList) {
+          if (typeof item !== "string") continue;
+          if (item.includes("*") || item.includes("?")) continue;
+          const candidatePath = resolve(tsconfigDir, item);
+          if (existsSync(candidatePath)) {
+            entries.push(candidatePath);
+          }
+        }
+      };
+      collectPaths(tsconfigJson.include);
+      collectPaths(tsconfigJson.files);
+    } catch {}
+  }
+
+  return entries;
+};
+
+const WRANGLER_TOML_MAIN_PATTERN = /^\s*main\s*=\s*['"]([^'"\n]+)['"]/m;
+const WRANGLER_JSON_MAIN_PATTERN = /"main"\s*:\s*"([^"]+)"/;
+const WRANGLER_SERVICE_BINDINGS_PATTERN = /entry_point\s*=\s*['"]([^'"\n]+)['"]/g;
+
+const extractWranglerEntries = (directory: string): string[] => {
+  const entries: string[] = [];
+  const wranglerPaths = fg.sync(["wrangler.toml", "wrangler.json", "wrangler.jsonc"], {
+    cwd: directory,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**"],
+    deep: 1,
+  });
+
+  for (const wranglerPath of wranglerPaths) {
+    try {
+      const content = readFileSync(wranglerPath, "utf-8");
+      const wranglerDir = dirname(wranglerPath);
+      const isToml = wranglerPath.endsWith(".toml");
+      const mainMatch = isToml
+        ? content.match(WRANGLER_TOML_MAIN_PATTERN)
+        : content.match(WRANGLER_JSON_MAIN_PATTERN);
+      if (mainMatch?.[1]) {
+        const candidatePath = resolve(wranglerDir, mainMatch[1]);
+        if (existsSync(candidatePath)) entries.push(candidatePath);
+        else {
+          const sourceCandidate = resolveSourcePath(candidatePath, wranglerDir);
+          if (sourceCandidate) entries.push(sourceCandidate);
+        }
+      }
+      let entryPointMatch: RegExpExecArray | null;
+      WRANGLER_SERVICE_BINDINGS_PATTERN.lastIndex = 0;
+      while ((entryPointMatch = WRANGLER_SERVICE_BINDINGS_PATTERN.exec(content)) !== null) {
+        const candidatePath = resolve(wranglerDir, entryPointMatch[1]);
+        if (existsSync(candidatePath)) entries.push(candidatePath);
+      }
+    } catch {}
+  }
+
   return entries;
 };
 
