@@ -9,12 +9,27 @@ import { verifyUnusedDependenciesBatch } from "../verify/verify-deps.js";
 import { computeMetricsForReports, formatMetricsSummary } from "../metrics/compute-metrics.js";
 import { REPORTS_DIR } from "../constants.js";
 import type {
+  AnalyzeFlaggedExport,
+  AnalyzeFlaggedFile,
   CorpusEntry,
   EntryRunOutcome,
   EntryVerifiedReport,
   RunArtifact,
 } from "../types.js";
 import { getCurrentCommitSha } from "./git-ops.js";
+
+const MAX_VERIFY_PER_CATEGORY = 200;
+
+const samplePool = <Item>(items: readonly Item[], maxCount: number): Item[] => {
+  if (items.length <= maxCount) return [...items];
+  const stride = items.length / maxCount;
+  const sampled: Item[] = new Array(maxCount);
+  for (let outputIndex = 0; outputIndex < maxCount; outputIndex++) {
+    const sourceIndex = Math.min(items.length - 1, Math.floor(outputIndex * stride));
+    sampled[outputIndex] = items[sourceIndex];
+  }
+  return sampled;
+};
 
 const verifyOutcome = async (outcome: EntryRunOutcome): Promise<EntryVerifiedReport> => {
   if (outcome.status !== "ok" || !outcome.result) {
@@ -34,9 +49,18 @@ const verifyOutcome = async (outcome: EntryRunOutcome): Promise<EntryVerifiedRep
 
   const searchDir = outcome.entry.analyzeDir;
 
+  const filesToVerify: AnalyzeFlaggedFile[] = samplePool(
+    outcome.result.unusedFiles,
+    MAX_VERIFY_PER_CATEGORY,
+  );
+  const exportsToVerify: AnalyzeFlaggedExport[] = samplePool(
+    outcome.result.unusedExports,
+    MAX_VERIFY_PER_CATEGORY,
+  );
+
   const [unusedExports, unusedFiles, unusedDependencies] = await Promise.all([
-    verifyUnusedExportsBatch(outcome.result.unusedExports, searchDir, { concurrency: 6 }),
-    verifyUnusedFilesBatch(outcome.result.unusedFiles, searchDir, { concurrency: 4 }),
+    verifyUnusedExportsBatch(exportsToVerify, searchDir, { concurrency: 6 }),
+    verifyUnusedFilesBatch(filesToVerify, searchDir, { concurrency: 4 }),
     verifyUnusedDependenciesBatch(outcome.result.unusedDependencies, searchDir, {
       concurrency: 6,
     }),
