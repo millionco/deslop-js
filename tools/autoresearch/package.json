@@ -1,0 +1,19 @@
+{
+  "name": "autoresearch",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clone": "tsx src/cli.ts clone",
+    "baseline": "tsx src/cli.ts baseline",
+    "loop": "tsx src/cli.ts loop",
+    "build": "tsx src/cli.ts build"
+  },
+  "dependencies": {
+    "deslop-js": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0"
+  }
+}

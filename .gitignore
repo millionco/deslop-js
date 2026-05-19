@@ -8,3 +8,9 @@ coverage
 test-results
 .cursor
 .claude
+tools/autoresearch/snapshots/
+tools/autoresearch/reports/
+tools/autoresearch/results.tsv
+tools/autoresearch/status.json
+tools/autoresearch/hypotheses.log
+tools/autoresearch/corpus-samples/
