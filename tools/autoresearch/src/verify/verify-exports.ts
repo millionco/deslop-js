@@ -3,7 +3,8 @@ import type {
   VerificationVerdict,
   VerifiedExport,
 } from "../types.js";
-import { queryNameUsages } from "./grep-corpus.js";
+import { queryIdentifierLineMatches } from "./grep-corpus.js";
+import { filterImportOnlyMatches } from "./identifier-context.js";
 import { SKIP_EXPORT_NAMES, VERIFIABLE_EXPORT_MIN_NAME_LENGTH } from "../constants.js";
 
 const isVerifiableExportName = (name: string): boolean => {
@@ -37,20 +38,26 @@ export const verifyUnusedExport = async (
     return { ...flaggedExport, verdict: SKIPPED_VERDICT };
   }
 
-  const lookup = await queryNameUsages(
+  const lineMatches = await queryIdentifierLineMatches(
     { identifier: flaggedExport.name, excludePaths: [flaggedExport.path] },
     searchDir,
   );
 
-  const credibleMatches = lookup.matchingPaths.filter((filePath) => !isNoisyMatchPath(filePath));
+  const nonNoisyLineMatches = lineMatches.filter(
+    (lineMatch) => !isNoisyMatchPath(lineMatch.filePath),
+  );
+  const importContextMatches = filterImportOnlyMatches(nonNoisyLineMatches, flaggedExport.name);
 
-  if (credibleMatches.length > 0) {
+  if (importContextMatches.length > 0) {
+    const evidencePaths = [
+      ...new Set(importContextMatches.map((lineMatch) => lineMatch.filePath)),
+    ].slice(0, 3);
     return {
       ...flaggedExport,
       verdict: {
         kind: "likely_fp",
-        reason: "identifier appears outside declaration file",
-        evidence: credibleMatches.slice(0, 3).join(", "),
+        reason: "identifier imported in another file",
+        evidence: evidencePaths.join(", "),
       },
     };
   }
@@ -59,7 +66,7 @@ export const verifyUnusedExport = async (
     ...flaggedExport,
     verdict: {
       kind: "likely_tp",
-      reason: "no credible external references to identifier",
+      reason: "no import-context references found",
     },
   };
 };

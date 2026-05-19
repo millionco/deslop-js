@@ -170,6 +170,82 @@ export const queryNameUsagesBatch = async (
   return verdictsByKey;
 };
 
+export interface LineMatch {
+  filePath: string;
+  lineNumber: number;
+  lineText: string;
+}
+
+const SOURCE_LINE_GLOBS = SOURCE_FILE_GLOBS;
+
+export const ripgrepLineMatches = (
+  pattern: string,
+  searchDir: string,
+  options: { timeoutMs?: number; extraArgs?: string[] } = {},
+): Promise<LineMatch[]> => {
+  return new Promise((resolvePromise) => {
+    const args = [
+      "--vimgrep",
+      "--no-messages",
+      "--no-config",
+      ...RIPGREP_EXCLUDE_GLOBS,
+      ...(options.extraArgs ?? []),
+      pattern,
+      searchDir,
+    ];
+    const child = spawn("rg", args, { stdio: ["ignore", "pipe", "pipe"] });
+    const stdoutChunks: Buffer[] = [];
+    const timeoutHandle = setTimeout(() => {
+      child.kill("SIGKILL");
+    }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    child.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+    child.on("close", () => {
+      clearTimeout(timeoutHandle);
+      const outputText = Buffer.concat(stdoutChunks).toString("utf-8");
+      const matches: LineMatch[] = [];
+      for (const line of outputText.split("\n")) {
+        if (!line) continue;
+        const firstColon = line.indexOf(":");
+        if (firstColon === -1) continue;
+        const secondColon = line.indexOf(":", firstColon + 1);
+        if (secondColon === -1) continue;
+        const thirdColon = line.indexOf(":", secondColon + 1);
+        if (thirdColon === -1) continue;
+        const filePath = line.slice(0, firstColon);
+        const lineNumber = Number.parseInt(line.slice(firstColon + 1, secondColon), 10);
+        if (!Number.isFinite(lineNumber)) continue;
+        const lineText = line.slice(thirdColon + 1);
+        matches.push({ filePath, lineNumber, lineText });
+      }
+      resolvePromise(matches);
+    });
+    child.on("error", () => {
+      clearTimeout(timeoutHandle);
+      resolvePromise([]);
+    });
+  });
+};
+
+export interface IdentifierLineMatchesQuery {
+  identifier: string;
+  excludePaths: string[];
+}
+
+export const queryIdentifierLineMatches = async (
+  query: IdentifierLineMatchesQuery,
+  searchDir: string,
+  options: { timeoutMs?: number } = {},
+): Promise<LineMatch[]> => {
+  if (!query.identifier) return [];
+  const pattern = `\\b${escapeIdentifier(query.identifier)}\\b`;
+  const matches = await ripgrepLineMatches(pattern, searchDir, {
+    timeoutMs: options.timeoutMs,
+    extraArgs: SOURCE_LINE_GLOBS,
+  });
+  const excludeSet = new Set(query.excludePaths);
+  return matches.filter((lineMatch) => !excludeSet.has(lineMatch.filePath));
+};
+
 export interface DependencyUsageQuery {
   packageName: string;
 }

@@ -117,6 +117,7 @@ const isDocumentationPath = (filePath: string): boolean => {
 export const verifyUnusedFile = async (
   flaggedFile: AnalyzeFlaggedFile,
   searchDir: string,
+  options: { otherFlaggedFiles?: ReadonlySet<string> } = {},
 ): Promise<VerifiedFile> => {
   const extension = extname(flaggedFile.path);
   const basenameWithExt = basename(flaggedFile.path);
@@ -125,7 +126,10 @@ export const verifyUnusedFile = async (
 
   const escapedBasename = escapeRipgrepLiteral(basenameWithoutExt);
   const escapedRelative = escapeRipgrepLiteral(relativeFromSearchDir);
-  const exclude = new Set([flaggedFile.path]);
+  const exclude = new Set<string>([flaggedFile.path]);
+  if (options.otherFlaggedFiles) {
+    for (const otherFlaggedPath of options.otherFlaggedFiles) exclude.add(otherFlaggedPath);
+  }
 
   if (relativeFromSearchDir && !relativeFromSearchDir.startsWith("..")) {
     const explicitPathPattern = `['"\`](?:\\.{1,2}/)?(?:[^'"\`\\n]*?/)?${escapedRelative}['"\`]`;
@@ -139,7 +143,7 @@ export const verifyUnusedFile = async (
         ...flaggedFile,
         verdict: {
           kind: "likely_fp",
-          reason: "explicit path referenced from source",
+          reason: "explicit path referenced from non-flagged source",
           evidence: filePath,
         },
       };
@@ -158,7 +162,7 @@ export const verifyUnusedFile = async (
         ...flaggedFile,
         verdict: {
           kind: "likely_fp",
-          reason: "basename imported elsewhere",
+          reason: "basename imported from non-flagged source",
           evidence: filePath,
         },
       };
@@ -196,13 +200,16 @@ export const verifyUnusedFilesBatch = async (
   options: { concurrency?: number } = {},
 ): Promise<VerifiedFile[]> => {
   const verified: VerifiedFile[] = new Array(flaggedFiles.length);
+  const otherFlaggedFiles = new Set(flaggedFiles.map((flaggedFile) => flaggedFile.path));
   const concurrency = options.concurrency ?? 6;
   let nextIndex = 0;
 
   const runOne = async (): Promise<void> => {
     while (nextIndex < flaggedFiles.length) {
       const currentIndex = nextIndex++;
-      verified[currentIndex] = await verifyUnusedFile(flaggedFiles[currentIndex], searchDir);
+      verified[currentIndex] = await verifyUnusedFile(flaggedFiles[currentIndex], searchDir, {
+        otherFlaggedFiles,
+      });
     }
   };
 
