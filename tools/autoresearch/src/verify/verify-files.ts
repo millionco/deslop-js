@@ -118,6 +118,25 @@ const isDocumentationPath = (filePath: string): boolean => {
   );
 };
 
+const findOtherFilesWithSameBasename = async (
+  flaggedPath: string,
+  basenameWithoutExt: string,
+  extension: string,
+  searchDir: string,
+): Promise<string[]> => {
+  const sameBasename = basenameWithoutExt + extension;
+  const matched = await ripgrepFilesWithMatches("", searchDir, {
+    timeoutMs: 5_000,
+    extraArgs: ["--files", "--glob", `**/${sameBasename}`],
+  });
+  const candidates: string[] = [];
+  for (const filePath of matched.files) {
+    if (filePath === flaggedPath) continue;
+    if (basename(filePath) === sameBasename) candidates.push(filePath);
+  }
+  return candidates;
+};
+
 const isTsConfigPathsOnlyReference = (
   filePath: string,
   basenameWithoutExt: string,
@@ -177,23 +196,32 @@ export const verifyUnusedFile = async (
     }
   }
 
-  if (!isAmbiguousBasename(basenameWithoutExt)) {
-    const importContextPattern = `(?:from|import|require)\\s*\\(?\\s*['"\`][^'"\`\\n]*?${escapedBasename}(?:\\.[cm]?[jt]sx?)?['"\`]`;
-    const importHits = await ripgrepFilesWithMatches(importContextPattern, searchDir, {
-      timeoutMs: 15_000,
-    });
-    for (const filePath of importHits.files) {
-      if (exclude.has(filePath)) continue;
-      if (isDocumentationPath(filePath)) continue;
-      return {
-        ...flaggedFile,
-        verdict: {
-          kind: "likely_fp",
-          reason: "basename imported from non-flagged source",
-          evidence: filePath,
-        },
-      };
-    }
+    if (!isAmbiguousBasename(basenameWithoutExt)) {
+      const sameBasenameFiles = await findOtherFilesWithSameBasename(
+        flaggedFile.path,
+        basenameWithoutExt,
+        extension,
+        searchDir,
+      );
+
+      if (sameBasenameFiles.length === 0) {
+        const importContextPattern = `(?:from|import|require)\\s*\\(?\\s*['"\`][^'"\`\\n]*?${escapedBasename}(?:\\.[cm]?[jt]sx?)?['"\`]`;
+        const importHits = await ripgrepFilesWithMatches(importContextPattern, searchDir, {
+          timeoutMs: 15_000,
+        });
+        for (const filePath of importHits.files) {
+          if (exclude.has(filePath)) continue;
+          if (isDocumentationPath(filePath)) continue;
+          return {
+            ...flaggedFile,
+            verdict: {
+              kind: "likely_fp",
+              reason: "basename imported from non-flagged source",
+              evidence: filePath,
+            },
+          };
+        }
+      }
 
     const tsConfigPattern = `['"\`][^'"\`\\n]*?${escapedBasename}['"\`]`;
     const tsConfigHits = await ripgrepFilesWithMatches(tsConfigPattern, searchDir, {
