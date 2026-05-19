@@ -1994,8 +1994,14 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
     alwaysUsed: ["tsr.config.json", "app.config.{ts,js}"],
   },
   {
-    enablers: ["vite", "rolldown-vite"],
-    enablerPrefixes: ["@vitejs/"],
+    enablers: [
+      "vite",
+      "rolldown-vite",
+      "vite-plus",
+      "@voidzero-dev/vite-plus-core",
+      "@voidzero-dev/vite-plus-test",
+    ],
+    enablerPrefixes: ["@vitejs/", "@voidzero-dev/vite-plus"],
     entryPatterns: ["src/main.{ts,tsx,js,jsx}", "src/index.{ts,tsx,js,jsx}", "index.html"],
     alwaysUsed: ["vite.config.{ts,js,mts,mjs}"],
   },
