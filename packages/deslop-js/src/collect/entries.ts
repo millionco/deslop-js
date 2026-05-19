@@ -2628,6 +2628,47 @@ interface ToolingDiscoveryResult {
   alwaysUsedFiles: string[];
 }
 
+const FRAMEWORK_SCRIPT_BINARIES: Record<string, string[]> = {
+  next: ["next"],
+  nuxt: ["nuxt"],
+  astro: ["astro"],
+  gatsby: ["gatsby"],
+  remix: ["remix"],
+  "@sveltejs/kit": ["svelte-kit", "vite-svelte-kit"],
+  "@docusaurus/core": ["docusaurus"],
+  "@angular/core": ["ng"],
+  "@nestjs/core": ["nest"],
+  storybook: ["storybook", "start-storybook", "build-storybook"],
+};
+
+const detectFrameworkFromScripts = (scripts: Record<string, unknown> | undefined): Set<string> => {
+  const enabledEnablers = new Set<string>();
+  if (!scripts || typeof scripts !== "object") return enabledEnablers;
+  for (const scriptValue of Object.values(scripts)) {
+    if (typeof scriptValue !== "string") continue;
+    const tokenized = scriptValue.split(/[\s|&;]+/);
+    for (const token of tokenized) {
+      const cleaned = token.replace(/^.*\//, "");
+      for (const [enabler, binaries] of Object.entries(FRAMEWORK_SCRIPT_BINARIES)) {
+        if (binaries.includes(cleaned)) enabledEnablers.add(enabler);
+      }
+    }
+  }
+  return enabledEnablers;
+};
+
+const readPackageScripts = (directory: string): Record<string, unknown> | undefined => {
+  const packageJsonPath = join(directory, "package.json");
+  if (!existsSync(packageJsonPath)) return undefined;
+  try {
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    return packageJson.scripts;
+  } catch {
+    return undefined;
+  }
+};
+
 const discoverToolingEntryPoints = (
   rootDir: string,
   workspacePackages: WorkspacePackage[],
@@ -2653,6 +2694,12 @@ const discoverToolingEntryPoints = (
     } catch {}
   }
 
+  const monorepoRoot = findMonorepoRoot(rootDir);
+  const monorepoRootDeps =
+    monorepoRoot && monorepoRoot !== rootDir
+      ? readPackageJsonDependencies(join(monorepoRoot, "package.json"))
+      : {};
+
   for (const directory of directoriesToCheck) {
     const packageJsonPath = join(directory, "package.json");
     if (!existsSync(packageJsonPath)) continue;
@@ -2670,7 +2717,21 @@ const discoverToolingEntryPoints = (
       continue;
     }
 
-    const mergedDependencies = directory === rootDir ? rootDependencies : workspaceDependencies;
+    const workspaceScripts = readPackageScripts(directory);
+    const scriptDetectedEnablers = detectFrameworkFromScripts(workspaceScripts);
+
+    const mergedDependencies: Record<string, string> = {
+      ...workspaceDependencies,
+    };
+    if (directory === rootDir) {
+      Object.assign(mergedDependencies, rootDependencies);
+    } else {
+      for (const enabler of scriptDetectedEnablers) {
+        if (enabler in monorepoRootDeps || enabler in rootDependencies) {
+          mergedDependencies[enabler] = "*";
+        }
+      }
+    }
 
     const activatedPatterns: string[] = [];
     const activatedAlwaysUsed: string[] = [];
