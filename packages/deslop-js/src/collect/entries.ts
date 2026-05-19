@@ -17,6 +17,7 @@ import {
 import { resolveWorkspaces, detectFrameworkEntries } from "./workspaces.js";
 import type { WorkspacePackage } from "./workspaces.js";
 import { resolveSourcePath } from "../resolver/source-path.js";
+import { findMonorepoRoot } from "../utils/find-monorepo-root.js";
 import { join } from "node:path";
 
 export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFile[]> => {
@@ -2287,6 +2288,20 @@ interface TestRunnerDiscoveryResult {
   alwaysUsedFiles: string[];
 }
 
+const readPackageJsonDependencies = (packageJsonPath: string): Record<string, string> => {
+  try {
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    return {
+      ...packageJson.dependencies,
+      ...packageJson.devDependencies,
+      ...packageJson.optionalDependencies,
+    };
+  } catch {
+    return {};
+  }
+};
+
 const discoverTestRunnerEntryPoints = (
   rootDir: string,
   workspacePackages: WorkspacePackage[],
@@ -2297,6 +2312,12 @@ const discoverTestRunnerEntryPoints = (
     rootDir,
     ...workspacePackages.map((workspacePackage) => workspacePackage.directory),
   ];
+
+  const monorepoRoot = findMonorepoRoot(rootDir);
+  const monorepoRootDeps =
+    monorepoRoot && monorepoRoot !== rootDir
+      ? readPackageJsonDependencies(join(monorepoRoot, "package.json"))
+      : {};
 
   for (const directory of directoriesToCheck) {
     const packageJsonPath = join(directory, "package.json");
@@ -2334,14 +2355,28 @@ const discoverTestRunnerEntryPoints = (
     };
 
     for (const runner of TEST_FRAMEWORK_PATTERNS) {
-      if (isRunnerEnabled(runner, allDependencies, directory)) {
+      const enabledLocally = isRunnerEnabled(runner, allDependencies, directory);
+      const enabledViaMonorepo =
+        !enabledLocally &&
+        monorepoRoot &&
+        (isRunnerEnabled(runner, monorepoRootDeps, monorepoRoot) ||
+          runner.configFileActivators.some((configFile) =>
+            existsSync(join(monorepoRoot, configFile)),
+          ));
+      if (enabledLocally || enabledViaMonorepo) {
         const isVitestRunner = runner.enablers.includes("vitest");
         const isJestRunner = runner.enablers.includes("jest");
         let customPatterns: string[] = [];
         if (isVitestRunner) {
           customPatterns = extractVitestIncludePatterns(directory);
+          if (customPatterns.length === 0 && monorepoRoot) {
+            customPatterns = extractVitestIncludePatterns(monorepoRoot);
+          }
         } else if (isJestRunner) {
           customPatterns = extractJestTestMatchPatterns(directory);
+          if (customPatterns.length === 0 && monorepoRoot) {
+            customPatterns = extractJestTestMatchPatterns(monorepoRoot);
+          }
         }
         if (customPatterns.length > 0) {
           activatedPatterns.push(...customPatterns);
