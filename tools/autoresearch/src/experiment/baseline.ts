@@ -57,10 +57,16 @@ const verifyOutcome = async (outcome: EntryRunOutcome): Promise<EntryVerifiedRep
     outcome.result.unusedExports,
     MAX_VERIFY_PER_CATEGORY,
   );
+  const allFlaggedFilePaths = new Set(
+    outcome.result.unusedFiles.map((flaggedFile) => flaggedFile.path),
+  );
 
   const [unusedExports, unusedFiles, unusedDependencies] = await Promise.all([
     verifyUnusedExportsBatch(exportsToVerify, searchDir, { concurrency: 6 }),
-    verifyUnusedFilesBatch(filesToVerify, searchDir, { concurrency: 4 }),
+    verifyUnusedFilesBatch(filesToVerify, searchDir, {
+      concurrency: 4,
+      allFlaggedFilePaths,
+    }),
     verifyUnusedDependenciesBatch(outcome.result.unusedDependencies, searchDir, {
       concurrency: 6,
     }),

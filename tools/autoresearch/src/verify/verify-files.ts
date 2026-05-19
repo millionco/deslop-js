@@ -322,10 +322,11 @@ export const verifyUnusedFile = async (
 export const verifyUnusedFilesBatch = async (
   flaggedFiles: AnalyzeFlaggedFile[],
   searchDir: string,
-  options: { concurrency?: number } = {},
+  options: { concurrency?: number; allFlaggedFilePaths?: ReadonlySet<string> } = {},
 ): Promise<VerifiedFile[]> => {
   const verified: VerifiedFile[] = new Array(flaggedFiles.length);
-  const otherFlaggedFiles = new Set(flaggedFiles.map((flaggedFile) => flaggedFile.path));
+  const otherFlaggedFiles =
+    options.allFlaggedFilePaths ?? new Set(flaggedFiles.map((flaggedFile) => flaggedFile.path));
   const concurrency = options.concurrency ?? 6;
   let nextIndex = 0;
 
