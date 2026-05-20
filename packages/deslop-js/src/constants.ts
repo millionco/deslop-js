@@ -217,6 +217,8 @@ export const PLATFORM_SUFFIXES = [
   ".windows",
   ".macos",
   ".any",
+  ".server",
+  ".client",
 ];
 
 export const REACT_NATIVE_PLATFORM_EXTENSIONS = [
