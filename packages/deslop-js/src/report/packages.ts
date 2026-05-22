@@ -387,6 +387,8 @@ const CLI_BINARY_TO_PACKAGE: Record<string, string> = {
 const CLI_BINARY_FALLBACK_PACKAGES: Record<string, string[]> = {
   babel: ["babel-cli"],
   jest: ["jest-cli"],
+  remark: ["remark-cli"],
+  dumi: ["dumi"],
 };
 
 const ENV_WRAPPER_BINARY_SET = new Set(["cross-env", "dotenv", "dotenv-flow", "env-cmd"]);
@@ -539,6 +541,11 @@ const CONFIG_FILE_GLOBS = [
   "commitlint.config.{js,cjs,mjs,ts}",
   ".commitlintrc.{js,cjs,mjs,json,yaml,yml}",
   "tslint.json",
+  ".remarkrc",
+  ".remarkrc.{js,cjs,mjs,json}",
+  ".dumirc.ts",
+  ".dumirc.js",
+  "dumi.config.{ts,js}",
 ];
 
 const collectConfigReferencedPackages = (
@@ -576,6 +583,27 @@ const collectConfigReferencedPackages = (
       const content = readFileSync(configPath, "utf-8");
       for (const packageName of declaredNames) {
         if (content.includes(packageName)) {
+          referenced.add(packageName);
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  const documentationFiles = fg.sync(["**/*.{mdx,md}"], {
+    cwd: rootDir,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ["**/node_modules/**", "**/dist/**", "**/build/**", "**/CHANGELOG.md"],
+    deep: 6,
+  });
+
+  for (const documentationPath of documentationFiles) {
+    try {
+      const content = readFileSync(documentationPath, "utf-8");
+      for (const packageName of declaredNames) {
+        if (matchesPackageImportReference(content, packageName)) {
           referenced.add(packageName);
         }
       }

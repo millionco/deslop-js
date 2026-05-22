@@ -35,6 +35,8 @@ export const detectDeadExports = (graph: DependencyGraph, config: DeslopConfig):
       const usageKey = `${module.fileId.path}::${exportInfo.name}`;
       if (usageMap.has(usageKey)) continue;
 
+      if (module.localIdentifierReferences.includes(exportInfo.name)) continue;
+
       if (
         !exportInfo.isDefault &&
         defaultExportLinkedNames.has(exportInfo.name)
@@ -117,6 +119,25 @@ const buildUsageMap = (graph: DependencyGraph): Set<string> => {
           usedExportKeys,
           new Set(),
         );
+
+        if (symbol.isDefault) {
+          const hasDefaultExport = targetModule.exports.some((exportInfo) => exportInfo.isDefault);
+          if (!hasDefaultExport && symbol.localName !== "default") {
+            const matchingNamedExport = targetModule.exports.find(
+              (exportInfo) => exportInfo.name === symbol.localName,
+            );
+            if (matchingNamedExport) {
+              markExportUsedRecursive(
+                targetModule.fileId.path,
+                symbol.localName,
+                graph,
+                sourceToTargetMap,
+                usedExportKeys,
+                new Set(),
+              );
+            }
+          }
+        }
       }
     }
   }

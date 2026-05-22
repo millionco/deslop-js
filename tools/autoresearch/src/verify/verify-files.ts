@@ -1,5 +1,5 @@
-import { basename, extname, relative } from "node:path";
-import { readFileSync } from "node:fs";
+import { basename, dirname, extname, relative, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import type { AnalyzeFlaggedFile, VerifiedFile, VerificationVerdict } from "../types.js";
 import {
   ripgrepFilesWithMatches,
@@ -138,24 +138,67 @@ const extractImportPaths = (lineText: string): string[] => {
   return paths;
 };
 
+const RESOLVABLE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts", ".cjs", ".cts"];
+
+const resolveRelativeImportCandidate = (
+  importPath: string,
+  fromFilePath: string,
+): string | undefined => {
+  if (!importPath.startsWith(".")) return undefined;
+  const absoluteBase = resolve(dirname(fromFilePath), importPath);
+  if (existsSync(absoluteBase)) return absoluteBase;
+  for (const extension of RESOLVABLE_EXTENSIONS) {
+    const withExtension = absoluteBase + extension;
+    if (existsSync(withExtension)) return withExtension;
+  }
+  for (const extension of RESOLVABLE_EXTENSIONS) {
+    const indexCandidate = resolve(absoluteBase, `index${extension}`);
+    if (existsSync(indexCandidate)) return indexCandidate;
+  }
+  return undefined;
+};
+
 const doesImportPathPlausiblyTargetFlagged = (
   lineText: string,
   flaggedRelativeWithoutExt: string,
+  flaggedAbsolutePath: string,
+  evidenceFilePath: string,
 ): boolean => {
   const importPaths = extractImportPaths(lineText);
   if (importPaths.length === 0) return false;
   for (const importPath of importPaths) {
+    const resolvedImportPath = resolveRelativeImportCandidate(importPath, evidenceFilePath);
+    if (resolvedImportPath && resolvedImportPath === flaggedAbsolutePath) {
+      return true;
+    }
+
+    if (!importPath.startsWith(".")) {
+      return false;
+    }
+
+    if (flaggedAbsolutePath.includes("/__mocks__/") && !importPath.includes("__mocks__")) {
+      return false;
+    }
+
     const strippedSpecifier = importPath
       .replace(/^@[\w-]+\/[\w-]+\//, "")
       .replace(/^\.{1,2}\//, "")
       .replace(/\.[cm]?[jt]sx?$/, "");
     if (!strippedSpecifier) continue;
-    if (flaggedRelativeWithoutExt.endsWith(strippedSpecifier)) return true;
-    const flaggedTail = flaggedRelativeWithoutExt.split("/").slice(-2).join("/");
-    const importTail = strippedSpecifier.split("/").slice(-2).join("/");
-    if (flaggedTail === importTail && flaggedTail.includes("/")) return true;
+
+    if (strippedSpecifier.includes("/")) {
+      if (flaggedRelativeWithoutExt.endsWith(strippedSpecifier)) return true;
+      const flaggedTail = flaggedRelativeWithoutExt.split("/").slice(-2).join("/");
+      const importTail = strippedSpecifier.split("/").slice(-2).join("/");
+      if (flaggedTail === importTail) return true;
+    }
   }
   return false;
+};
+
+const isCommentedImportLine = (lineText: string): boolean => {
+  const trimmedLine = lineText.trimStart();
+  return trimmedLine.startsWith("//") || trimmedLine.startsWith("*");
 };
 
 const findOtherFilesWithSameBasename = async (
@@ -194,6 +237,30 @@ const isTsConfigPathsOnlyReference = (
       (filesBlockMatch && filesBlockMatch[0].includes(basenameWithoutExt));
     if (inIncludeOrFiles) return false;
     return true;
+  } catch {
+    return false;
+  }
+};
+
+const looksLikeSourceFileReference = (
+  filePath: string,
+  basenameWithoutExt: string,
+  extension: string,
+): boolean => {
+  if (filePath.endsWith("package.json")) {
+    return false;
+  }
+  const expectedExtensionPattern = new RegExp(
+    `${basenameWithoutExt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\${extension.replace(".", "\\.")}(?:['"\`]|$)`,
+  );
+  try {
+    const text = readFileSync(filePath, "utf-8");
+    if (!expectedExtensionPattern.test(text)) return false;
+    if (text.includes(`/${basenameWithoutExt}${extension}`)) return true;
+    if (text.includes(`./${basenameWithoutExt}${extension}`)) return true;
+    if (text.includes(`"${basenameWithoutExt}${extension}"`)) return true;
+    if (text.includes(`'${basenameWithoutExt}${extension}'`)) return true;
+    return false;
   } catch {
     return false;
   }
@@ -277,7 +344,13 @@ export const verifyUnusedFile = async (
       for (const lineMatch of lineMatches) {
         if (exclude.has(lineMatch.filePath)) continue;
         if (isDocumentationPath(lineMatch.filePath)) continue;
-        if (!doesImportPathPlausiblyTargetFlagged(lineMatch.lineText, relativeWithoutExt)) {
+        if (isCommentedImportLine(lineMatch.lineText)) continue;
+        if (!doesImportPathPlausiblyTargetFlagged(
+          lineMatch.lineText,
+          relativeWithoutExt,
+          flaggedFile.path,
+          lineMatch.filePath,
+        )) {
           continue;
         }
         if (sameBasenameFiles.length > 0) continue;
@@ -300,6 +373,7 @@ export const verifyUnusedFile = async (
       if (exclude.has(filePath)) continue;
       if (isTsConfigPathsOnlyReference(filePath, basenameWithoutExt)) continue;
       if (isTsConfigExcludeOnlyReference(filePath, basenameWithoutExt)) continue;
+      if (!looksLikeSourceFileReference(filePath, basenameWithoutExt, extension)) continue;
       return {
         ...flaggedFile,
         verdict: {

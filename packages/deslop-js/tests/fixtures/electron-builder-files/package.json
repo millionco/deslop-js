@@ -1,0 +1,12 @@
+{
+  "name": "electron-builder-files",
+  "version": "1.0.0",
+  "main": "src/main.ts",
+  "build": {
+    "files": ["src/preload.ts", "src/worker.ts"]
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}
