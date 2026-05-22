@@ -4539,15 +4539,21 @@ describe("unused-class-members-public-api (FP-class fix)", () => {
   });
 });
 
-describe("redundant-exports symbol-identity dedup (semantic enabled)", () => {
-  it("should NOT flag same-name exports across modules that resolve to the same TS symbol", async () => {
+describe("redundant-exports barrel-pollution (semantic enabled, plan-literal)", () => {
+  it("flags same symbol exported from multiple barrels when only one is consumed externally", async () => {
     const result = await scanFixture("redundant-exports-local-reexport-dedup", {
       semantic: { enabled: true, reportRedundantExports: true },
     });
-    assert.deepEqual(
-      result.redundantExports,
-      [],
-      "local re-export (export type { X } with no from-clause) resolves to the same symbol as the original",
+    const finding = result.redundantExports.find((entry) => entry.name === "ToolbarState");
+    assert.ok(
+      finding,
+      `ToolbarState should appear as barrel pollution, got: ${JSON.stringify(result.redundantExports)}`,
     );
+    assert.equal(finding!.confidence, "high");
+    assert.ok(
+      finding!.reason.includes("sibling barrels"),
+      `reason should mention sibling barrels, got: ${finding!.reason}`,
+    );
+    assert.equal(finding!.paths.length, 2);
   });
 });

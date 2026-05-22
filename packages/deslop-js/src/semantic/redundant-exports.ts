@@ -67,7 +67,7 @@ export const detectRedundantExports = (
       if (SKIP_NAMES.has(exportInfo.name)) continue;
       if (exportInfo.isSynthetic) continue;
       if (exportInfo.isNamespaceReExport) continue;
-      if (exportInfo.isReExport) continue;
+      if (exportInfo.isReExport && !exportInfo.reExportSource) continue;
       const existing = pathsByExportName.get(exportInfo.name) ?? new Set<string>();
       existing.add(module.fileId.path);
       pathsByExportName.set(exportInfo.name, existing);
@@ -80,6 +80,7 @@ export const detectRedundantExports = (
   for (const [exportName, pathSet] of pathsByExportName) {
     if (pathSet.size < 2) continue;
 
+    let allSameSymbol = false;
     if (symbolByExportLocation.size > 0) {
       const distinctSymbols = new Set<ts.Symbol>();
       let allMapped = true;
@@ -91,7 +92,7 @@ export const detectRedundantExports = (
         }
         distinctSymbols.add(symbol);
       }
-      if (allMapped && distinctSymbols.size < 2) continue;
+      if (allMapped) allSameSymbol = distinctSymbols.size < 2;
     }
 
     const consumedPaths: string[] = [];
@@ -102,6 +103,23 @@ export const detectRedundantExports = (
       } else {
         unconsumedPaths.push(modulePath);
       }
+    }
+
+    if (allSameSymbol) {
+      if (consumedPaths.length === 0) continue;
+      if (unconsumedPaths.length === 0) continue;
+      findings.push({
+        name: exportName,
+        paths: [...pathSet].sort(),
+        confidence: "high",
+        reason: `\`${exportName}\` re-exported from ${pathSet.size} sibling barrels; only ${consumedPaths.length} consumed externally — others are redundant aliases`,
+        trace: [
+          `same symbol exported from ${pathSet.size} modules (checker-confirmed)`,
+          `consumed: ${consumedPaths.length}, unconsumed: ${unconsumedPaths.length}`,
+          `redundant barrels: ${unconsumedPaths.slice(0, 3).join(" | ")}`,
+        ].slice(0, SEMANTIC_TRACE_MAX_ENTRIES),
+      });
+      continue;
     }
 
     let confidence: RedundantExport["confidence"];
