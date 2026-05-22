@@ -81,11 +81,12 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
   }
 
   if (result.misclassifiedDependencies.length > 0) {
-    const depLabel =
-      result.misclassifiedDependencies.length === 1 ? "dependency" : "dependencies";
+    const depLabel = result.misclassifiedDependencies.length === 1 ? "dependency" : "dependencies";
     lines.push(`${result.misclassifiedDependencies.length} misclassified ${depLabel}`);
     for (const finding of result.misclassifiedDependencies) {
-      lines.push(`  ${finding.name}  ${finding.declaredAs} → ${finding.suggestedAs} (${finding.confidence})`);
+      lines.push(
+        `  ${finding.name}  ${finding.declaredAs} → ${finding.suggestedAs} (${finding.confidence})`,
+      );
     }
     lines.push("");
   }
@@ -94,9 +95,7 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
     const aliasLabel = result.redundantAliases.length === 1 ? "alias" : "aliases";
     lines.push(`${result.redundantAliases.length} redundant ${aliasLabel}`);
     for (const finding of result.redundantAliases) {
-      lines.push(
-        `  ${finding.path}:${finding.line}  [${finding.kind}] ${finding.name}`,
-      );
+      lines.push(`  ${finding.path}:${finding.line}  [${finding.kind}] ${finding.name}`);
     }
     lines.push("");
   }
@@ -159,7 +158,9 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
 
   if (result.analysisErrors.length > 0) {
     const fatalCount = result.analysisErrors.filter((error) => error.severity === "fatal").length;
-    const warningCount = result.analysisErrors.filter((error) => error.severity === "warning").length;
+    const warningCount = result.analysisErrors.filter(
+      (error) => error.severity === "warning",
+    ).length;
     const infoCount = result.analysisErrors.filter((error) => error.severity === "info").length;
     const counts = [
       fatalCount > 0 ? `${fatalCount} fatal` : null,
@@ -185,12 +186,12 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
 
   if (result.duplicateInlineTypes.length > 0) {
     const inlineLabel =
-      result.duplicateInlineTypes.length === 1
-        ? "inline type group"
-        : "inline type groups";
+      result.duplicateInlineTypes.length === 1 ? "inline type group" : "inline type groups";
     lines.push(`${result.duplicateInlineTypes.length} duplicate ${inlineLabel}`);
     for (const finding of result.duplicateInlineTypes) {
-      lines.push(`  [${finding.confidence}] ${finding.preview} (${finding.occurrences.length} sites)`);
+      lines.push(
+        `  [${finding.confidence}] ${finding.preview} (${finding.occurrences.length} sites)`,
+      );
       for (const occurrence of finding.occurrences) {
         lines.push(
           `    ${occurrence.path}:${occurrence.line}  ${occurrence.context}${occurrence.nearestName ? `  ${occurrence.nearestName}` : ""}`,
@@ -212,8 +213,7 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
   }
 
   if (result.simplifiableExpressions.length > 0) {
-    const exprLabel =
-      result.simplifiableExpressions.length === 1 ? "expression" : "expressions";
+    const exprLabel = result.simplifiableExpressions.length === 1 ? "expression" : "expressions";
     lines.push(`${result.simplifiableExpressions.length} simplifiable ${exprLabel}`);
     for (const finding of result.simplifiableExpressions) {
       lines.push(
@@ -225,12 +225,12 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
 
   if (result.duplicateConstants.length > 0) {
     const constLabel =
-      result.duplicateConstants.length === 1
-        ? "constant group"
-        : "constant groups";
+      result.duplicateConstants.length === 1 ? "constant group" : "constant groups";
     lines.push(`${result.duplicateConstants.length} duplicate ${constLabel}`);
     for (const finding of result.duplicateConstants) {
-      lines.push(`  [${finding.confidence}] ${finding.literalPreview} (${finding.occurrences.length} copies)`);
+      lines.push(
+        `  [${finding.confidence}] ${finding.literalPreview} (${finding.occurrences.length} copies)`,
+      );
       for (const occurrence of finding.occurrences.slice(0, 3)) {
         lines.push(`    ${occurrence.path}:${occurrence.line}  const ${occurrence.constantName}`);
       }
@@ -287,4 +287,5 @@ export const hasUnusedIssues = (result: ScanResult): boolean =>
   result.simplifiableExpressions.length > 0 ||
   result.duplicateConstants.length > 0;
 
-export const hasCircularIssues = (result: ScanResult): boolean => result.circularDependencies.length > 0;
+export const hasCircularIssues = (result: ScanResult): boolean =>
+  result.circularDependencies.length > 0;

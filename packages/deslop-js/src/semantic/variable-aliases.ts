@@ -36,7 +36,8 @@ const isDeclarationExported = (declaration: ts.VariableDeclaration): boolean => 
   if (!modifiers) return false;
   return modifiers.some(
     (modifier) =>
-      modifier.kind === ts.SyntaxKind.ExportKeyword || modifier.kind === ts.SyntaxKind.DefaultKeyword,
+      modifier.kind === ts.SyntaxKind.ExportKeyword ||
+      modifier.kind === ts.SyntaxKind.DefaultKeyword,
   );
 };
 
@@ -85,10 +86,7 @@ const isMeaningfulReference = (site: SymbolReferenceSite): boolean => {
   return true;
 };
 
-const resolveThroughAliasChain = (
-  symbol: ts.Symbol,
-  checker: ts.TypeChecker,
-): ts.Symbol => {
+const resolveThroughAliasChain = (symbol: ts.Symbol, checker: ts.TypeChecker): ts.Symbol => {
   if (symbol.flags & ts.SymbolFlags.Alias) {
     try {
       return checker.getAliasedSymbol(symbol);
@@ -141,7 +139,9 @@ export const detectRedundantVariableAliases = (
     if (aliasMeaningfulRefs.length === 0) continue;
 
     const { line: zeroIndexedLine, character: zeroIndexedColumn } =
-      candidate.sourceFile.getLineAndCharacterOfPosition(candidate.declaration.getStart(candidate.sourceFile));
+      candidate.sourceFile.getLineAndCharacterOfPosition(
+        candidate.declaration.getStart(candidate.sourceFile),
+      );
 
     findings.push({
       path: candidate.modulePath,

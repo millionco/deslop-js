@@ -61,13 +61,9 @@ export const computeMetricsForReports = (
     exportsBreakdown.totalFlagged +
     dependenciesBreakdown.totalFlagged;
   combined.likelyTrue =
-    filesBreakdown.likelyTrue +
-    exportsBreakdown.likelyTrue +
-    dependenciesBreakdown.likelyTrue;
+    filesBreakdown.likelyTrue + exportsBreakdown.likelyTrue + dependenciesBreakdown.likelyTrue;
   combined.likelyFalse =
-    filesBreakdown.likelyFalse +
-    exportsBreakdown.likelyFalse +
-    dependenciesBreakdown.likelyFalse;
+    filesBreakdown.likelyFalse + exportsBreakdown.likelyFalse + dependenciesBreakdown.likelyFalse;
   combined.skipped =
     filesBreakdown.skipped + exportsBreakdown.skipped + dependenciesBreakdown.skipped;
   const verified = combined.likelyTrue + combined.likelyFalse;

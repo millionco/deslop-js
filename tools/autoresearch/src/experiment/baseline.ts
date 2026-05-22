@@ -95,9 +95,7 @@ export interface RunCorpusOptions {
   silent?: boolean;
 }
 
-export const runOneCorpusPass = async (
-  options: RunCorpusOptions,
-): Promise<RunArtifact> => {
+export const runOneCorpusPass = async (options: RunCorpusOptions): Promise<RunArtifact> => {
   const startedAt = Date.now();
   const startedAtIso = new Date(startedAt).toISOString();
   const allEntries = loadRepoEntries();
@@ -113,9 +111,7 @@ export const runOneCorpusPass = async (
       const status = cloneOutcome.status.padEnd(7);
       const slug = cloneOutcome.slug;
       const elapsed = `${cloneOutcome.durationMs}ms`;
-      process.stderr.write(
-        `[clone ${completedIndex}/${total}] ${status} ${slug} (${elapsed})\n`,
-      );
+      process.stderr.write(`[clone ${completedIndex}/${total}] ${status} ${slug} (${elapsed})\n`);
     },
   });
   const failedRepoSlugs = new Set<string>();
@@ -147,7 +143,7 @@ export const runOneCorpusPass = async (
                 (outcome.result?.unusedExports.length ?? 0) +
                 (outcome.result?.unusedDependencies.length ?? 0)
               }`
-            : outcome.errorMessage?.slice(0, 120) ?? "";
+            : (outcome.errorMessage?.slice(0, 120) ?? "");
         process.stderr.write(
           `[analyze ${completedIndex}/${totalCount}] ${status} ${outcome.entry.slug} ${outcome.durationMs}ms ${message}\n`,
         );
@@ -176,7 +172,8 @@ export const runOneCorpusPass = async (
         const fpCount =
           verified.unusedFiles.filter((flagged) => flagged.verdict.kind === "likely_fp").length +
           verified.unusedExports.filter((flagged) => flagged.verdict.kind === "likely_fp").length +
-          verified.unusedDependencies.filter((flagged) => flagged.verdict.kind === "likely_fp").length;
+          verified.unusedDependencies.filter((flagged) => flagged.verdict.kind === "likely_fp")
+            .length;
         process.stderr.write(
           `[verify ${currentIndex + 1}/${analysisOutcomes.length}] ${verified.entry.slug} flagged=${totalFlagged} likely_fp=${fpCount}\n`,
         );

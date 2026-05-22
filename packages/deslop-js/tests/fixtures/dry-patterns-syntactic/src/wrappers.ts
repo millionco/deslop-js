@@ -1,7 +1,6 @@
 export const debugLog = (message: string) => console.log(message);
 
-export const triggerWith = (event: string, payload: number) =>
-  fireEvent(event, payload);
+export const triggerWith = (event: string, payload: number) => fireEvent(event, payload);
 
 export const variadicWrap = (...args: unknown[]) => downstream(...args);
 

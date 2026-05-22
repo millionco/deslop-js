@@ -20,7 +20,8 @@ import {
 } from "./git-ops.js";
 import type { MutationProposal, RunArtifact, RunMetrics } from "../types.js";
 
-const RESULTS_TSV_HEADER = "iter\ttimestamp\tcorpus\tcommit\tparent\tscore\tlikely_tp\tlikely_fp\tfp_rate\tcrashes\ttimeouts\tstatus\tdescription";
+const RESULTS_TSV_HEADER =
+  "iter\ttimestamp\tcorpus\tcommit\tparent\tscore\tlikely_tp\tlikely_fp\tfp_rate\tcrashes\ttimeouts\tstatus\tdescription";
 
 const ensureResultsTsv = (): void => {
   if (existsSync(RESULTS_TSV_PATH)) return;
@@ -115,7 +116,11 @@ export const runExperimentLoop = async (options: RunLoopOptions): Promise<void> 
 
   const originalBranch = await getCurrentBranch();
   const tag =
-    options.branchTag ?? new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 12);
+    options.branchTag ??
+    new Date()
+      .toISOString()
+      .replace(/[^0-9]/g, "")
+      .slice(0, 12);
   const branchName = `autoresearch/${tag}`;
   const branchOutcome = await ensureBranch(branchName);
   if (!branchOutcome.ok) {
@@ -250,5 +255,7 @@ export const runExperimentLoop = async (options: RunLoopOptions): Promise<void> 
   }
 
   writeStatus(state, "loop-completed");
-  process.stderr.write(`[autoresearch] loop completed after ${state.iterationCounter} iterations\n`);
+  process.stderr.write(
+    `[autoresearch] loop completed after ${state.iterationCounter} iterations\n`,
+  );
 };

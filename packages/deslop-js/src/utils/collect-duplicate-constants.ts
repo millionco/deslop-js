@@ -1,8 +1,8 @@
-interface NodeLike {
-  type: string;
-  start?: number;
-  [key: string]: unknown;
-}
+import {
+  MIN_NUMERIC_LITERAL_MAGNITUDE_FOR_DUPLICATE,
+  MIN_STRING_LITERAL_LENGTH_FOR_DUPLICATE,
+} from "../constants.js";
+import { isOxcAstNode, type OxcAstNode } from "./oxc-ast-node.js";
 
 export interface DuplicateConstantCandidate {
   constantName: string;
@@ -10,9 +10,6 @@ export interface DuplicateConstantCandidate {
   literalPreview: string;
   startOffset: number;
 }
-
-const MIN_STRING_LITERAL_LENGTH = 8;
-const MIN_NUMBER_LITERAL_VALUE = 1000;
 
 const FRAMEWORK_RESERVED_CONSTANT_NAMES = new Set([
   "dynamic",
@@ -39,19 +36,16 @@ const FRAMEWORK_RESERVED_CONSTANT_NAMES = new Set([
   "Layout",
 ]);
 
-const isNode = (value: unknown): value is NodeLike =>
-  Boolean(value) && typeof value === "object" && typeof (value as NodeLike).type === "string";
-
-const isLiteralCandidate = (node: NodeLike): boolean => {
+const isLiteralCandidate = (node: OxcAstNode): boolean => {
   if (node.type === "Literal") {
     const value = (node as { value?: unknown }).value;
     if (typeof value === "string") {
-      if (value.length < MIN_STRING_LITERAL_LENGTH) return false;
+      if (value.length < MIN_STRING_LITERAL_LENGTH_FOR_DUPLICATE) return false;
       return true;
     }
     if (typeof value === "number") {
       if (!Number.isFinite(value)) return false;
-      if (Math.abs(value) < MIN_NUMBER_LITERAL_VALUE) return false;
+      if (Math.abs(value) < MIN_NUMERIC_LITERAL_MAGNITUDE_FOR_DUPLICATE) return false;
       return true;
     }
     return false;
@@ -62,13 +56,13 @@ const isLiteralCandidate = (node: NodeLike): boolean => {
     const quasis = (node as { quasis?: Array<{ value?: { cooked?: string } }> }).quasis;
     if (!Array.isArray(quasis) || quasis.length === 0) return false;
     const cooked = quasis[0].value?.cooked ?? "";
-    return cooked.length >= MIN_STRING_LITERAL_LENGTH;
+    return cooked.length >= MIN_STRING_LITERAL_LENGTH_FOR_DUPLICATE;
   }
   if (node.type === "ArrayExpression") {
     const elements = (node as { elements?: unknown[] }).elements ?? [];
     if (elements.length === 0) return false;
     for (const element of elements) {
-      if (!isNode(element)) return false;
+      if (!isOxcAstNode(element)) return false;
       if (element.type !== "Literal") return false;
     }
     return true;
@@ -76,7 +70,7 @@ const isLiteralCandidate = (node: NodeLike): boolean => {
   return false;
 };
 
-const hashLiteralNode = (node: NodeLike): string => {
+const hashLiteralNode = (node: OxcAstNode): string => {
   if (node.type === "Literal") {
     return `lit:${typeof (node as { value?: unknown }).value}:${JSON.stringify((node as { value?: unknown }).value)}`;
   }
@@ -87,7 +81,7 @@ const hashLiteralNode = (node: NodeLike): string => {
   if (node.type === "ArrayExpression") {
     const elements = (node as { elements?: unknown[] }).elements ?? [];
     const values = elements.map((element) => {
-      if (!isNode(element)) return "?";
+      if (!isOxcAstNode(element)) return "?";
       if (element.type !== "Literal") return "?";
       return JSON.stringify((element as { value?: unknown }).value);
     });
@@ -96,10 +90,11 @@ const hashLiteralNode = (node: NodeLike): string => {
   return "?";
 };
 
-const previewLiteralNode = (node: NodeLike): string => {
+const previewLiteralNode = (node: OxcAstNode): string => {
   if (node.type === "Literal") {
     const value = (node as { value?: unknown }).value;
-    if (typeof value === "string") return `"${value.length > 60 ? value.slice(0, 57) + "..." : value}"`;
+    if (typeof value === "string")
+      return `"${value.length > 60 ? value.slice(0, 57) + "..." : value}"`;
     return String(value);
   }
   if (node.type === "TemplateLiteral") {
@@ -112,7 +107,7 @@ const previewLiteralNode = (node: NodeLike): string => {
     const head = elements
       .slice(0, 3)
       .map((element) =>
-        isNode(element) && element.type === "Literal"
+        isOxcAstNode(element) && element.type === "Literal"
           ? JSON.stringify((element as { value?: unknown }).value)
           : "?",
       )
@@ -127,21 +122,21 @@ const visitForConstants = (
   statementNode: unknown,
   candidates: DuplicateConstantCandidate[],
 ): void => {
-  if (!isNode(statementNode)) return;
+  if (!isOxcAstNode(statementNode)) return;
   const inner =
     (statementNode.type === "ExportNamedDeclaration" ||
       statementNode.type === "ExportDefaultDeclaration") &&
     (statementNode as { declaration?: unknown }).declaration
       ? (statementNode as { declaration?: unknown }).declaration
       : statementNode;
-  if (!isNode(inner)) return;
+  if (!isOxcAstNode(inner)) return;
   if (inner.type !== "VariableDeclaration") return;
   if ((inner as { kind?: string }).kind !== "const") return;
   const declarators = (inner as { declarations?: unknown[] }).declarations ?? [];
   for (const declarator of declarators) {
-    if (!isNode(declarator)) continue;
-    const idNode = (declarator as { id?: NodeLike }).id;
-    const initializerNode = (declarator as { init?: NodeLike }).init;
+    if (!isOxcAstNode(declarator)) continue;
+    const idNode = (declarator as { id?: OxcAstNode }).id;
+    const initializerNode = (declarator as { init?: OxcAstNode }).init;
     if (!idNode || !initializerNode) continue;
     if (idNode.type !== "Identifier") continue;
     const constantName = (idNode as { name?: string }).name;

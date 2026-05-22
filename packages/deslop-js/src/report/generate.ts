@@ -21,26 +21,22 @@ import {
 import { runSemanticAnalysis } from "../semantic/index.js";
 import { DetectorError, describeUnknownError } from "../errors.js";
 import { MAX_ANALYSIS_ERRORS } from "../constants.js";
+import { runSafeDetector } from "../utils/run-safe-detector.js";
 
 const safeReportDetector = <ResultType>(
   detectorName: string,
   detector: () => ResultType,
   fallback: ResultType,
   errorSink: DeslopError[],
-): ResultType => {
-  try {
-    return detector();
-  } catch (detectorError) {
-    errorSink.push(
-      new DetectorError({
-        module: "report",
-        message: `${detectorName} threw while building findings`,
-        detail: describeUnknownError(detectorError),
-      }),
-    );
-    return fallback;
-  }
-};
+): ResultType =>
+  runSafeDetector({
+    detectorName,
+    detector,
+    fallback,
+    errorSink,
+    module: "report",
+    contextDescription: "while building findings",
+  });
 
 export const generateReport = (graph: DependencyGraph, config: DeslopConfig): ScanResult => {
   const analysisStartTime = performance.now();
@@ -54,7 +50,12 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     if (errorSink.length >= MAX_ANALYSIS_ERRORS) break;
   }
 
-  const unusedFiles = safeReportDetector("detectOrphanFiles", () => detectOrphanFiles(graph), [], errorSink);
+  const unusedFiles = safeReportDetector(
+    "detectOrphanFiles",
+    () => detectOrphanFiles(graph),
+    [],
+    errorSink,
+  );
   const unusedExports = safeReportDetector(
     "detectDeadExports",
     () => detectDeadExports(graph, config),
@@ -67,10 +68,20 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     [],
     errorSink,
   );
-  const circularDependencies = safeReportDetector("detectCycles", () => detectCycles(graph), [], errorSink);
+  const circularDependencies = safeReportDetector(
+    "detectCycles",
+    () => detectCycles(graph),
+    [],
+    errorSink,
+  );
   const syntacticRedundantAliases = config.reportRedundancy
     ? [
-        ...safeReportDetector("detectRedundantAliases", () => detectRedundantAliases(graph), [], errorSink),
+        ...safeReportDetector(
+          "detectRedundantAliases",
+          () => detectRedundantAliases(graph),
+          [],
+          errorSink,
+        ),
         ...safeReportDetector(
           "detectUselessAliasedReExports",
           () => detectUselessAliasedReExports(graph),
@@ -80,10 +91,20 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
       ]
     : [];
   const duplicateExports = config.reportRedundancy
-    ? safeReportDetector("detectDuplicateExports", () => detectDuplicateExports(graph), [], errorSink)
+    ? safeReportDetector(
+        "detectDuplicateExports",
+        () => detectDuplicateExports(graph),
+        [],
+        errorSink,
+      )
     : [];
   const duplicateImports = config.reportRedundancy
-    ? safeReportDetector("detectDuplicateImports", () => detectDuplicateImports(graph), [], errorSink)
+    ? safeReportDetector(
+        "detectDuplicateImports",
+        () => detectDuplicateImports(graph),
+        [],
+        errorSink,
+      )
     : [];
   const redundantTypePatterns = config.reportRedundancy
     ? safeReportDetector(
@@ -94,7 +115,12 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
       )
     : [];
   const identityWrappers = config.reportRedundancy
-    ? safeReportDetector("detectIdentityWrappers", () => detectIdentityWrappers(graph), [], errorSink)
+    ? safeReportDetector(
+        "detectIdentityWrappers",
+        () => detectIdentityWrappers(graph),
+        [],
+        errorSink,
+      )
     : [];
   const duplicateTypeDefinitions = config.reportRedundancy
     ? safeReportDetector(
@@ -105,7 +131,12 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
       )
     : [];
   const duplicateInlineTypes = config.reportRedundancy
-    ? safeReportDetector("detectDuplicateInlineTypes", () => detectDuplicateInlineTypes(graph), [], errorSink)
+    ? safeReportDetector(
+        "detectDuplicateInlineTypes",
+        () => detectDuplicateInlineTypes(graph),
+        [],
+        errorSink,
+      )
     : [];
   const simplifiableFunctions = config.reportRedundancy
     ? safeReportDetector(
@@ -124,7 +155,12 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
       )
     : [];
   const duplicateConstants = config.reportRedundancy
-    ? safeReportDetector("detectDuplicateConstants", () => detectDuplicateConstants(graph), [], errorSink)
+    ? safeReportDetector(
+        "detectDuplicateConstants",
+        () => detectDuplicateConstants(graph),
+        [],
+        errorSink,
+      )
     : [];
 
   let semanticResult: ReturnType<typeof runSemanticAnalysis>;

@@ -33,8 +33,19 @@ export const wordyReversed = someValue !== undefined && someValue !== null;
 export const legitCheck = someValue !== null && typeof someValue === "string";
 
 console.log(
-  value, nested, legitTernary, coerced, nested_coerced, notNotNotIsNot,
-  condBoolean, condBooleanInverse, legitBoolean,
-  nullCoalesced, undefinedCoalesced, legitCoalesced,
-  wordy, wordyReversed, legitCheck,
+  value,
+  nested,
+  legitTernary,
+  coerced,
+  nested_coerced,
+  notNotNotIsNot,
+  condBoolean,
+  condBooleanInverse,
+  legitBoolean,
+  nullCoalesced,
+  undefinedCoalesced,
+  legitCoalesced,
+  wordy,
+  wordyReversed,
+  legitCheck,
 );

@@ -8,7 +8,8 @@ import type {
   UnusedEnumMember,
   UnusedType,
 } from "../types.js";
-import { DetectorError, TypeScriptError, describeUnknownError } from "../errors.js";
+import { TypeScriptError, describeUnknownError } from "../errors.js";
+import { runSafeDetector } from "../utils/run-safe-detector.js";
 import { createSemanticContext } from "./program.js";
 import { buildReferenceIndex } from "./references.js";
 import { detectUnusedTypes } from "./unused-types.js";
@@ -60,23 +61,22 @@ export const runSemanticAnalysis = (
     detectorName: string,
     detector: () => ResultType,
     fallback: ResultType,
-  ): ResultType => {
-    try {
-      return detector();
-    } catch (detectorError) {
-      errors.push(
-        new DetectorError({
-          module: "semantic",
-          message: `${detectorName} threw during semantic analysis`,
-          detail: describeUnknownError(detectorError),
-        }),
-      );
-      return fallback;
-    }
-  };
+  ): ResultType =>
+    runSafeDetector({
+      detectorName,
+      detector,
+      fallback,
+      errorSink: errors,
+      module: "semantic",
+      contextDescription: "during semantic analysis",
+    });
 
   const misclassifiedDependencies = semanticConfig.reportMisclassifiedDependencies
-    ? safeDetector("detectMisclassifiedDependencies", () => detectMisclassifiedDependencies(graph, config), [])
+    ? safeDetector(
+        "detectMisclassifiedDependencies",
+        () => detectMisclassifiedDependencies(graph, config),
+        [],
+      )
     : [];
 
   const needsTsContext =
@@ -142,7 +142,11 @@ export const runSemanticAnalysis = (
   };
 
   const unusedTypes = semanticConfig.reportUnusedTypes
-    ? safeDetector("detectUnusedTypes", () => detectUnusedTypes(graph, config, context, getReferenceIndex()), [])
+    ? safeDetector(
+        "detectUnusedTypes",
+        () => detectUnusedTypes(graph, config, context, getReferenceIndex()),
+        [],
+      )
     : [];
   const unusedEnumMembers = semanticConfig.reportUnusedEnumMembers
     ? safeDetector(

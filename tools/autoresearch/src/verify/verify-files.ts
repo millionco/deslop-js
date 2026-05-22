@@ -220,10 +220,7 @@ const findOtherFilesWithSameBasename = async (
   return candidates;
 };
 
-const isTsConfigPathsOnlyReference = (
-  filePath: string,
-  basenameWithoutExt: string,
-): boolean => {
+const isTsConfigPathsOnlyReference = (filePath: string, basenameWithoutExt: string): boolean => {
   const isTsconfig = filePath.endsWith("tsconfig.json") || /tsconfig\.[\w-]+\.json$/.test(filePath);
   if (!isTsconfig) return false;
   try {
@@ -266,10 +263,7 @@ const looksLikeSourceFileReference = (
   }
 };
 
-const isTsConfigExcludeOnlyReference = (
-  filePath: string,
-  basenameWithoutExt: string,
-): boolean => {
+const isTsConfigExcludeOnlyReference = (filePath: string, basenameWithoutExt: string): boolean => {
   const isTsconfig = filePath.endsWith("tsconfig.json") || /tsconfig\.[\w-]+\.json$/.test(filePath);
   if (!isTsconfig) return false;
   try {
@@ -325,44 +319,46 @@ export const verifyUnusedFile = async (
     }
   }
 
-    if (!isAmbiguousBasename(basenameWithoutExt)) {
-      const sameBasenameFiles = await findOtherFilesWithSameBasename(
-        flaggedFile.path,
-        basenameWithoutExt,
-        extension,
-        searchDir,
-      );
+  if (!isAmbiguousBasename(basenameWithoutExt)) {
+    const sameBasenameFiles = await findOtherFilesWithSameBasename(
+      flaggedFile.path,
+      basenameWithoutExt,
+      extension,
+      searchDir,
+    );
 
-      const importContextPattern = `(?:from|import|require)\\s*\\(?\\s*['"\`][^'"\`\\n]*?${escapedBasename}(?:\\.[cm]?[jt]sx?)?['"\`]`;
-      const lineMatches = await ripgrepLineMatches(importContextPattern, searchDir, {
-        timeoutMs: 15_000,
-      });
-      const relativeWithoutExt = relativeFromSearchDir.slice(
-        0,
-        relativeFromSearchDir.length - extension.length,
-      );
-      for (const lineMatch of lineMatches) {
-        if (exclude.has(lineMatch.filePath)) continue;
-        if (isDocumentationPath(lineMatch.filePath)) continue;
-        if (isCommentedImportLine(lineMatch.lineText)) continue;
-        if (!doesImportPathPlausiblyTargetFlagged(
+    const importContextPattern = `(?:from|import|require)\\s*\\(?\\s*['"\`][^'"\`\\n]*?${escapedBasename}(?:\\.[cm]?[jt]sx?)?['"\`]`;
+    const lineMatches = await ripgrepLineMatches(importContextPattern, searchDir, {
+      timeoutMs: 15_000,
+    });
+    const relativeWithoutExt = relativeFromSearchDir.slice(
+      0,
+      relativeFromSearchDir.length - extension.length,
+    );
+    for (const lineMatch of lineMatches) {
+      if (exclude.has(lineMatch.filePath)) continue;
+      if (isDocumentationPath(lineMatch.filePath)) continue;
+      if (isCommentedImportLine(lineMatch.lineText)) continue;
+      if (
+        !doesImportPathPlausiblyTargetFlagged(
           lineMatch.lineText,
           relativeWithoutExt,
           flaggedFile.path,
           lineMatch.filePath,
-        )) {
-          continue;
-        }
-        if (sameBasenameFiles.length > 0) continue;
-        return {
-          ...flaggedFile,
-          verdict: {
-            kind: "likely_fp",
-            reason: "basename imported from non-flagged source",
-            evidence: lineMatch.filePath,
-          },
-        };
+        )
+      ) {
+        continue;
       }
+      if (sameBasenameFiles.length > 0) continue;
+      return {
+        ...flaggedFile,
+        verdict: {
+          kind: "likely_fp",
+          reason: "basename imported from non-flagged source",
+          evidence: lineMatch.filePath,
+        },
+      };
+    }
 
     const tsConfigPattern = `['"\`](?:[^'"\`\\n]*?[/.])?${escapedBasename}\\.[cm]?[jt]sx?['"\`]`;
     const tsConfigHits = await ripgrepFilesWithMatches(tsConfigPattern, searchDir, {

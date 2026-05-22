@@ -89,7 +89,10 @@ const isPureTypeSymbol = (symbol: ts.Symbol): boolean => {
 const classifyTypeKind = (symbol: ts.Symbol): UnusedTypeKind | undefined => {
   if (symbol.flags & ts.SymbolFlags.Interface) return "interface";
   if (symbol.flags & ts.SymbolFlags.TypeAlias) return "type-alias";
-  if (symbol.flags & (ts.SymbolFlags.Enum | ts.SymbolFlags.ConstEnum | ts.SymbolFlags.RegularEnum)) {
+  if (
+    symbol.flags &
+    (ts.SymbolFlags.Enum | ts.SymbolFlags.ConstEnum | ts.SymbolFlags.RegularEnum)
+  ) {
     return "enum-type";
   }
   return undefined;

@@ -27,10 +27,7 @@ const typeReferenceName = (node: TypeNodeLike): string | undefined => {
   return typeName.name as string;
 };
 
-const isKeyofOfType = (
-  candidate: TypeNodeLike,
-  expectedReferenceName: string,
-): boolean => {
+const isKeyofOfType = (candidate: TypeNodeLike, expectedReferenceName: string): boolean => {
   if (candidate.type !== "TSTypeOperator") return false;
   if (candidate.operator !== "keyof") return false;
   const operand = candidate.typeAnnotation as TypeNodeLike | undefined;
@@ -49,7 +46,9 @@ const isLiterallyEqualByJson = (left: TypeNodeLike, right: TypeNodeLike): boolea
   return JSON.stringify(left, stripPositions) === JSON.stringify(right, stripPositions);
 };
 
-const detectIntersectionWithEmpty = (node: TypeNodeLike): RedundantTypePatternDetection | undefined => {
+const detectIntersectionWithEmpty = (
+  node: TypeNodeLike,
+): RedundantTypePatternDetection | undefined => {
   if (node.type !== "TSIntersectionType") return undefined;
   const operands = node.types as TypeNodeLike[] | undefined;
   if (!Array.isArray(operands) || operands.length < 2) return undefined;
@@ -80,9 +79,7 @@ const detectSelfUnion = (node: TypeNodeLike): RedundantTypePatternDetection | un
   return undefined;
 };
 
-const detectSelfIntersection = (
-  node: TypeNodeLike,
-): RedundantTypePatternDetection | undefined => {
+const detectSelfIntersection = (node: TypeNodeLike): RedundantTypePatternDetection | undefined => {
   if (node.type !== "TSIntersectionType") return undefined;
   const operands = node.types as TypeNodeLike[] | undefined;
   if (!Array.isArray(operands) || operands.length < 2) return undefined;
@@ -170,9 +167,10 @@ const detectEmptyInterfaceExtendsOne = (
   const declarationName = (declarationNode.id as { name?: string } | undefined)?.name;
   const parentNode = extendsClauses[0] as TypeNodeLike | undefined;
   const parentExpression = parentNode?.expression as TypeNodeLike | undefined;
-  const parentName = parentExpression && parentExpression.type === "Identifier"
-    ? (parentExpression as { name?: string }).name
-    : undefined;
+  const parentName =
+    parentExpression && parentExpression.type === "Identifier"
+      ? (parentExpression as { name?: string }).name
+      : undefined;
   return {
     kind: "empty-interface-extends-one",
     reason: `interface ${declarationName ?? "<anon>"} extends ${parentName ?? "<base>"} with no new members`,

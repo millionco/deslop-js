@@ -29,11 +29,11 @@ const collectDeclaredExportedTypeNames = (
       const isPureType =
         Boolean(
           resolvedSymbol.flags &
-            (ts.SymbolFlags.Interface |
-              ts.SymbolFlags.TypeAlias |
-              ts.SymbolFlags.Enum |
-              ts.SymbolFlags.RegularEnum |
-              ts.SymbolFlags.ConstEnum),
+          (ts.SymbolFlags.Interface |
+            ts.SymbolFlags.TypeAlias |
+            ts.SymbolFlags.Enum |
+            ts.SymbolFlags.RegularEnum |
+            ts.SymbolFlags.ConstEnum),
         ) &&
         !(
           resolvedSymbol.flags &
@@ -62,20 +62,18 @@ const countNonDeclarationReferences = (
     if (ts.isIdentifier(node)) {
       const symbol = checker.getSymbolAtLocation(node);
       const resolvedSymbol =
-        symbol && symbol.flags & ts.SymbolFlags.Alias
-          ? checker.getAliasedSymbol(symbol)
-          : symbol;
+        symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
       if (resolvedSymbol === targetSymbol) {
         const parent = node.parent;
         const isDeclarationName =
           parent &&
-          ((ts.isInterfaceDeclaration(parent) ||
+          (ts.isInterfaceDeclaration(parent) ||
             ts.isTypeAliasDeclaration(parent) ||
             ts.isEnumDeclaration(parent) ||
             ts.isClassDeclaration(parent) ||
             ts.isFunctionDeclaration(parent) ||
             ts.isVariableDeclaration(parent)) &&
-            parent.name === node);
+          parent.name === node;
         const isExportSpecifier = parent && ts.isExportSpecifier(parent);
         if (!isDeclarationName && !isExportSpecifier) {
           referenceCount++;

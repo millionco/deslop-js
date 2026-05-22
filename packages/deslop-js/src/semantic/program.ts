@@ -169,7 +169,9 @@ export const createSemanticContext = (
     const checker = program.getTypeChecker();
     const rootSourceFiles = program
       .getSourceFiles()
-      .filter((sourceFile) => !sourceFile.isDeclarationFile || sourceFile.fileName.endsWith(".d.ts"));
+      .filter(
+        (sourceFile) => !sourceFile.isDeclarationFile || sourceFile.fileName.endsWith(".d.ts"),
+      );
 
     return {
       ok: true,

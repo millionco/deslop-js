@@ -11,10 +11,7 @@ export interface MetricsDelta {
   rationale: string;
 }
 
-export const decideKeepOrDiscard = (
-  baseline: RunMetrics,
-  candidate: RunMetrics,
-): MetricsDelta => {
+export const decideKeepOrDiscard = (baseline: RunMetrics, candidate: RunMetrics): MetricsDelta => {
   const scoreDelta = candidate.score - baseline.score;
   const likelyTpDelta = candidate.combined.likelyTrue - baseline.combined.likelyTrue;
   const likelyFpDelta = candidate.combined.likelyFalse - baseline.combined.likelyFalse;

@@ -23,7 +23,8 @@ const isClassExported = (declaration: ts.ClassDeclaration): boolean => {
   if (!modifiers) return false;
   return modifiers.some(
     (modifier) =>
-      modifier.kind === ts.SyntaxKind.ExportKeyword || modifier.kind === ts.SyntaxKind.DefaultKeyword,
+      modifier.kind === ts.SyntaxKind.ExportKeyword ||
+      modifier.kind === ts.SyntaxKind.DefaultKeyword,
   );
 };
 
@@ -132,10 +133,7 @@ const isStaticMember = (member: ts.ClassElement): boolean => {
   return modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword);
 };
 
-const hasAllowedDecorator = (
-  member: ts.ClassElement,
-  decoratorAllowlist: Set<string>,
-): boolean => {
+const hasAllowedDecorator = (member: ts.ClassElement, decoratorAllowlist: Set<string>): boolean => {
   const decorators = ts.canHaveDecorators(member) ? ts.getDecorators(member) : undefined;
   if (!decorators || decorators.length === 0) return false;
   for (const decorator of decorators) {
@@ -145,10 +143,7 @@ const hasAllowedDecorator = (
       decoratorName = expression.text;
     } else if (ts.isCallExpression(expression) && ts.isIdentifier(expression.expression)) {
       decoratorName = expression.expression.text;
-    } else if (
-      ts.isPropertyAccessExpression(expression) &&
-      ts.isIdentifier(expression.name)
-    ) {
+    } else if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.name)) {
       decoratorName = expression.name.text;
     }
     if (decoratorName && decoratorAllowlist.has(decoratorName)) return true;

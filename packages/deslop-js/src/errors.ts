@@ -123,7 +123,12 @@ export class DeslopError extends Error {
 
 export class ConfigError extends DeslopError {
   constructor(input: Omit<DeslopErrorInput, "module" | "code"> & { code?: "config-invalid" }) {
-    super({ ...input, code: input.code ?? "config-invalid", module: "config", severity: input.severity ?? "fatal" });
+    super({
+      ...input,
+      code: input.code ?? "config-invalid",
+      module: "config",
+      severity: input.severity ?? "fatal",
+    });
     this.name = "ConfigError";
   }
 }
@@ -211,8 +216,7 @@ export class DetectorError extends DeslopError {
   }
 }
 
-export const createDeslopError = (input: DeslopErrorInput): DeslopError =>
-  new DeslopError(input);
+export const createDeslopError = (input: DeslopErrorInput): DeslopError => new DeslopError(input);
 
 export class DeslopErrorCollector {
   private readonly entries: DeslopError[] = [];

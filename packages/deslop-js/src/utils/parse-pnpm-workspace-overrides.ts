@@ -40,7 +40,10 @@ const parseIndentedYamlMapping = (
       continue;
     }
 
-    const key = trimmedLine.slice(0, colonIndex).trim().replace(/^["']|["']$/g, "");
+    const key = trimmedLine
+      .slice(0, colonIndex)
+      .trim()
+      .replace(/^["']|["']$/g, "");
     const rawValue = trimmedLine.slice(colonIndex + 1).trim();
 
     if (!key) {

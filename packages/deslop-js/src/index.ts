@@ -19,8 +19,7 @@ import { collectSourceFiles, resolveEntries, getFrameworkExclusions } from "./co
 import { resolveWorkspaces } from "./collect/workspaces.js";
 import { parseSourceFile } from "./collect/parse.js";
 import { createResolver } from "./resolver/resolve.js";
-import { buildDependencyGraph } from "./linker/build.js";
-import type { ModuleLinkInput } from "./linker/build.js";
+import { buildDependencyGraph, type ModuleLinkInput } from "./linker/build.js";
 import { traceReachability } from "./linker/reachability.js";
 import { resolveReExportChains } from "./linker/re-exports.js";
 import { generateReport } from "./report/generate.js";
@@ -111,7 +110,8 @@ const fillSemanticConfig = (
     reportRedundantVariableAliases: semanticOverrides.reportRedundantVariableAliases ?? true,
     reportMisclassifiedDependencies: semanticOverrides.reportMisclassifiedDependencies ?? true,
     reportRoundTripAliases: semanticOverrides.reportRoundTripAliases ?? true,
-    decoratorAllowlist: semanticOverrides.decoratorAllowlist ?? DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
+    decoratorAllowlist:
+      semanticOverrides.decoratorAllowlist ?? DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
   };
 };
 
@@ -122,7 +122,7 @@ export const defineConfig = (
   entryPatterns: options.entryPatterns ?? DEFAULT_ENTRY_GLOBS,
   ignorePatterns: options.ignorePatterns ?? [],
   includeExtensions: options.includeExtensions ?? DEFAULT_EXTENSIONS,
-  tsConfigPath: options.tsConfigPath ?? undefined,
+  tsConfigPath: options.tsConfigPath,
   reportTypes: options.reportTypes ?? false,
   includeEntryExports: options.includeEntryExports ?? false,
   reportRedundancy: options.reportRedundancy ?? true,
@@ -173,10 +173,7 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
 
   const configValidationError = validateConfig(config);
   if (configValidationError) {
-    return buildEmptyScanResult(
-      [configValidationError],
-      performance.now() - pipelineStartTime,
-    );
+    return buildEmptyScanResult([configValidationError], performance.now() - pipelineStartTime);
   }
 
   let workspaceDiscovery: ReturnType<typeof resolveWorkspaces>;
@@ -201,7 +198,7 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
 
   let monorepoRoot: string | undefined;
   try {
-    monorepoRoot = findMonorepoRoot(config.rootDir) ?? undefined;
+    monorepoRoot = findMonorepoRoot(config.rootDir);
   } catch (monorepoError) {
     setupErrors.push(
       new WorkspaceError({

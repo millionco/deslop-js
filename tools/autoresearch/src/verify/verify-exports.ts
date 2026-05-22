@@ -1,8 +1,4 @@
-import type {
-  AnalyzeFlaggedExport,
-  VerificationVerdict,
-  VerifiedExport,
-} from "../types.js";
+import type { AnalyzeFlaggedExport, VerificationVerdict, VerifiedExport } from "../types.js";
 import {
   escapeRipgrepLiteral,
   queryIdentifierLineMatches,
@@ -63,8 +59,7 @@ const importLineTargetsFlaggedFile = (
   const isDefaultExportCheck = exportName === "default";
   const isNamedImportLine = /\{[^}]+\}\s*from/.test(lineText);
   const isDefaultImportLine =
-    /import\s+(?!type\s*\{)(?!\*\s+as)(?!\{)[A-Za-z_$][\w$]*/.test(lineText) &&
-    !isNamedImportLine;
+    /import\s+(?!type\s*\{)(?!\*\s+as)(?!\{)[A-Za-z_$][\w$]*/.test(lineText) && !isNamedImportLine;
 
   if (isDefaultExportCheck && !isDefaultImportLine) return false;
   if (!isDefaultExportCheck && !isNamedImportLine) return false;
@@ -89,16 +84,10 @@ const countExportDeclarationsForIdentifier = async (
   searchDir: string,
 ): Promise<number> => {
   const escaped = escapeRipgrepLiteral(identifier);
-  const declarationPattern =
-    `^\\s*export\\s+(?:async\\s+)?(?:const|let|var|function|class|interface|type|enum|abstract\\s+class|default\\s+)?\\s*\\{?[^=;\\n]*\\b${escaped}\\b`;
+  const declarationPattern = `^\\s*export\\s+(?:async\\s+)?(?:const|let|var|function|class|interface|type|enum|abstract\\s+class|default\\s+)?\\s*\\{?[^=;\\n]*\\b${escaped}\\b`;
   const result = await ripgrepFilesWithMatches(declarationPattern, searchDir, {
     timeoutMs: 15_000,
-    extraArgs: [
-      "--type-add",
-      "tsjs:*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
-      "--type",
-      "tsjs",
-    ],
+    extraArgs: ["--type-add", "tsjs:*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}", "--type", "tsjs"],
   });
   return result.files.size;
 };
@@ -133,14 +122,16 @@ export const verifyUnusedExport = async (
   const nonNoisyLineMatches = lineMatches.filter(
     (lineMatch) => !isNoisyMatchPath(lineMatch.filePath),
   );
-  const importContextMatches = filterImportOnlyMatches(nonNoisyLineMatches, flaggedExport.name).filter(
-    (lineMatch) =>
-      importLineTargetsFlaggedFile(
-        lineMatch.lineText,
-        flaggedExport.path,
-        lineMatch.filePath,
-        flaggedExport.name,
-      ),
+  const importContextMatches = filterImportOnlyMatches(
+    nonNoisyLineMatches,
+    flaggedExport.name,
+  ).filter((lineMatch) =>
+    importLineTargetsFlaggedFile(
+      lineMatch.lineText,
+      flaggedExport.path,
+      lineMatch.filePath,
+      flaggedExport.name,
+    ),
   );
 
   if (importContextMatches.length > 0) {

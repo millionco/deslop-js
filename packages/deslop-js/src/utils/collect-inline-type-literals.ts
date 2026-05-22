@@ -1,14 +1,12 @@
 import type { InlineTypeContext } from "../types.js";
-import { MAX_AST_WALK_DEPTH } from "../constants.js";
+import {
+  INLINE_TYPE_PREVIEW_KEYS,
+  MAX_AST_WALK_DEPTH,
+  MAX_TYPE_REFERENCE_WALK_DEPTH,
+  MIN_PROPERTIES_FOR_INLINE_TYPE_LITERAL,
+} from "../constants.js";
 import { normalizeTypeAstHash } from "./normalize-type-hash.js";
-
-const MIN_MEMBER_COUNT_FOR_INLINE_TYPE = 3;
-
-interface NodeLike {
-  type: string;
-  start?: number;
-  [key: string]: unknown;
-}
+import { getIdentifierName, isOxcAstNode, type OxcAstNode } from "./oxc-ast-node.js";
 
 export interface InlineTypeLiteralCapture {
   structuralHash: string;
@@ -19,38 +17,32 @@ export interface InlineTypeLiteralCapture {
   startOffset: number;
 }
 
-const isNode = (value: unknown): value is NodeLike =>
-  Boolean(value) && typeof value === "object" && typeof (value as NodeLike).type === "string";
+const isTypeLiteralNode = (node: OxcAstNode): boolean => node.type === "TSTypeLiteral";
 
-const isTypeLiteralNode = (node: NodeLike): boolean => node.type === "TSTypeLiteral";
-
-const getIdentifierName = (node: unknown): string | undefined => {
-  if (!isNode(node)) return undefined;
-  if (node.type === "Identifier") return node.name as string | undefined;
-  return undefined;
-};
-
-const buildPreview = (typeLiteralNode: NodeLike): string => {
+const buildPreview = (typeLiteralNode: OxcAstNode): string => {
   const members = (typeLiteralNode.members as unknown[]) ?? [];
   const propertyKeys: string[] = [];
   for (const memberCandidate of members) {
-    if (!isNode(memberCandidate)) continue;
+    if (!isOxcAstNode(memberCandidate)) continue;
     if (memberCandidate.type !== "TSPropertySignature") continue;
     const keyNode = memberCandidate.key as { name?: string; value?: string } | undefined;
     const keyName = keyNode?.name ?? keyNode?.value;
     if (keyName) propertyKeys.push(String(keyName));
   }
   propertyKeys.sort();
-  const truncatedKeys = propertyKeys.slice(0, 4);
-  const suffix = propertyKeys.length > 4 ? `, +${propertyKeys.length - 4} more` : "";
+  const truncatedKeys = propertyKeys.slice(0, INLINE_TYPE_PREVIEW_KEYS);
+  const suffix =
+    propertyKeys.length > INLINE_TYPE_PREVIEW_KEYS
+      ? `, +${propertyKeys.length - INLINE_TYPE_PREVIEW_KEYS} more`
+      : "";
   return `{ ${truncatedKeys.join(", ")}${suffix} }`;
 };
 
-const countPropertySignatures = (typeLiteralNode: NodeLike): number => {
+const countPropertySignatures = (typeLiteralNode: OxcAstNode): number => {
   const members = (typeLiteralNode.members as unknown[]) ?? [];
   let signatureCount = 0;
   for (const memberCandidate of members) {
-    if (!isNode(memberCandidate)) continue;
+    if (!isOxcAstNode(memberCandidate)) continue;
     if (memberCandidate.type === "TSPropertySignature") signatureCount++;
   }
   return signatureCount;
@@ -62,10 +54,10 @@ const captureIfTypeLiteral = (
   context: InlineTypeContext,
   nearestName: string | undefined,
 ): void => {
-  if (!isNode(candidateNode)) return;
+  if (!isOxcAstNode(candidateNode)) return;
   if (!isTypeLiteralNode(candidateNode)) return;
   const memberCount = countPropertySignatures(candidateNode);
-  if (memberCount < MIN_MEMBER_COUNT_FOR_INLINE_TYPE) return;
+  if (memberCount < MIN_PROPERTIES_FOR_INLINE_TYPE_LITERAL) return;
   captures.push({
     structuralHash: `inline:${normalizeTypeAstHash(candidateNode)}`,
     memberCount,
@@ -99,14 +91,14 @@ const inspectAnyTypeNode = (
   nearestName: string | undefined,
   recursionDepth: number,
 ): void => {
-  if (!isNode(candidateNode)) return;
-  if (recursionDepth > 6) return;
+  if (!isOxcAstNode(candidateNode)) return;
+  if (recursionDepth > MAX_TYPE_REFERENCE_WALK_DEPTH) return;
 
   if (isTypeLiteralNode(candidateNode)) {
     captureIfTypeLiteral(candidateNode, captures, context, nearestName);
     const members = (candidateNode.members as unknown[]) ?? [];
     for (const memberCandidate of members) {
-      if (!isNode(memberCandidate)) continue;
+      if (!isOxcAstNode(memberCandidate)) continue;
       if (memberCandidate.type !== "TSPropertySignature") continue;
       const memberKey = (memberCandidate as { key?: { name?: string } }).key?.name;
       const nested = (memberCandidate as { typeAnnotation?: unknown }).typeAnnotation;
@@ -161,16 +153,15 @@ const inspectAnyTypeNode = (
 
   if (candidateNode.type === "TSTypeReference") {
     const referenceTypeName = (candidateNode as { typeName?: { name?: string } }).typeName?.name;
-    const typeArguments = (candidateNode as { typeArguments?: { params?: unknown[] } }).typeArguments;
-    if (referenceTypeName && typeArguments?.params && GENERIC_WRAPPERS_TO_RECURSE.has(referenceTypeName)) {
+    const typeArguments = (candidateNode as { typeArguments?: { params?: unknown[] } })
+      .typeArguments;
+    if (
+      referenceTypeName &&
+      typeArguments?.params &&
+      GENERIC_WRAPPERS_TO_RECURSE.has(referenceTypeName)
+    ) {
       for (const param of typeArguments.params) {
-        inspectAnyTypeNode(
-          param,
-          captures,
-          context,
-          nearestName,
-          recursionDepth + 1,
-        );
+        inspectAnyTypeNode(param, captures, context, nearestName, recursionDepth + 1);
       }
     }
   }
@@ -192,7 +183,7 @@ const visitFunctionParameters = (
 ): void => {
   if (!parameters) return;
   for (const parameter of parameters) {
-    if (!isNode(parameter)) continue;
+    if (!isOxcAstNode(parameter)) continue;
     const parameterIdentifierName = getIdentifierName(parameter);
     inspectTypeAnnotation(
       parameter.typeAnnotation,
@@ -204,7 +195,7 @@ const visitFunctionParameters = (
 };
 
 const visitFunctionLike = (
-  functionNode: NodeLike,
+  functionNode: OxcAstNode,
   captures: InlineTypeLiteralCapture[],
   functionName: string | undefined,
 ): void => {
@@ -221,22 +212,23 @@ const visitFunctionLike = (
 };
 
 const visitVariableDeclaration = (
-  declarationNode: NodeLike,
+  declarationNode: OxcAstNode,
   captures: InlineTypeLiteralCapture[],
   enclosingName: string | undefined,
 ): void => {
   const declarators = (declarationNode.declarations as unknown[]) ?? [];
   for (const declarator of declarators) {
-    if (!isNode(declarator)) continue;
+    if (!isOxcAstNode(declarator)) continue;
     const declarationName = getIdentifierName(declarator.id);
     inspectTypeAnnotation(
-      declarator.typeAnnotation ?? (declarator.id && isNode(declarator.id) ? declarator.id.typeAnnotation : undefined),
+      declarator.typeAnnotation ??
+        (declarator.id && isOxcAstNode(declarator.id) ? declarator.id.typeAnnotation : undefined),
       captures,
       "variable-annotation",
       declarationName,
     );
     const initializerNode = declarator.init;
-    if (isNode(initializerNode)) {
+    if (isOxcAstNode(initializerNode)) {
       if (
         initializerNode.type === "ArrowFunctionExpression" ||
         initializerNode.type === "FunctionExpression"
@@ -256,11 +248,11 @@ const walkBodyForInlineTypes = (
   recursionDepth: number = 0,
 ): void => {
   if (recursionDepth > MAX_AST_WALK_DEPTH) return;
-  if (!isNode(bodyNode)) return;
+  if (!isOxcAstNode(bodyNode)) return;
   const statements = (bodyNode.body as unknown[]) ?? [];
   if (!Array.isArray(statements)) return;
   for (const statement of statements) {
-    if (!isNode(statement)) continue;
+    if (!isOxcAstNode(statement)) continue;
     if (statement.type === "VariableDeclaration") {
       visitVariableDeclaration(statement, captures, enclosingName);
     } else if (statement.type === "FunctionDeclaration") {
@@ -268,18 +260,18 @@ const walkBodyForInlineTypes = (
       visitFunctionLike(statement, captures, functionName ?? enclosingName);
     } else if (statement.type === "TSTypeAliasDeclaration") {
       const typeAliasName = getIdentifierName(statement.id);
-      captureIfTypeLiteral(
-        statement.typeAnnotation,
-        captures,
-        "local-type-alias",
-        typeAliasName,
-      );
+      captureIfTypeLiteral(statement.typeAnnotation, captures, "local-type-alias", typeAliasName);
     } else if (statement.type === "ReturnStatement") {
       walkExpressionForInlineTypes(statement.argument, captures, enclosingName, recursionDepth + 1);
     } else if (statement.type === "BlockStatement") {
       walkBodyForInlineTypes(statement, captures, enclosingName, recursionDepth + 1);
     } else if (statement.type === "ExpressionStatement") {
-      walkExpressionForInlineTypes(statement.expression, captures, enclosingName, recursionDepth + 1);
+      walkExpressionForInlineTypes(
+        statement.expression,
+        captures,
+        enclosingName,
+        recursionDepth + 1,
+      );
     }
   }
 };
@@ -291,7 +283,7 @@ const walkExpressionForInlineTypes = (
   recursionDepth: number = 0,
 ): void => {
   if (recursionDepth > MAX_AST_WALK_DEPTH) return;
-  if (!isNode(expressionNode)) return;
+  if (!isOxcAstNode(expressionNode)) return;
   if (
     expressionNode.type === "ArrowFunctionExpression" ||
     expressionNode.type === "FunctionExpression"
@@ -304,7 +296,7 @@ const walkExpressionForInlineTypes = (
       for (const element of value) {
         walkExpressionForInlineTypes(element, captures, enclosingName, recursionDepth + 1);
       }
-    } else if (isNode(value)) {
+    } else if (isOxcAstNode(value)) {
       walkExpressionForInlineTypes(value, captures, enclosingName, recursionDepth + 1);
     }
   }
@@ -314,13 +306,14 @@ const visitTopLevelStatement = (
   statementNode: unknown,
   captures: InlineTypeLiteralCapture[],
 ): void => {
-  if (!isNode(statementNode)) return;
+  if (!isOxcAstNode(statementNode)) return;
 
   const innerNode =
-    statementNode.type === "ExportNamedDeclaration" || statementNode.type === "ExportDefaultDeclaration"
+    statementNode.type === "ExportNamedDeclaration" ||
+    statementNode.type === "ExportDefaultDeclaration"
       ? ((statementNode.declaration as unknown) ?? statementNode)
       : statementNode;
-  const targetNode = isNode(innerNode) ? innerNode : statementNode;
+  const targetNode = isOxcAstNode(innerNode) ? innerNode : statementNode;
 
   if (targetNode.type === "FunctionDeclaration") {
     const functionName = getIdentifierName(targetNode.id);
@@ -338,10 +331,10 @@ const visitTopLevelStatement = (
     const bodyContainer = targetNode.body as { body?: unknown[] } | undefined;
     const members = bodyContainer?.body ?? [];
     for (const memberCandidate of members) {
-      if (!isNode(memberCandidate)) continue;
-      const memberKeyName =
-        getIdentifierName((memberCandidate as { key?: unknown }).key) ?? undefined;
-      const qualifiedName = className && memberKeyName ? `${className}.${memberKeyName}` : memberKeyName;
+      if (!isOxcAstNode(memberCandidate)) continue;
+      const memberKeyName = getIdentifierName((memberCandidate as { key?: unknown }).key);
+      const qualifiedName =
+        className && memberKeyName ? `${className}.${memberKeyName}` : memberKeyName;
       if (memberCandidate.type === "PropertyDefinition") {
         inspectTypeAnnotation(
           (memberCandidate as { typeAnnotation?: unknown }).typeAnnotation,
@@ -355,8 +348,8 @@ const visitTopLevelStatement = (
         memberCandidate.type === "MethodDefinition" ||
         memberCandidate.type === "TSAbstractMethodDefinition"
       ) {
-        const methodValue = (memberCandidate as { value?: NodeLike }).value;
-        if (isNode(methodValue)) {
+        const methodValue = (memberCandidate as { value?: OxcAstNode }).value;
+        if (isOxcAstNode(methodValue)) {
           visitFunctionLike(methodValue, captures, qualifiedName);
         }
       }
@@ -369,10 +362,9 @@ const visitTopLevelStatement = (
     const interfaceBodyContainer = targetNode.body as { body?: unknown[] } | undefined;
     const interfaceMembers = interfaceBodyContainer?.body ?? [];
     for (const memberCandidate of interfaceMembers) {
-      if (!isNode(memberCandidate)) continue;
+      if (!isOxcAstNode(memberCandidate)) continue;
       if (memberCandidate.type !== "TSPropertySignature") continue;
-      const memberKeyName =
-        getIdentifierName((memberCandidate as { key?: unknown }).key) ?? undefined;
+      const memberKeyName = getIdentifierName((memberCandidate as { key?: unknown }).key);
       const qualifiedName =
         interfaceName && memberKeyName ? `${interfaceName}.${memberKeyName}` : memberKeyName;
       inspectTypeAnnotation(
@@ -385,9 +377,7 @@ const visitTopLevelStatement = (
   }
 };
 
-export const collectInlineTypeLiterals = (
-  programBody: unknown[],
-): InlineTypeLiteralCapture[] => {
+export const collectInlineTypeLiterals = (programBody: unknown[]): InlineTypeLiteralCapture[] => {
   const captures: InlineTypeLiteralCapture[] = [];
   for (const statement of programBody) {
     visitTopLevelStatement(statement, captures);

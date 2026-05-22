@@ -1,5 +1,5 @@
 import ts from "typescript";
-import { MAX_AST_WALK_DEPTH } from "../constants.js";
+import { MAX_AST_WALK_DEPTH, MAX_TYPE_CONTEXT_PARENT_WALK } from "../constants.js";
 
 export interface SymbolReferenceSite {
   sourceFile: ts.SourceFile;
@@ -51,17 +51,13 @@ const isExportSpecifierIdentifier = (identifier: ts.Identifier): boolean => {
 const isImportSpecifierIdentifier = (identifier: ts.Identifier): boolean => {
   const parent = identifier.parent;
   if (!parent) return false;
-  return (
-    ts.isImportSpecifier(parent) ||
-    ts.isImportClause(parent) ||
-    ts.isNamespaceImport(parent)
-  );
+  return ts.isImportSpecifier(parent) || ts.isImportClause(parent) || ts.isNamespaceImport(parent);
 };
 
 const isInTypeContext = (identifier: ts.Identifier): boolean => {
   let current: ts.Node | undefined = identifier.parent;
   let depth = 0;
-  while (current && depth < 12) {
+  while (current && depth < MAX_TYPE_CONTEXT_PARENT_WALK) {
     if (
       ts.isTypeReferenceNode(current) ||
       ts.isTypeQueryNode(current) ||
@@ -111,10 +107,7 @@ interface NodeWithJsDoc extends ts.Node {
   jsDoc?: ts.JSDoc[];
 }
 
-const visitJsDocNodes = (
-  node: ts.Node,
-  visit: (jsDocNode: ts.Node) => void,
-): void => {
+const visitJsDocNodes = (node: ts.Node, visit: (jsDocNode: ts.Node) => void): void => {
   const jsDocContainer = node as NodeWithJsDoc;
   if (!jsDocContainer.jsDoc) return;
   for (const jsDocNode of jsDocContainer.jsDoc) {
@@ -148,11 +141,7 @@ export const buildReferenceIndex = (
     }
   };
 
-  const visitNode = (
-    node: ts.Node,
-    sourceFile: ts.SourceFile,
-    recursionDepth: number,
-  ): void => {
+  const visitNode = (node: ts.Node, sourceFile: ts.SourceFile, recursionDepth: number): void => {
     if (recursionDepth > MAX_AST_WALK_DEPTH) return;
     if (ts.isIdentifier(node)) {
       recordIdentifier(node, sourceFile);

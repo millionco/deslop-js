@@ -72,7 +72,9 @@ export const stageAllAndCommit = async (
   return { ok: true, commitSha: sha, stderr: "" };
 };
 
-export const resetToCommit = async (commitSha: string): Promise<{ ok: boolean; stderr: string }> => {
+export const resetToCommit = async (
+  commitSha: string,
+): Promise<{ ok: boolean; stderr: string }> => {
   const result = await runGit(["reset", "--hard", commitSha]);
   return { ok: result.exitCode === 0, stderr: result.stderr };
 };

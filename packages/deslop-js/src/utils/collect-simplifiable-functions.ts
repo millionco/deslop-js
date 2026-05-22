@@ -1,12 +1,7 @@
 import type { SimplifiableFunctionKind } from "../types.js";
 import { MAX_AST_WALK_DEPTH } from "../constants.js";
 import { detectSimplifiableFunctionPatterns } from "./detect-simplifiable-function.js";
-
-interface NodeLike {
-  type: string;
-  start?: number;
-  [key: string]: unknown;
-}
+import { getIdentifierName, isOxcAstNode, type OxcAstNode } from "./oxc-ast-node.js";
 
 export interface SimplifiableFunctionCapture {
   kind: SimplifiableFunctionKind;
@@ -16,28 +11,22 @@ export interface SimplifiableFunctionCapture {
   suggestion: string;
 }
 
-const isNode = (value: unknown): value is NodeLike =>
-  Boolean(value) && typeof value === "object" && typeof (value as NodeLike).type === "string";
-
-const getIdentifierName = (node: unknown): string | undefined => {
-  if (!isNode(node)) return undefined;
-  if (node.type === "Identifier") return node.name as string | undefined;
-  return undefined;
-};
-
-const looksLikeFunction = (node: NodeLike): boolean =>
+const looksLikeFunction = (node: OxcAstNode): boolean =>
   node.type === "FunctionDeclaration" ||
   node.type === "FunctionExpression" ||
   node.type === "ArrowFunctionExpression";
 
-const inferFunctionName = (functionNode: NodeLike, parentContext: string | undefined): string | undefined => {
+const inferFunctionName = (
+  functionNode: OxcAstNode,
+  parentContext: string | undefined,
+): string | undefined => {
   const declaredId = (functionNode as { id?: { name?: string } }).id;
   if (declaredId?.name) return declaredId.name;
   return parentContext;
 };
 
 const visitFunctionAndDescend = (
-  functionNode: NodeLike,
+  functionNode: OxcAstNode,
   captures: SimplifiableFunctionCapture[],
   contextName: string | undefined,
   recursionDepth: number,
@@ -53,16 +42,18 @@ const visitFunctionAndDescend = (
       suggestion: detection.suggestion,
     });
   }
-  const bodyNode = (functionNode as { body?: NodeLike }).body;
-  if (isNode(bodyNode)) walkForFunctions(bodyNode, captures, functionName, recursionDepth + 1);
+  const bodyNode = (functionNode as { body?: OxcAstNode }).body;
+  if (isOxcAstNode(bodyNode))
+    walkForFunctions(bodyNode, captures, functionName, recursionDepth + 1);
   const parameters = (functionNode as { params?: unknown[] }).params ?? [];
   for (const parameter of parameters) {
-    if (isNode(parameter)) walkForFunctions(parameter, captures, functionName, recursionDepth + 1);
+    if (isOxcAstNode(parameter))
+      walkForFunctions(parameter, captures, functionName, recursionDepth + 1);
   }
 };
 
 const walkForFunctions = (
-  node: NodeLike,
+  node: OxcAstNode,
   captures: SimplifiableFunctionCapture[],
   contextName: string | undefined,
   recursionDepth: number = 0,
@@ -90,9 +81,10 @@ const walkForFunctions = (
   for (const value of Object.values(node)) {
     if (Array.isArray(value)) {
       for (const element of value) {
-        if (isNode(element)) walkForFunctions(element, captures, nextContext, recursionDepth + 1);
+        if (isOxcAstNode(element))
+          walkForFunctions(element, captures, nextContext, recursionDepth + 1);
       }
-    } else if (isNode(value)) {
+    } else if (isOxcAstNode(value)) {
       walkForFunctions(value, captures, nextContext, recursionDepth + 1);
     }
   }
@@ -103,7 +95,7 @@ export const collectSimplifiableFunctions = (
 ): SimplifiableFunctionCapture[] => {
   const captures: SimplifiableFunctionCapture[] = [];
   for (const statement of programBody) {
-    if (isNode(statement)) walkForFunctions(statement, captures, undefined, 0);
+    if (isOxcAstNode(statement)) walkForFunctions(statement, captures, undefined, 0);
   }
   return captures;
 };

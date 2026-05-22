@@ -78,8 +78,7 @@ export const detectUselessAliasedReExports = (graph: DependencyGraph): Redundant
     const platformBase = platformStrippedBasePath(module.fileId.path);
     if ((platformSiblingGroupSizes.get(platformBase) ?? 0) > 1) continue;
 
-    const consumerImportedNames =
-      moduleConsumerImportedNames.get(module.fileId.index) ?? new Set();
+    const consumerImportedNames = moduleConsumerImportedNames.get(module.fileId.index) ?? new Set();
 
     for (const exportInfo of module.exports) {
       if (exportInfo.isSynthetic) continue;

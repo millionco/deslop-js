@@ -1,6 +1,11 @@
 import type { DeslopError } from "./errors.js";
 
-export type { DeslopError, DeslopErrorCode, DeslopErrorModule, DeslopErrorSeverity } from "./errors.js";
+export type {
+  DeslopError,
+  DeslopErrorCode,
+  DeslopErrorModule,
+  DeslopErrorSeverity,
+} from "./errors.js";
 
 export interface SourceFile {
   index: number;

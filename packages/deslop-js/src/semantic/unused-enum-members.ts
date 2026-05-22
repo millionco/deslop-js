@@ -23,10 +23,7 @@ const collectEnumDeclarations = (
 ): EnumDeclarationContext[] => {
   const declarations: EnumDeclarationContext[] = [];
 
-  const visitTopLevel = (
-    sourceFile: ts.SourceFile,
-    modulePath: string,
-  ): void => {
+  const visitTopLevel = (sourceFile: ts.SourceFile, modulePath: string): void => {
     for (const statement of sourceFile.statements) {
       if (ts.isEnumDeclaration(statement)) {
         declarations.push({ sourceFile, declaration: statement, modulePath });
@@ -57,17 +54,12 @@ const isStringLiteralEnum = (declaration: ts.EnumDeclaration): boolean => {
 };
 
 const isConstEnum = (declaration: ts.EnumDeclaration): boolean => {
-  const modifiers = ts.canHaveModifiers(declaration)
-    ? ts.getModifiers(declaration)
-    : undefined;
+  const modifiers = ts.canHaveModifiers(declaration) ? ts.getModifiers(declaration) : undefined;
   if (!modifiers) return false;
   return modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.ConstKeyword);
 };
 
-const enumHasComputedAccess = (
-  enumSymbol: ts.Symbol,
-  referenceIndex: ReferenceIndex,
-): boolean => {
+const enumHasComputedAccess = (enumSymbol: ts.Symbol, referenceIndex: ReferenceIndex): boolean => {
   const references = referenceIndex.getReferences(enumSymbol);
   for (const referenceSite of references) {
     const parent = referenceSite.identifier.parent;
@@ -79,10 +71,7 @@ const enumHasComputedAccess = (
   return false;
 };
 
-const enumHasWholeObjectUse = (
-  enumSymbol: ts.Symbol,
-  referenceIndex: ReferenceIndex,
-): boolean => {
+const enumHasWholeObjectUse = (enumSymbol: ts.Symbol, referenceIndex: ReferenceIndex): boolean => {
   const references = referenceIndex.getReferences(enumSymbol);
   for (const referenceSite of references) {
     if (referenceSite.isDeclarationName) continue;

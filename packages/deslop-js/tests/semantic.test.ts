@@ -163,7 +163,10 @@ describe("semantic / unused-types: declaration merging", () => {
   it("does NOT flag any branch of a merged interface when the merged symbol is referenced", async () => {
     const result = await scanFixtureWithSemantic("unused-types-decl-merge");
     const found = unusedTypeNames(result);
-    assert.ok(!found.includes("MergedConfig"), `MergedConfig branches must not flag, got: ${found}`);
+    assert.ok(
+      !found.includes("MergedConfig"),
+      `MergedConfig branches must not flag, got: ${found}`,
+    );
   });
 
   it("flags non-merged dead types alongside merged-and-used types", async () => {
@@ -238,10 +241,9 @@ describe("semantic / unused-types: entry export gating", () => {
   });
 
   it("respects reportUnusedTypes=false: skips type detection entirely", async () => {
-    const result = await scanFixtureWithSemantic(
-      "unused-types-basic",
-      { reportUnusedTypes: false },
-    );
+    const result = await scanFixtureWithSemantic("unused-types-basic", {
+      reportUnusedTypes: false,
+    });
     assert.deepEqual(result.unusedTypes, []);
   });
 });
@@ -258,63 +260,53 @@ describe("semantic / misclassified-dependencies", () => {
   });
 
   it("flags dependencies that are only consumed via `import type`", async () => {
-    const result = await scanFixtureWithSemantic(
-      "misclassified-deps-typeonly",
-      { reportUnusedTypes: false },
-    );
+    const result = await scanFixtureWithSemantic("misclassified-deps-typeonly", {
+      reportUnusedTypes: false,
+    });
     const names = misclassifiedNames(result);
-    assert.ok(
-      names.includes("type-only-lib"),
-      `type-only-lib should be flagged, got: ${names}`,
-    );
+    assert.ok(names.includes("type-only-lib"), `type-only-lib should be flagged, got: ${names}`);
   });
 
   it("flags dependencies that are only consumed via `export type ... from`", async () => {
-    const result = await scanFixtureWithSemantic(
-      "misclassified-deps-typeonly",
-      { reportUnusedTypes: false },
-    );
+    const result = await scanFixtureWithSemantic("misclassified-deps-typeonly", {
+      reportUnusedTypes: false,
+    });
     assert.ok(misclassifiedNames(result).includes("reexported-type-lib"));
   });
 
   it("does NOT flag dependencies imported with value bindings", async () => {
-    const result = await scanFixtureWithSemantic(
-      "misclassified-deps-typeonly",
-      { reportUnusedTypes: false },
-    );
+    const result = await scanFixtureWithSemantic("misclassified-deps-typeonly", {
+      reportUnusedTypes: false,
+    });
     const names = misclassifiedNames(result);
     assert.ok(!names.includes("value-used-lib"), `value-used-lib used at runtime, got: ${names}`);
   });
 
   it("does NOT flag side-effect imports (always runtime)", async () => {
-    const result = await scanFixtureWithSemantic(
-      "misclassified-deps-typeonly",
-      { reportUnusedTypes: false },
-    );
+    const result = await scanFixtureWithSemantic("misclassified-deps-typeonly", {
+      reportUnusedTypes: false,
+    });
     assert.ok(!misclassifiedNames(result).includes("side-effect-lib"));
   });
 
   it("does NOT flag mixed-use packages (any value import wins)", async () => {
-    const result = await scanFixtureWithSemantic(
-      "misclassified-deps-typeonly",
-      { reportUnusedTypes: false },
-    );
+    const result = await scanFixtureWithSemantic("misclassified-deps-typeonly", {
+      reportUnusedTypes: false,
+    });
     assert.ok(!misclassifiedNames(result).includes("mixed-use-lib"));
   });
 
   it("does NOT flag value re-exports `export { x } from`", async () => {
-    const result = await scanFixtureWithSemantic(
-      "misclassified-deps-typeonly",
-      { reportUnusedTypes: false },
-    );
+    const result = await scanFixtureWithSemantic("misclassified-deps-typeonly", {
+      reportUnusedTypes: false,
+    });
     assert.ok(!misclassifiedNames(result).includes("reexported-value-lib"));
   });
 
   it("includes a trace with at least one import site path", async () => {
-    const result = await scanFixtureWithSemantic(
-      "misclassified-deps-typeonly",
-      { reportUnusedTypes: false },
-    );
+    const result = await scanFixtureWithSemantic("misclassified-deps-typeonly", {
+      reportUnusedTypes: false,
+    });
     const finding = result.misclassifiedDependencies.find(
       (entry) => entry.name === "type-only-lib",
     );
@@ -327,28 +319,25 @@ describe("semantic / misclassified-dependencies", () => {
   });
 
   it("marks suggestedAs as devDependencies for all current findings", async () => {
-    const result = await scanFixtureWithSemantic(
-      "misclassified-deps-typeonly",
-      { reportUnusedTypes: false },
-    );
+    const result = await scanFixtureWithSemantic("misclassified-deps-typeonly", {
+      reportUnusedTypes: false,
+    });
     for (const finding of result.misclassifiedDependencies) {
       assert.equal(finding.suggestedAs, "devDependencies");
     }
   });
 
   it("respects reportMisclassifiedDependencies=false", async () => {
-    const result = await scanFixtureWithSemantic(
-      "misclassified-deps-typeonly",
-      { reportUnusedTypes: false, reportMisclassifiedDependencies: false },
-    );
+    const result = await scanFixtureWithSemantic("misclassified-deps-typeonly", {
+      reportUnusedTypes: false,
+      reportMisclassifiedDependencies: false,
+    });
     assert.deepEqual(result.misclassifiedDependencies, []);
   });
 });
 
 const enumMemberLabels = (result: ScanResult): string[] =>
-  result.unusedEnumMembers
-    .map((finding) => `${finding.enumName}.${finding.memberName}`)
-    .sort();
+  result.unusedEnumMembers.map((finding) => `${finding.enumName}.${finding.memberName}`).sort();
 
 describe("semantic / unused-enum-members: string enum", () => {
   it("flags unreferenced members with high confidence", async () => {
@@ -569,9 +558,7 @@ describe("redundancy / duplicate exports", () => {
 });
 
 const classMemberLabels = (result: ScanResult): string[] =>
-  result.unusedClassMembers
-    .map((finding) => `${finding.className}.${finding.memberName}`)
-    .sort();
+  result.unusedClassMembers.map((finding) => `${finding.className}.${finding.memberName}`).sort();
 
 describe("semantic / unused-class-members: basic", () => {
   it("flags methods and properties with no external references", async () => {
@@ -629,7 +616,10 @@ describe("semantic / unused-class-members: inheritance", () => {
       reportUnusedClassMembers: true,
     });
     const labels = classMemberLabels(result);
-    assert.ok(!labels.includes("Animal.speak"), `Animal.speak is overridden by Dog, got: ${labels}`);
+    assert.ok(
+      !labels.includes("Animal.speak"),
+      `Animal.speak is overridden by Dog, got: ${labels}`,
+    );
   });
 
   it("flags a parent method that no subclass overrides and is never called", async () => {
@@ -694,7 +684,10 @@ describe("semantic / unused-class-members: decorators", () => {
       decoratorAllowlist: ["Get", "Internal"],
     });
     const labels = classMemberLabels(result);
-    assert.ok(!labels.includes("UserController.deadInternal"), `Internal now allowlisted, got: ${labels}`);
+    assert.ok(
+      !labels.includes("UserController.deadInternal"),
+      `Internal now allowlisted, got: ${labels}`,
+    );
     assert.ok(labels.includes("UserController.deadPlainMethod"));
   });
 });
@@ -715,7 +708,10 @@ describe("redundancy / DRY patterns (syntactic)", () => {
   it("flags duplicate imports from the same module", async () => {
     const result = await scanFixtureSyntactic("dry-patterns-syntactic");
     const finding = result.duplicateImports.find((entry) => entry.specifier === "./helpers.js");
-    assert.ok(finding, `expected ./helpers.js duplicate import, got: ${JSON.stringify(result.duplicateImports)}`);
+    assert.ok(
+      finding,
+      `expected ./helpers.js duplicate import, got: ${JSON.stringify(result.duplicateImports)}`,
+    );
     assert.equal(finding.occurrences.length, 3);
   });
 
@@ -743,7 +739,9 @@ describe("redundancy / DRY patterns (syntactic)", () => {
 
   it("does NOT flag legitimate interface/type definitions", async () => {
     const result = await scanFixtureSyntactic("dry-patterns-syntactic");
-    const flaggedTypeNames = new Set(result.redundantTypePatterns.map((finding) => finding.typeName));
+    const flaggedTypeNames = new Set(
+      result.redundantTypePatterns.map((finding) => finding.typeName),
+    );
     assert.ok(!flaggedTypeNames.has("User"));
     assert.ok(!flaggedTypeNames.has("LegitChild"));
     assert.ok(!flaggedTypeNames.has("LegitUnion"));
@@ -850,11 +848,20 @@ describe("redundancy / duplicate inline types (inside functions, returns, locals
       result.duplicateInlineTypes.length >= 1,
       `expected at least 1 inline duplicate, got: ${result.duplicateInlineTypes.length}`,
     );
-    const profileGroup = result.duplicateInlineTypes.find((entry) =>
-      entry.preview.includes("email") && entry.preview.includes("id") && entry.preview.includes("name"),
+    const profileGroup = result.duplicateInlineTypes.find(
+      (entry) =>
+        entry.preview.includes("email") &&
+        entry.preview.includes("id") &&
+        entry.preview.includes("name"),
     );
-    assert.ok(profileGroup, `expected profile shape, got: ${JSON.stringify(result.duplicateInlineTypes)}`);
-    assert.ok(profileGroup.occurrences.length >= 5, `at least 5 occurrences expected, got ${profileGroup.occurrences.length}`);
+    assert.ok(
+      profileGroup,
+      `expected profile shape, got: ${JSON.stringify(result.duplicateInlineTypes)}`,
+    );
+    assert.ok(
+      profileGroup.occurrences.length >= 5,
+      `at least 5 occurrences expected, got ${profileGroup.occurrences.length}`,
+    );
     const contexts = new Set(profileGroup.occurrences.map((occurrence) => occurrence.context));
     assert.ok(contexts.has("function-parameter"));
     assert.ok(contexts.has("function-return"));
@@ -863,8 +870,8 @@ describe("redundancy / duplicate inline types (inside functions, returns, locals
 
   it("does NOT flag shapes with fewer than 3 properties (noise threshold)", async () => {
     const result = await scanFixtureSyntactic("duplicate-inline-types");
-    const twoPropFinding = result.duplicateInlineTypes.find((entry) =>
-      entry.preview.includes("a") && entry.preview.includes("b"),
+    const twoPropFinding = result.duplicateInlineTypes.find(
+      (entry) => entry.preview.includes("a") && entry.preview.includes("b"),
     );
     assert.ok(!twoPropFinding, "2-prop shapes should be below threshold");
   });
@@ -930,7 +937,8 @@ describe("redundancy / simplifiable functions", () => {
     assert.ok(
       !result.simplifiableFunctions.some(
         (finding) =>
-          finding.kind === "block-arrow-single-return" && finding.functionName === "blockArrowComplex",
+          finding.kind === "block-arrow-single-return" &&
+          finding.functionName === "blockArrowComplex",
       ),
     );
   });
@@ -938,9 +946,7 @@ describe("redundancy / simplifiable functions", () => {
   it("does NOT flag arrows that are already expression-bodied", async () => {
     const result = await scanFixtureSyntactic("simplifiable-functions");
     assert.ok(
-      !result.simplifiableFunctions.some(
-        (finding) => finding.functionName === "expressionArrow",
-      ),
+      !result.simplifiableFunctions.some((finding) => finding.functionName === "expressionArrow"),
     );
   });
 
@@ -962,7 +968,10 @@ describe("redundancy / simplifiable functions", () => {
     );
     const names = new Set(uselessAsync.map((finding) => finding.functionName));
     assert.ok(names.has("uselessAsync"), `uselessAsync must flag, got: ${[...names]}`);
-    assert.ok(!names.has("fetchDataDirect"), `fetchDataDirect calls Promise.resolve — must NOT flag, got: ${[...names]}`);
+    assert.ok(
+      !names.has("fetchDataDirect"),
+      `fetchDataDirect calls Promise.resolve — must NOT flag, got: ${[...names]}`,
+    );
     for (const finding of uselessAsync) {
       assert.equal(finding.confidence, "low", "useless-async findings should be low-confidence");
     }
@@ -995,7 +1004,10 @@ describe("redundancy / simplifiable expressions", () => {
     const doubleBangs = result.simplifiableExpressions.filter(
       (finding) => finding.kind === "double-bang-boolean",
     );
-    assert.ok(doubleBangs.length >= 3, `expected at least 3 double-bang findings, got: ${doubleBangs.length}`);
+    assert.ok(
+      doubleBangs.length >= 3,
+      `expected at least 3 double-bang findings, got: ${doubleBangs.length}`,
+    );
     for (const finding of doubleBangs) {
       assert.equal(finding.confidence, "high");
     }
@@ -1097,7 +1109,10 @@ describe("redundancy / cross-file duplicate constants", () => {
     const apiBaseFinding = result.duplicateConstants.find((finding) =>
       finding.occurrences.every((occurrence) => occurrence.constantName === "API_BASE_URL"),
     );
-    assert.ok(apiBaseFinding, `expected API_BASE_URL duplicate, got: ${JSON.stringify(result.duplicateConstants)}`);
+    assert.ok(
+      apiBaseFinding,
+      `expected API_BASE_URL duplicate, got: ${JSON.stringify(result.duplicateConstants)}`,
+    );
     assert.equal(apiBaseFinding.confidence, "high");
     assert.equal(apiBaseFinding.occurrences.length, 3);
   });

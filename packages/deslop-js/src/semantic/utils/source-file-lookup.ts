@@ -1,7 +1,7 @@
 import ts from "typescript";
-import { resolve as resolvePath } from "node:path";
+import { resolve } from "node:path";
 
-export const normalizeSourcePath = (filePath: string): string => resolvePath(filePath);
+export const normalizeSourcePath = resolve;
 
 export const buildSourceFileLookup = (program: ts.Program): Map<string, ts.SourceFile> => {
   const lookup = new Map<string, ts.SourceFile>();

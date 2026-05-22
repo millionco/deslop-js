@@ -1,6 +1,10 @@
 import { parseSync } from "oxc-parser";
 import { readFileSync, statSync } from "node:fs";
-import { MAX_PARSE_FILE_SIZE_BYTES } from "../constants.js";
+import {
+  BINARY_DETECTION_NULL_BYTE_THRESHOLD,
+  BINARY_DETECTION_SAMPLE_BYTES,
+  MAX_PARSE_FILE_SIZE_BYTES,
+} from "../constants.js";
 import { type DeslopError, FileReadError, ParseError, describeUnknownError } from "../errors.js";
 import type {
   Statement,
@@ -310,19 +314,16 @@ const stripByteOrderMark = (sourceText: string): string => {
 };
 
 const looksLikeBinaryContent = (sourceText: string): boolean => {
-  const sampleLength = Math.min(sourceText.length, 2048);
+  const sampleLength = Math.min(sourceText.length, BINARY_DETECTION_SAMPLE_BYTES);
   let nullByteCount = 0;
   for (let scanIndex = 0; scanIndex < sampleLength; scanIndex++) {
     if (sourceText.charCodeAt(scanIndex) === 0) nullByteCount++;
-    if (nullByteCount > 4) return true;
+    if (nullByteCount > BINARY_DETECTION_NULL_BYTE_THRESHOLD) return true;
   }
   return false;
 };
 
-const safeReadSourceFile = (
-  filePath: string,
-  errors: DeslopError[],
-): string | undefined => {
+const safeReadSourceFile = (filePath: string, errors: DeslopError[]): string | undefined => {
   try {
     const stats = statSync(filePath);
     if (stats.size === 0) {
@@ -624,28 +625,32 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     () => collectSimplifiableFunctions(program.body),
     [],
   );
-  const simplifiableFunctions: ParsedSimplifiableFunction[] = simplifiableCaptures.map((capture) => ({
-    kind: capture.kind,
-    functionName: capture.functionName,
-    line: getLineFromOffset(sourceText, capture.startOffset),
-    column: getColumnFromOffset(sourceText, capture.startOffset),
-    reason: capture.reason,
-    suggestion: capture.suggestion,
-  }));
+  const simplifiableFunctions: ParsedSimplifiableFunction[] = simplifiableCaptures.map(
+    (capture) => ({
+      kind: capture.kind,
+      functionName: capture.functionName,
+      line: getLineFromOffset(sourceText, capture.startOffset),
+      column: getColumnFromOffset(sourceText, capture.startOffset),
+      reason: capture.reason,
+      suggestion: capture.suggestion,
+    }),
+  );
 
   const expressionCaptures = safeWalk(
     "collectSimplifiableExpressions",
     () => collectSimplifiableExpressions(program.body),
     [],
   );
-  const simplifiableExpressions: ParsedSimplifiableExpression[] = expressionCaptures.map((capture) => ({
-    kind: capture.kind,
-    snippet: capture.snippet,
-    line: getLineFromOffset(sourceText, capture.startOffset),
-    column: getColumnFromOffset(sourceText, capture.startOffset),
-    reason: capture.reason,
-    suggestion: capture.suggestion,
-  }));
+  const simplifiableExpressions: ParsedSimplifiableExpression[] = expressionCaptures.map(
+    (capture) => ({
+      kind: capture.kind,
+      snippet: capture.snippet,
+      line: getLineFromOffset(sourceText, capture.startOffset),
+      column: getColumnFromOffset(sourceText, capture.startOffset),
+      reason: capture.reason,
+      suggestion: capture.suggestion,
+    }),
+  );
 
   const constantCaptures = safeWalk(
     "collectDuplicateConstantCandidates",
@@ -687,7 +692,13 @@ const collectDryPatterns = (
   typeDefinitionHashes: ParsedTypeDefinitionHash[],
 ): void => {
   for (const statement of bodyNodes) {
-    inspectStatement(statement, sourceText, redundantTypePatterns, identityWrappers, typeDefinitionHashes);
+    inspectStatement(
+      statement,
+      sourceText,
+      redundantTypePatterns,
+      identityWrappers,
+      typeDefinitionHashes,
+    );
   }
 };
 
@@ -699,7 +710,10 @@ const inspectStatement = (
   typeDefinitionHashes: ParsedTypeDefinitionHash[],
 ): void => {
   let declarationOfInterest: unknown = statementNode;
-  if (statementNode.type === "ExportNamedDeclaration" && (statementNode as { declaration?: unknown }).declaration) {
+  if (
+    statementNode.type === "ExportNamedDeclaration" &&
+    (statementNode as { declaration?: unknown }).declaration
+  ) {
     declarationOfInterest = (statementNode as { declaration?: unknown }).declaration;
   }
 
@@ -986,7 +1000,7 @@ const extractNamedExportDeclaration = (
   exports: ExportReference[],
 ): void => {
   const isTypeOnly = node.exportKind === "type";
-  const reExportSource = node.source?.value ?? undefined;
+  const reExportSource = node.source?.value;
 
   if (node.declaration) {
     extractDeclarationNames(node.declaration, isTypeOnly, sourceText, exports, node.start);

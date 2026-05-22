@@ -1,10 +1,9 @@
 import type { SimplifiableExpressionKind } from "../types.js";
-
-interface NodeLike {
-  type: string;
-  start?: number;
-  [key: string]: unknown;
-}
+import {
+  MAX_EXPRESSION_DETECTOR_WALK_DEPTH,
+  SIMPLIFIABLE_EXPRESSION_MEMBER_ACCESS_DEPTH,
+} from "../constants.js";
+import { isOxcAstNode, type OxcAstNode } from "./oxc-ast-node.js";
 
 export interface SimplifiableExpressionCapture {
   kind: SimplifiableExpressionKind;
@@ -14,40 +13,36 @@ export interface SimplifiableExpressionCapture {
   suggestion: string;
 }
 
-const isNode = (value: unknown): value is NodeLike =>
-  Boolean(value) && typeof value === "object" && typeof (value as NodeLike).type === "string";
-
-const memberAccessText = (node: NodeLike, depth = 0): string | undefined => {
-  if (depth > 6) return undefined;
+const memberAccessText = (node: OxcAstNode, depth = 0): string | undefined => {
+  if (depth > SIMPLIFIABLE_EXPRESSION_MEMBER_ACCESS_DEPTH) return undefined;
   if (node.type === "Identifier") return (node as { name?: string }).name;
   if (node.type === "ThisExpression") return "this";
   if (node.type === "MemberExpression") {
     const computed = (node as { computed?: boolean }).computed;
     if (computed) return undefined;
-    const objectNode = (node as { object?: NodeLike }).object;
-    const propertyNode = (node as { property?: NodeLike }).property;
+    const objectNode = (node as { object?: OxcAstNode }).object;
+    const propertyNode = (node as { property?: OxcAstNode }).property;
     if (!objectNode || !propertyNode) return undefined;
     const objectText = memberAccessText(objectNode, depth + 1);
-    const propertyText = propertyNode.type === "Identifier"
-      ? (propertyNode as { name?: string }).name
-      : undefined;
+    const propertyText =
+      propertyNode.type === "Identifier" ? (propertyNode as { name?: string }).name : undefined;
     if (!objectText || !propertyText) return undefined;
     return `${objectText}.${propertyText}`;
   }
   return undefined;
 };
 
-const isBooleanLiteral = (node: NodeLike, expected: boolean): boolean => {
+const isBooleanLiteral = (node: OxcAstNode, expected: boolean): boolean => {
   if (node.type !== "Literal") return false;
   return (node as { value?: unknown }).value === expected;
 };
 
 const detectSelfFallbackTernary = (
-  conditionalNode: NodeLike,
+  conditionalNode: OxcAstNode,
 ): SimplifiableExpressionCapture | undefined => {
   if (conditionalNode.type !== "ConditionalExpression") return undefined;
-  const testNode = (conditionalNode as { test?: NodeLike }).test;
-  const consequentNode = (conditionalNode as { consequent?: NodeLike }).consequent;
+  const testNode = (conditionalNode as { test?: OxcAstNode }).test;
+  const consequentNode = (conditionalNode as { consequent?: OxcAstNode }).consequent;
   if (!testNode || !consequentNode) return undefined;
   const testText = memberAccessText(testNode);
   const consequentText = memberAccessText(consequentNode);
@@ -63,11 +58,11 @@ const detectSelfFallbackTernary = (
 };
 
 const detectTernaryReturnsBoolean = (
-  conditionalNode: NodeLike,
+  conditionalNode: OxcAstNode,
 ): SimplifiableExpressionCapture | undefined => {
   if (conditionalNode.type !== "ConditionalExpression") return undefined;
-  const consequentNode = (conditionalNode as { consequent?: NodeLike }).consequent;
-  const alternateNode = (conditionalNode as { alternate?: NodeLike }).alternate;
+  const consequentNode = (conditionalNode as { consequent?: OxcAstNode }).consequent;
+  const alternateNode = (conditionalNode as { alternate?: OxcAstNode }).alternate;
   if (!consequentNode || !alternateNode) return undefined;
   const isTrueFalse =
     isBooleanLiteral(consequentNode, true) && isBooleanLiteral(alternateNode, false);
@@ -81,27 +76,29 @@ const detectTernaryReturnsBoolean = (
     reason: isTrueFalse
       ? "`cond ? true : false` collapses to `Boolean(cond)`"
       : "`cond ? false : true` collapses to `!cond`",
-    suggestion: isTrueFalse ? "replace with `Boolean(cond)` or just `cond` when types match" : "replace with `!cond`",
+    suggestion: isTrueFalse
+      ? "replace with `Boolean(cond)` or just `cond` when types match"
+      : "replace with `!cond`",
   };
 };
 
-const isNullLiteral = (node: NodeLike): boolean =>
+const isNullLiteral = (node: OxcAstNode): boolean =>
   node.type === "Literal" && (node as { value?: unknown }).value === null;
 
-const isUndefinedIdentifier = (node: NodeLike): boolean =>
+const isUndefinedIdentifier = (node: OxcAstNode): boolean =>
   node.type === "Identifier" && (node as { name?: string }).name === "undefined";
 
 const detectNullishCoalescingWithNullish = (
-  logicalNode: NodeLike,
+  logicalNode: OxcAstNode,
 ): SimplifiableExpressionCapture | undefined => {
   if (logicalNode.type !== "LogicalExpression") return undefined;
   if ((logicalNode as { operator?: string }).operator !== "??") return undefined;
-  const rightNode = (logicalNode as { right?: NodeLike }).right;
+  const rightNode = (logicalNode as { right?: OxcAstNode }).right;
   if (!rightNode) return undefined;
   const isNullish = isNullLiteral(rightNode) || isUndefinedIdentifier(rightNode);
   if (!isNullish) return undefined;
-  const leftNode = (logicalNode as { left?: NodeLike }).left;
-  const leftText = leftNode ? memberAccessText(leftNode) ?? "expr" : "expr";
+  const leftNode = (logicalNode as { left?: OxcAstNode }).left;
+  const leftText = leftNode ? (memberAccessText(leftNode) ?? "expr") : "expr";
   const rightLabel = isNullLiteral(rightNode) ? "null" : "undefined";
   return {
     kind: "nullish-coalescing-with-nullish",
@@ -113,21 +110,22 @@ const detectNullishCoalescingWithNullish = (
 };
 
 const detectRedundantNullAndUndefinedCheck = (
-  logicalNode: NodeLike,
+  logicalNode: OxcAstNode,
 ): SimplifiableExpressionCapture | undefined => {
   if (logicalNode.type !== "LogicalExpression") return undefined;
   if ((logicalNode as { operator?: string }).operator !== "&&") return undefined;
-  const leftNode = (logicalNode as { left?: NodeLike }).left;
-  const rightNode = (logicalNode as { right?: NodeLike }).right;
+  const leftNode = (logicalNode as { left?: OxcAstNode }).left;
+  const rightNode = (logicalNode as { right?: OxcAstNode }).right;
   if (!leftNode || !rightNode) return undefined;
-  if (leftNode.type !== "BinaryExpression" || rightNode.type !== "BinaryExpression") return undefined;
+  if (leftNode.type !== "BinaryExpression" || rightNode.type !== "BinaryExpression")
+    return undefined;
   const leftOp = (leftNode as { operator?: string }).operator;
   const rightOp = (rightNode as { operator?: string }).operator;
   if (leftOp !== "!==" || rightOp !== "!==") return undefined;
-  const leftLeft = (leftNode as { left?: NodeLike }).left;
-  const leftRight = (leftNode as { right?: NodeLike }).right;
-  const rightLeft = (rightNode as { left?: NodeLike }).left;
-  const rightRight = (rightNode as { right?: NodeLike }).right;
+  const leftLeft = (leftNode as { left?: OxcAstNode }).left;
+  const leftRight = (leftNode as { right?: OxcAstNode }).right;
+  const rightLeft = (rightNode as { left?: OxcAstNode }).left;
+  const rightRight = (rightNode as { right?: OxcAstNode }).right;
   if (!leftLeft || !leftRight || !rightLeft || !rightRight) return undefined;
   const leftLeftText = memberAccessText(leftLeft);
   const rightLeftText = memberAccessText(rightLeft);
@@ -149,14 +147,14 @@ const detectRedundantNullAndUndefinedCheck = (
 };
 
 const detectDoubleBangBoolean = (
-  unaryNode: NodeLike,
+  unaryNode: OxcAstNode,
 ): SimplifiableExpressionCapture | undefined => {
   if (unaryNode.type !== "UnaryExpression") return undefined;
   if ((unaryNode as { operator?: string }).operator !== "!") return undefined;
-  const inner = (unaryNode as { argument?: NodeLike }).argument;
+  const inner = (unaryNode as { argument?: OxcAstNode }).argument;
   if (!inner || inner.type !== "UnaryExpression") return undefined;
   if ((inner as { operator?: string }).operator !== "!") return undefined;
-  const coerced = (inner as { argument?: NodeLike }).argument;
+  const coerced = (inner as { argument?: OxcAstNode }).argument;
   if (!coerced) return undefined;
   const coercedText = memberAccessText(coerced) ?? "expr";
   return {
@@ -168,11 +166,14 @@ const detectDoubleBangBoolean = (
   };
 };
 
-const visit = (node: NodeLike, captures: SimplifiableExpressionCapture[], depth: number): void => {
-  if (depth > 100) return;
+const visit = (
+  node: OxcAstNode,
+  captures: SimplifiableExpressionCapture[],
+  depth: number,
+): void => {
+  if (depth > MAX_EXPRESSION_DETECTOR_WALK_DEPTH) return;
 
-  const conditionalCapture =
-    detectSelfFallbackTernary(node) ?? detectTernaryReturnsBoolean(node);
+  const conditionalCapture = detectSelfFallbackTernary(node) ?? detectTernaryReturnsBoolean(node);
   if (conditionalCapture) captures.push(conditionalCapture);
 
   const doubleBangCapture = detectDoubleBangBoolean(node);
@@ -185,9 +186,9 @@ const visit = (node: NodeLike, captures: SimplifiableExpressionCapture[], depth:
   for (const value of Object.values(node)) {
     if (Array.isArray(value)) {
       for (const element of value) {
-        if (isNode(element)) visit(element, captures, depth + 1);
+        if (isOxcAstNode(element)) visit(element, captures, depth + 1);
       }
-    } else if (isNode(value)) {
+    } else if (isOxcAstNode(value)) {
       visit(value, captures, depth + 1);
     }
   }
@@ -198,7 +199,7 @@ export const collectSimplifiableExpressions = (
 ): SimplifiableExpressionCapture[] => {
   const captures: SimplifiableExpressionCapture[] = [];
   for (const statement of programBody) {
-    if (isNode(statement)) visit(statement, captures, 0);
+    if (isOxcAstNode(statement)) visit(statement, captures, 0);
   }
   return captures;
 };

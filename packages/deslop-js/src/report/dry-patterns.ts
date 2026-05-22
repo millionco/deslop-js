@@ -13,8 +13,10 @@ import type {
   SimplifiableExpression,
   SimplifiableFunction,
 } from "../types.js";
-
-const MIN_FILES_FOR_DUPLICATE_CONSTANT = 3;
+import {
+  DUPLICATE_INLINE_TYPE_HIGH_MEMBER_COUNT,
+  MIN_FILES_FOR_DUPLICATE_CONSTANT,
+} from "../constants.js";
 
 export const detectDuplicateImports = (graph: DependencyGraph): DuplicateImport[] => {
   const findings: DuplicateImport[] = [];
@@ -190,9 +192,7 @@ export const detectDuplicateConstants = (graph: DependencyGraph): DuplicateConst
   return findings;
 };
 
-export const detectSimplifiableExpressions = (
-  graph: DependencyGraph,
-): SimplifiableExpression[] => {
+export const detectSimplifiableExpressions = (graph: DependencyGraph): SimplifiableExpression[] => {
   const findings: SimplifiableExpression[] = [];
   for (const module of graph.modules) {
     if (module.isDeclarationFile) continue;
@@ -274,7 +274,10 @@ export const detectDuplicateInlineTypes = (graph: DependencyGraph): DuplicateInl
     );
     if (uniqueSiteKeys.size < 2) continue;
     const uniquePaths = new Set(group.occurrences.map((occurrence) => occurrence.path));
-    const confidence = uniquePaths.size >= 2 || group.memberCount >= 5 ? "medium" : "low";
+    const confidence =
+      uniquePaths.size >= 2 || group.memberCount >= DUPLICATE_INLINE_TYPE_HIGH_MEMBER_COUNT
+        ? "medium"
+        : "low";
     findings.push({
       structuralHash,
       memberCount: group.memberCount,
