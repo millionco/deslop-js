@@ -1,5 +1,7 @@
+import ts from "typescript";
 import type { DependencyGraph, DeslopConfig, RedundantExport } from "../types.js";
 import { SEMANTIC_TRACE_MAX_ENTRIES } from "../constants.js";
+import { lookupSourceFile, createSemanticContext } from "./program.js";
 
 const SKIP_NAMES = new Set(["default", "*"]);
 
@@ -36,6 +38,26 @@ export const detectRedundantExports = (
   if (!config.semantic.enabled) return [];
   if (!config.semantic.reportRedundantExports) return [];
 
+  const semanticContext = createSemanticContext(graph, config);
+  const symbolByExportLocation = new Map<string, ts.Symbol>();
+
+  if (semanticContext) {
+    for (const module of graph.modules) {
+      if (module.isDeclarationFile) continue;
+      const sourceFile = lookupSourceFile(semanticContext, module.fileId.path);
+      if (!sourceFile) continue;
+      const moduleSymbol = semanticContext.checker.getSymbolAtLocation(sourceFile);
+      if (!moduleSymbol) continue;
+      for (const exportedSymbol of semanticContext.checker.getExportsOfModule(moduleSymbol)) {
+        const resolved =
+          (exportedSymbol.flags & ts.SymbolFlags.Alias) !== 0
+            ? semanticContext.checker.getAliasedSymbol(exportedSymbol)
+            : exportedSymbol;
+        symbolByExportLocation.set(`${module.fileId.path}::${exportedSymbol.getName()}`, resolved);
+      }
+    }
+  }
+
   const pathsByExportName = new Map<string, Set<string>>();
 
   for (const module of graph.modules) {
@@ -57,6 +79,20 @@ export const detectRedundantExports = (
 
   for (const [exportName, pathSet] of pathsByExportName) {
     if (pathSet.size < 2) continue;
+
+    if (symbolByExportLocation.size > 0) {
+      const distinctSymbols = new Set<ts.Symbol>();
+      let allMapped = true;
+      for (const modulePath of pathSet) {
+        const symbol = symbolByExportLocation.get(`${modulePath}::${exportName}`);
+        if (!symbol) {
+          allMapped = false;
+          break;
+        }
+        distinctSymbols.add(symbol);
+      }
+      if (allMapped && distinctSymbols.size < 2) continue;
+    }
 
     const consumedPaths: string[] = [];
     const unconsumedPaths: string[] = [];

@@ -1,0 +1,4 @@
+{
+  "name": "redundant-exports-local-reexport-dedup",
+  "main": "src/index.ts"
+}

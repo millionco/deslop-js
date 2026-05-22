@@ -58,29 +58,35 @@ export const runSemanticAnalysis = (
   const withinBudget = (): boolean =>
     performance.now() - semanticPassStartTime < SEMANTIC_PROGRAM_BUDGET_MS;
 
-  const unusedTypes = config.semantic.reportUnusedTypes && withinBudget()
-    ? detectUnusedTypes(graph, config, semanticContext)
-    : [];
+  const unusedTypes =
+    config.semantic.reportUnusedTypes && withinBudget()
+      ? detectUnusedTypes(graph, config, semanticContext)
+      : [];
 
-  const unusedEnumMembers = config.semantic.reportUnusedEnumMembers && withinBudget()
-    ? detectUnusedEnumMembers(graph, config, semanticContext)
-    : [];
+  const unusedEnumMembers =
+    config.semantic.reportUnusedEnumMembers && withinBudget()
+      ? detectUnusedEnumMembers(graph, config, semanticContext)
+      : [];
 
-  const unusedClassMembers = config.semantic.reportUnusedClassMembers && withinBudget()
-    ? detectUnusedClassMembers(graph, config, semanticContext)
-    : [];
+  const unusedClassMembers =
+    config.semantic.reportUnusedClassMembers && withinBudget()
+      ? detectUnusedClassMembers(graph, config, semanticContext)
+      : [];
 
-  const privateTypeLeaks = config.semantic.reportPrivateTypeLeaks && withinBudget()
-    ? detectPrivateTypeLeaks(graph, config, semanticContext)
-    : [];
+  const privateTypeLeaks =
+    config.semantic.reportPrivateTypeLeaks && withinBudget()
+      ? detectPrivateTypeLeaks(graph, config, semanticContext)
+      : [];
 
-  const unusedParameters = config.semantic.reportUnusedParameters && withinBudget()
-    ? detectUnusedParameters(graph, config, semanticContext)
-    : [];
+  const unusedParameters =
+    config.semantic.reportUnusedParameters && withinBudget()
+      ? detectUnusedParameters(graph, config, semanticContext)
+      : [];
 
-  const duplicateTypeDefinitions = config.semantic.reportDuplicateTypeDefinitions && withinBudget()
-    ? detectDuplicateTypeDefinitions(graph, config, semanticContext)
-    : [];
+  const duplicateTypeDefinitions =
+    config.semantic.reportDuplicateTypeDefinitions && withinBudget()
+      ? detectDuplicateTypeDefinitions(graph, config, semanticContext)
+      : [];
 
   return {
     unusedTypes,
