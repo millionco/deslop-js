@@ -1,11 +1,11 @@
-# cli
+# deslop-js-cli
 
 CLI for [deslop-js](https://github.com/aidenybai/deslop-js) — find unused files, exports, dependencies, and circular imports.
 
 ## Install
 
 ```bash
-npm install -g cli
+npm install -g deslop-js-cli
 ```
 
 Requires Node.js 22 or later.
