@@ -61,6 +61,7 @@ export type {
   UnusedEnumMember,
   UnusedClassMember,
   RedundantExport,
+  PrivateTypeLeak,
 } from "./types.js";
 import type { SemanticConfig } from "./types.js";
 export type { SemanticConfig };

@@ -4241,3 +4241,52 @@ describe("redundant-exports-both-consumed (semantic enabled)", () => {
     assert.equal(entry?.confidence, "low");
   });
 });
+
+const privateLeakKeys = (result: ScanResult): string[] =>
+  result.privateTypeLeaks.map((leak) => `${leak.exportName}->${leak.leakedTypeName}`).sort();
+
+describe("private-type-leaks: default (semantic disabled)", () => {
+  it("should not surface privateTypeLeaks by default", async () => {
+    const result = await scanFixture("private-type-leak");
+    assert.deepEqual(result.privateTypeLeaks, []);
+  });
+});
+
+describe("private-type-leak (semantic enabled)", () => {
+  it("flags exported function whose signature references an unexported type", async () => {
+    const result = await scanFixture("private-type-leak", {
+      semantic: { enabled: true, reportPrivateTypeLeaks: true },
+    });
+    const keys = privateLeakKeys(result);
+    assert.ok(
+      keys.includes("createInternal->InternalShape"),
+      `createInternal->InternalShape should be flagged, got: ${keys.join(", ")}`,
+    );
+    const finding = result.privateTypeLeaks.find(
+      (leak) => leak.exportName === "createInternal" && leak.leakedTypeName === "InternalShape",
+    );
+    assert.equal(finding?.confidence, "high");
+  });
+});
+
+describe("private-type-no-leak (semantic enabled)", () => {
+  it("should NOT flag exported function with only public types in signature", async () => {
+    const result = await scanFixture("private-type-no-leak", {
+      semantic: { enabled: true, reportPrivateTypeLeaks: true },
+    });
+    assert.deepEqual(result.privateTypeLeaks, [], "public-only signatures must not produce leaks");
+  });
+});
+
+describe("private-type-leak-class (semantic enabled)", () => {
+  it("flags exported class with public method referencing unexported type", async () => {
+    const result = await scanFixture("private-type-leak-class", {
+      semantic: { enabled: true, reportPrivateTypeLeaks: true },
+    });
+    const keys = privateLeakKeys(result);
+    assert.ok(
+      keys.includes("Service->PrivateConfig"),
+      `Service->PrivateConfig should be flagged, got: ${keys.join(", ")}`,
+    );
+  });
+});

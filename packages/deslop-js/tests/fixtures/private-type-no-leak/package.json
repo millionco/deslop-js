@@ -1,0 +1,4 @@
+{
+  "name": "private-type-no-leak",
+  "main": "src/index.ts"
+}

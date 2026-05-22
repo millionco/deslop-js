@@ -1,6 +1,7 @@
 import type {
   DependencyGraph,
   DeslopConfig,
+  PrivateTypeLeak,
   UnusedClassMember,
   UnusedEnumMember,
   UnusedType,
@@ -9,11 +10,13 @@ import { createSemanticContext } from "./program.js";
 import { detectUnusedTypes } from "./unused-types.js";
 import { detectUnusedEnumMembers } from "./unused-enum-members.js";
 import { detectUnusedClassMembers } from "./unused-class-members.js";
+import { detectPrivateTypeLeaks } from "./private-type-leaks.js";
 
 export interface SemanticAnalysisResult {
   unusedTypes: UnusedType[];
   unusedEnumMembers: UnusedEnumMember[];
   unusedClassMembers: UnusedClassMember[];
+  privateTypeLeaks: PrivateTypeLeak[];
 }
 
 export const runSemanticAnalysis = (
@@ -24,6 +27,7 @@ export const runSemanticAnalysis = (
     unusedTypes: [],
     unusedEnumMembers: [],
     unusedClassMembers: [],
+    privateTypeLeaks: [],
   };
 
   if (!config.semantic.enabled) return emptyResult;
@@ -43,5 +47,9 @@ export const runSemanticAnalysis = (
     ? detectUnusedClassMembers(graph, config, semanticContext)
     : [];
 
-  return { unusedTypes, unusedEnumMembers, unusedClassMembers };
+  const privateTypeLeaks = config.semantic.reportPrivateTypeLeaks
+    ? detectPrivateTypeLeaks(graph, config, semanticContext)
+    : [];
+
+  return { unusedTypes, unusedEnumMembers, unusedClassMembers, privateTypeLeaks };
 };

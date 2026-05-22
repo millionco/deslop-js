@@ -127,6 +127,18 @@ export interface UnusedEnumMember {
   trace: string[];
 }
 
+export interface PrivateTypeLeak {
+  path: string;
+  exportName: string;
+  leakedTypeName: string;
+  leakedTypePath: string;
+  line: number;
+  column: number;
+  confidence: "high" | "medium" | "low";
+  reason: string;
+  trace: string[];
+}
+
 export interface RedundantExport {
   name: string;
   paths: string[];
@@ -156,6 +168,7 @@ export interface ScanResult {
   unusedEnumMembers: UnusedEnumMember[];
   unusedClassMembers: UnusedClassMember[];
   redundantExports: RedundantExport[];
+  privateTypeLeaks: PrivateTypeLeak[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
