@@ -145,6 +145,21 @@ export interface UnusedEnumMember {
   trace: string[];
 }
 
+export type ClassMemberKind = "method" | "property" | "accessor";
+
+export interface UnusedClassMember {
+  path: string;
+  className: string;
+  memberName: string;
+  memberKind: ClassMemberKind;
+  isStatic: boolean;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+  trace: string[];
+}
+
 export type RedundantAliasKind =
   | "import-self-alias"
   | "export-self-alias"
@@ -185,6 +200,7 @@ export interface ScanResult {
   unusedTypes: UnusedType[];
   misclassifiedDependencies: MisclassifiedDependency[];
   unusedEnumMembers: UnusedEnumMember[];
+  unusedClassMembers: UnusedClassMember[];
   redundantAliases: RedundantAlias[];
   duplicateExports: DuplicateExport[];
   totalFiles: number;

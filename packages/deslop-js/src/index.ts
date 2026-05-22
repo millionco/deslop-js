@@ -64,6 +64,8 @@ export type {
   MisclassifiedDependency,
   DependencyDeclaredAs,
   UnusedEnumMember,
+  UnusedClassMember,
+  ClassMemberKind,
   RedundantAlias,
   RedundantAliasKind,
   DuplicateExport,

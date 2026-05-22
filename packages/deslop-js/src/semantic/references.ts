@@ -14,6 +14,11 @@ export interface ReferenceIndex {
   size: number;
 }
 
+const canonicalKeyForSymbol = (symbol: ts.Symbol): ts.Symbol | ts.Node => {
+  const firstDeclaration = symbol.declarations?.[0];
+  return firstDeclaration ?? symbol;
+};
+
 const isDeclarationNameIdentifier = (identifier: ts.Identifier): boolean => {
   const parent = identifier.parent;
   if (!parent) return false;
@@ -115,11 +120,12 @@ export const buildReferenceIndex = (
   program: ts.Program,
   checker: ts.TypeChecker,
 ): ReferenceIndex => {
-  const symbolToReferences = new Map<ts.Symbol, SymbolReferenceSite[]>();
+  const keyedToReferences = new Map<ts.Symbol | ts.Node, SymbolReferenceSite[]>();
 
   const recordIdentifier = (identifier: ts.Identifier, sourceFile: ts.SourceFile): void => {
     const resolvedSymbol = resolveSymbolForIdentifier(identifier, checker);
     if (!resolvedSymbol) return;
+    const key = canonicalKeyForSymbol(resolvedSymbol);
     const site: SymbolReferenceSite = {
       sourceFile,
       identifier,
@@ -128,11 +134,11 @@ export const buildReferenceIndex = (
       isImportSpecifier: isImportSpecifierIdentifier(identifier),
       isTypeContext: isInTypeContext(identifier),
     };
-    const existing = symbolToReferences.get(resolvedSymbol);
+    const existing = keyedToReferences.get(key);
     if (existing) {
       existing.push(site);
     } else {
-      symbolToReferences.set(resolvedSymbol, [site]);
+      keyedToReferences.set(key, [site]);
     }
   };
 
@@ -150,7 +156,7 @@ export const buildReferenceIndex = (
   }
 
   return {
-    getReferences: (symbol) => symbolToReferences.get(symbol) ?? [],
-    size: symbolToReferences.size,
+    getReferences: (symbol) => keyedToReferences.get(canonicalKeyForSymbol(symbol)) ?? [],
+    size: keyedToReferences.size,
   };
 };

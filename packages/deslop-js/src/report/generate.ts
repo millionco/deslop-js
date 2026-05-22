@@ -41,6 +41,7 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     unusedTypes: semanticResult.unusedTypes,
     misclassifiedDependencies: semanticResult.misclassifiedDependencies,
     unusedEnumMembers: semanticResult.unusedEnumMembers,
+    unusedClassMembers: semanticResult.unusedClassMembers,
     redundantAliases,
     duplicateExports,
     totalFiles: graph.modules.length,

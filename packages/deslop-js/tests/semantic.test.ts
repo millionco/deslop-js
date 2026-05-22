@@ -566,3 +566,146 @@ describe("redundancy / duplicate exports", () => {
     }
   });
 });
+
+const classMemberLabels = (result: ScanResult): string[] =>
+  result.unusedClassMembers
+    .map((finding) => `${finding.className}.${finding.memberName}`)
+    .sort();
+
+describe("semantic / unused-class-members: basic", () => {
+  it("flags methods and properties with no external references", async () => {
+    const result = await scanFixtureWithSemantic("unused-class-members-basic", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+      reportUnusedClassMembers: true,
+    });
+    const labels = classMemberLabels(result);
+    assert.ok(labels.includes("InternalCalculator.deadMethod"));
+    assert.ok(labels.includes("InternalCalculator.deadProperty"));
+  });
+
+  it("does NOT flag referenced members", async () => {
+    const result = await scanFixtureWithSemantic("unused-class-members-basic", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+      reportUnusedClassMembers: true,
+    });
+    const labels = classMemberLabels(result);
+    assert.ok(!labels.includes("InternalCalculator.sum"), `sum is used, got: ${labels}`);
+    assert.ok(
+      !labels.includes("InternalCalculator.usedProperty"),
+      `usedProperty is used, got: ${labels}`,
+    );
+  });
+
+  it("does NOT flag private members", async () => {
+    const result = await scanFixtureWithSemantic("unused-class-members-basic", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+      reportUnusedClassMembers: true,
+    });
+    const labels = classMemberLabels(result);
+    assert.ok(
+      !labels.includes("InternalCalculator.internalHelper"),
+      `private members are ESLint territory, got: ${labels}`,
+    );
+  });
+});
+
+describe("semantic / unused-class-members: inheritance", () => {
+  it("does NOT flag a parent method when a subclass overrides it (polymorphic call possible)", async () => {
+    const result = await scanFixtureWithSemantic("unused-class-members-inherited", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+      reportUnusedClassMembers: true,
+    });
+    const labels = classMemberLabels(result);
+    assert.ok(!labels.includes("Animal.speak"), `Animal.speak is overridden by Dog, got: ${labels}`);
+  });
+
+  it("flags a parent method that no subclass overrides and is never called", async () => {
+    const result = await scanFixtureWithSemantic("unused-class-members-inherited", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+      reportUnusedClassMembers: true,
+    });
+    const labels = classMemberLabels(result);
+    assert.ok(labels.includes("Animal.sleep"));
+  });
+
+  it("does NOT flag a parent method that is called on a subclass instance", async () => {
+    const result = await scanFixtureWithSemantic("unused-class-members-inherited", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+      reportUnusedClassMembers: true,
+    });
+    const labels = classMemberLabels(result);
+    assert.ok(!labels.includes("Animal.eat"), `Animal.eat called via buddy.eat(), got: ${labels}`);
+  });
+});
+
+describe("semantic / unused-class-members: decorators", () => {
+  it("does NOT flag methods carrying a decorator in the allowlist (e.g. @Get)", async () => {
+    const result = await scanFixtureWithSemantic("unused-class-members-decorated", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+      reportUnusedClassMembers: true,
+    });
+    const labels = classMemberLabels(result);
+    assert.ok(!labels.includes("UserController.listUsers"));
+    assert.ok(!labels.includes("UserController.currentUser"));
+  });
+
+  it("flags methods decorated with non-allowlisted decorators", async () => {
+    const result = await scanFixtureWithSemantic("unused-class-members-decorated", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+      reportUnusedClassMembers: true,
+    });
+    const labels = classMemberLabels(result);
+    assert.ok(labels.includes("UserController.deadInternal"));
+    assert.ok(labels.includes("UserController.deadPlainMethod"));
+  });
+
+  it("respects custom decoratorAllowlist", async () => {
+    const result = await scanFixtureWithSemantic("unused-class-members-decorated", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+      reportUnusedClassMembers: true,
+      decoratorAllowlist: ["Get", "Internal"],
+    });
+    const labels = classMemberLabels(result);
+    assert.ok(!labels.includes("UserController.deadInternal"), `Internal now allowlisted, got: ${labels}`);
+    assert.ok(labels.includes("UserController.deadPlainMethod"));
+  });
+});
+
+describe("semantic / unused-class-members: feature flag default", () => {
+  it("is off by default (P1 stability)", async () => {
+    const result = await scanFixtureWithSemantic("unused-class-members-basic", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+    });
+    assert.deepEqual(result.unusedClassMembers, []);
+  });
+});
