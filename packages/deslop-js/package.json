@@ -54,7 +54,8 @@
     "fast-glob": "^3.3.3",
     "minimatch": "^10.2.5",
     "oxc-parser": "^0.130.0",
-    "oxc-resolver": "^11.19.1"
+    "oxc-resolver": "^11.19.1",
+    "typescript": "^5.0.0 || ^6.0.0"
   },
   "devDependencies": {
     "@types/minimatch": "^5.1.2",

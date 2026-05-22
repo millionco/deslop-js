@@ -3,6 +3,7 @@ import { detectOrphanFiles } from "./files.js";
 import { detectDeadExports } from "./exports.js";
 import { detectStalePackages } from "./packages.js";
 import { detectCycles } from "./cycles.js";
+import { runSemanticAnalysis } from "../semantic/index.js";
 
 export const generateReport = (graph: DependencyGraph, config: DeslopConfig): ScanResult => {
   const analysisStartTime = performance.now();
@@ -11,6 +12,7 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
   const unusedExports = detectDeadExports(graph, config);
   const unusedDependencies = detectStalePackages(graph, config);
   const circularDependencies = detectCycles(graph);
+  const semanticResult = runSemanticAnalysis(graph, config);
 
   const totalExports = graph.modules.reduce(
     (exportCount, module) =>
@@ -26,6 +28,7 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     unusedExports,
     unusedDependencies,
     circularDependencies,
+    unusedTypes: semanticResult.unusedTypes,
     totalFiles: graph.modules.length,
     totalExports,
     analysisTimeMs: performance.now() - analysisStartTime,

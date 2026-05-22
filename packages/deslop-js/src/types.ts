@@ -104,11 +104,24 @@ export interface CircularDependency {
   files: string[];
 }
 
+export interface UnusedType {
+  path: string;
+  name: string;
+  line: number;
+  column: number;
+  kind: "interface" | "type-alias";
+  confidence: "high" | "medium" | "low";
+  reason: string;
+  trace: string[];
+  suppressionHint?: string;
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
   unusedDependencies: UnusedDependency[];
   circularDependencies: CircularDependency[];
+  unusedTypes: UnusedType[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
@@ -120,6 +133,16 @@ export interface ResolvedEntries {
   alwaysUsedFiles: string[];
 }
 
+export interface SemanticConfig {
+  enabled: boolean;
+  reportUnusedTypes: boolean;
+  reportUnusedEnumMembers: boolean;
+  reportUnusedClassMembers: boolean;
+  reportRedundantExports: boolean;
+  reportPrivateTypeLeaks: boolean;
+  decoratorAllowlist: string[];
+}
+
 export interface DeslopConfig {
   rootDir: string;
   entryPatterns: string[];
@@ -128,4 +151,5 @@ export interface DeslopConfig {
   tsConfigPath: string | undefined;
   reportTypes: boolean;
   includeEntryExports: boolean;
+  semantic: SemanticConfig;
 }

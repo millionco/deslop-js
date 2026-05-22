@@ -264,3 +264,25 @@ export const MAX_CYCLES_PER_SCC = 20;
 export const MAX_TOTAL_CYCLES = 200;
 
 export const MAX_SCC_SIZE_FOR_ENUMERATION = 50;
+
+export const SEMANTIC_MAX_PROGRAM_FILES = 5000;
+
+export const SEMANTIC_TRACE_MAX_ENTRIES = 5;
+
+export const DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST = [
+  "Component",
+  "Injectable",
+  "NgModule",
+  "Pipe",
+  "Directive",
+  "Controller",
+  "Module",
+  "Resolver",
+  "Query",
+  "Mutation",
+  "Get",
+  "Post",
+  "Put",
+  "Patch",
+  "Delete",
+];
