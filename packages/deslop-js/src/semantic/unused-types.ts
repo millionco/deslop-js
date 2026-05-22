@@ -1,7 +1,6 @@
 import type { DependencyGraph, DeslopConfig, UnusedType } from "../types.js";
 import { SEMANTIC_TRACE_MAX_ENTRIES } from "../constants.js";
 import type { SemanticContext } from "./program.js";
-import { buildReferenceIndex } from "./references.js";
 import { resolveExportedTypeSymbol } from "./utils/resolve-export-symbol.js";
 import { buildEntryExposureIndex } from "./utils/entry-exposed-modules.js";
 
@@ -50,7 +49,7 @@ export const detectUnusedTypes = (
   const candidates = collectTypeCandidates(graph, config);
   if (candidates.length === 0) return [];
 
-  const referenceIndex = buildReferenceIndex(context.program, context.checker);
+  const referenceIndex = context.getReferenceIndex();
   const unusedTypes: UnusedType[] = [];
 
   for (const candidate of candidates) {

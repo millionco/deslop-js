@@ -3,7 +3,6 @@ import type { DependencyGraph, DeslopConfig, UnusedEnumMember } from "../types.j
 import { SEMANTIC_TRACE_MAX_ENTRIES } from "../constants.js";
 import { lookupSourceFile } from "./program.js";
 import type { SemanticContext } from "./program.js";
-import { buildReferenceIndex } from "./references.js";
 import type { ReferenceIndex } from "./references.js";
 import { buildEntryExposureIndex } from "./utils/entry-exposed-modules.js";
 
@@ -118,7 +117,7 @@ export const detectUnusedEnumMembers = (
   const candidates = collectEnumCandidates(graph, _config, context);
   if (candidates.length === 0) return [];
 
-  const referenceIndex = buildReferenceIndex(context.program, context.checker);
+  const referenceIndex = context.getReferenceIndex();
   const unusedMembers: UnusedEnumMember[] = [];
 
   for (const candidate of candidates) {

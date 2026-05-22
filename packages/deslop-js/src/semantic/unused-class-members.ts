@@ -3,7 +3,6 @@ import type { DependencyGraph, DeslopConfig, UnusedClassMember } from "../types.
 import { SEMANTIC_TRACE_MAX_ENTRIES } from "../constants.js";
 import { lookupSourceFile } from "./program.js";
 import type { SemanticContext } from "./program.js";
-import { buildReferenceIndex } from "./references.js";
 import type { ReferenceIndex } from "./references.js";
 import { buildEntryExposureIndex } from "./utils/entry-exposed-modules.js";
 
@@ -194,7 +193,7 @@ export const detectUnusedClassMembers = (
   context: SemanticContext,
 ): UnusedClassMember[] => {
   const decoratorAllowlist = new Set(config.semantic.decoratorAllowlist);
-  const referenceIndex = buildReferenceIndex(context.program, context.checker);
+  const referenceIndex = context.getReferenceIndex();
   const subclassOverrideNamesByBase = collectSubclassOverrideNamesByBase(
     context.program,
     context.checker,

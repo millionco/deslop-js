@@ -3,6 +3,8 @@ import { existsSync } from "node:fs";
 import ts from "typescript";
 import type { DependencyGraph, DeslopConfig } from "../types.js";
 import { SEMANTIC_MAX_PROGRAM_FILES } from "../constants.js";
+import { buildReferenceIndex } from "./references.js";
+import type { ReferenceIndex } from "./references.js";
 
 export interface SemanticContext {
   program: ts.Program;
@@ -10,6 +12,7 @@ export interface SemanticContext {
   tsconfigPath: string;
   rootDir: string;
   sourceFileByPath: Map<string, ts.SourceFile>;
+  getReferenceIndex: () => ReferenceIndex;
 }
 
 const TSCONFIG_CANDIDATES = [
@@ -76,12 +79,21 @@ export const createSemanticContext = (
     sourceFileByPath.set(normalizePath(sourceFile.fileName), sourceFile);
   }
 
+  let cachedReferenceIndex: ReferenceIndex | undefined;
+  const getReferenceIndex = (): ReferenceIndex => {
+    if (!cachedReferenceIndex) {
+      cachedReferenceIndex = buildReferenceIndex(program, checker);
+    }
+    return cachedReferenceIndex;
+  };
+
   return {
     program,
     checker,
     tsconfigPath,
     rootDir: config.rootDir,
     sourceFileByPath,
+    getReferenceIndex,
   };
 };
 
