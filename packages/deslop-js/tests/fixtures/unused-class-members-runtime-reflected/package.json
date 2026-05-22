@@ -1,0 +1,4 @@
+{
+  "name": "unused-class-members-runtime-reflected",
+  "main": "src/index.ts"
+}

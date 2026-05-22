@@ -271,6 +271,30 @@ export const SEMANTIC_PROGRAM_BUDGET_MS = 30000;
 
 export const SEMANTIC_TRACE_MAX_ENTRIES = 5;
 
+export const RUNTIME_REFLECTED_CLASS_MEMBER_NAMES = new Set([
+  "message",
+  "name",
+  "stack",
+  "cause",
+  "toString",
+  "toJSON",
+  "valueOf",
+  "constructor",
+  "onmessage",
+  "onerror",
+  "onclose",
+  "onopen",
+  "postMessage",
+  "addEventListener",
+  "removeEventListener",
+  "dispatchEvent",
+  "close",
+  "destroy",
+  "dispose",
+  Symbol.iterator.toString(),
+  Symbol.asyncIterator.toString(),
+]);
+
 export const DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST = [
   "Component",
   "Injectable",

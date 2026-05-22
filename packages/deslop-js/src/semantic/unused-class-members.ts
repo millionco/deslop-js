@@ -1,6 +1,6 @@
 import ts from "typescript";
 import type { DependencyGraph, DeslopConfig, UnusedClassMember } from "../types.js";
-import { SEMANTIC_TRACE_MAX_ENTRIES } from "../constants.js";
+import { RUNTIME_REFLECTED_CLASS_MEMBER_NAMES, SEMANTIC_TRACE_MAX_ENTRIES } from "../constants.js";
 import { lookupSourceFile } from "./program.js";
 import type { SemanticContext } from "./program.js";
 import type { ReferenceIndex } from "./references.js";
@@ -115,15 +115,16 @@ const collectOverrideNames = (
   checker: ts.TypeChecker,
 ): Set<string> => {
   const overrides = new Set<string>();
-  if (!classDeclaration.name) return overrides;
-
-  const classType = checker.getDeclaredTypeOfSymbol(
-    checker.getSymbolAtLocation(classDeclaration.name)!,
-  );
-  const baseTypes = classType ? checker.getBaseTypes(classType as ts.InterfaceType) : [];
-  for (const baseType of baseTypes) {
-    for (const property of checker.getPropertiesOfType(baseType)) {
-      overrides.add(property.getName());
+  const heritageClauses = classDeclaration.heritageClauses;
+  if (!heritageClauses) return overrides;
+  for (const clause of heritageClauses) {
+    if (clause.token !== ts.SyntaxKind.ExtendsKeyword) continue;
+    for (const expression of clause.types) {
+      const baseType = checker.getTypeAtLocation(expression);
+      if (!baseType) continue;
+      for (const property of checker.getPropertiesOfType(baseType)) {
+        overrides.add(property.getName());
+      }
     }
   }
   return overrides;
@@ -244,6 +245,7 @@ export const detectUnusedClassMembers = (
               : memberNameNode.getText(sourceFile);
 
           if (!memberSymbol) continue;
+          if (RUNTIME_REFLECTED_CLASS_MEMBER_NAMES.has(memberName)) continue;
           if (overrides.has(memberName)) continue;
           if (subclassOverrideNames.has(memberName)) continue;
           if (hasReferences(memberSymbol, referenceIndex)) continue;

@@ -4597,3 +4597,17 @@ describe("unused-class-members-builtin-override (FP-class fix)", () => {
     );
   });
 });
+
+describe("unused-class-members-runtime-reflected (allowlist)", () => {
+  it("should NOT flag JS/DOM runtime-reflected names regardless of inheritance", async () => {
+    const result = await scanFixture("unused-class-members-runtime-reflected", {
+      semantic: { enabled: true, reportUnusedClassMembers: true },
+      includeEntryExports: true,
+    });
+    assert.deepEqual(
+      result.unusedClassMembers,
+      [],
+      "message/name/toJSON/toString/dispose/destroy are runtime-reflected names",
+    );
+  });
+});
