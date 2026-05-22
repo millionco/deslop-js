@@ -4570,3 +4570,16 @@ describe("private-type-leak-story-skip (FP-class fix)", () => {
     );
   });
 });
+
+describe("private-type-leak-generics-skip (FP-class fix)", () => {
+  it("should NOT flag generic type parameters as leaked types", async () => {
+    const result = await scanFixture("private-type-leak-generics-skip", {
+      semantic: { enabled: true, reportPrivateTypeLeaks: true },
+    });
+    assert.deepEqual(
+      result.privateTypeLeaks,
+      [],
+      "type parameters (T, K, V, etc.) are scope-local; never count as private-type leaks",
+    );
+  });
+});

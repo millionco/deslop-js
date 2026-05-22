@@ -197,6 +197,7 @@ const findLeakedDeclarationName = (
   if (exposedSymbols.has(symbol)) return undefined;
   if (isPrimitiveOrLib(symbol)) return undefined;
   if ((symbol.flags & ts.SymbolFlags.Type) === 0) return undefined;
+  if ((symbol.flags & ts.SymbolFlags.TypeParameter) !== 0) return undefined;
   const declarations = symbol.declarations;
   if (!declarations || declarations.length === 0) return undefined;
 
