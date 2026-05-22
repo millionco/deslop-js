@@ -77,6 +77,9 @@ export type {
   IdentityWrapper,
   DuplicateTypeDefinition,
   DuplicateTypeDefinitionInstance,
+  DuplicateInlineType,
+  InlineTypeOccurrence,
+  InlineTypeContext,
 } from "./types.js";
 
 const fillSemanticConfig = (

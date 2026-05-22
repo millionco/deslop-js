@@ -157,6 +157,23 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
     lines.push("");
   }
 
+  if (result.duplicateInlineTypes.length > 0) {
+    const inlineLabel =
+      result.duplicateInlineTypes.length === 1
+        ? "inline type group"
+        : "inline type groups";
+    lines.push(`${result.duplicateInlineTypes.length} duplicate ${inlineLabel}`);
+    for (const finding of result.duplicateInlineTypes) {
+      lines.push(`  [${finding.confidence}] ${finding.preview} (${finding.occurrences.length} sites)`);
+      for (const occurrence of finding.occurrences) {
+        lines.push(
+          `    ${occurrence.path}:${occurrence.line}  ${occurrence.context}${occurrence.nearestName ? `  ${occurrence.nearestName}` : ""}`,
+        );
+      }
+    }
+    lines.push("");
+  }
+
   const totalIssues =
     result.unusedFiles.length +
     result.unusedExports.length +
@@ -171,7 +188,8 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
     result.duplicateImports.length +
     result.redundantTypePatterns.length +
     result.identityWrappers.length +
-    result.duplicateTypeDefinitions.length;
+    result.duplicateTypeDefinitions.length +
+    result.duplicateInlineTypes.length;
 
   if (totalIssues === 0) {
     lines.push("No unused files, exports, dependencies, or circular imports found.");
@@ -193,6 +211,7 @@ export const hasUnusedIssues = (result: ScanResult): boolean =>
   result.duplicateImports.length > 0 ||
   result.redundantTypePatterns.length > 0 ||
   result.identityWrappers.length > 0 ||
-  result.duplicateTypeDefinitions.length > 0;
+  result.duplicateTypeDefinitions.length > 0 ||
+  result.duplicateInlineTypes.length > 0;
 
 export const hasCircularIssues = (result: ScanResult): boolean => result.circularDependencies.length > 0;

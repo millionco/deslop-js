@@ -66,6 +66,16 @@ export interface SourceModuleTypeDefinitionHash {
   column: number;
 }
 
+export interface SourceModuleInlineTypeLiteral {
+  structuralHash: string;
+  memberCount: number;
+  preview: string;
+  context: InlineTypeContext;
+  nearestName?: string;
+  line: number;
+  column: number;
+}
+
 export interface SourceModule {
   fileId: SourceFile;
   imports: ImportReference[];
@@ -76,6 +86,7 @@ export interface SourceModule {
   redundantTypePatterns: SourceModuleRedundantTypePattern[];
   identityWrappers: SourceModuleIdentityWrapper[];
   typeDefinitionHashes: SourceModuleTypeDefinitionHash[];
+  inlineTypeLiterals: SourceModuleInlineTypeLiteral[];
   isEntryPoint: boolean;
   isTestEntry: boolean;
   isReachable: boolean;
@@ -281,6 +292,32 @@ export interface DuplicateTypeDefinition {
   reason: string;
 }
 
+export type InlineTypeContext =
+  | "function-parameter"
+  | "function-return"
+  | "variable-annotation"
+  | "local-type-alias"
+  | "class-property"
+  | "interface-property"
+  | "generic-type-argument";
+
+export interface InlineTypeOccurrence {
+  path: string;
+  line: number;
+  column: number;
+  context: InlineTypeContext;
+  nearestName?: string;
+}
+
+export interface DuplicateInlineType {
+  structuralHash: string;
+  memberCount: number;
+  preview: string;
+  occurrences: InlineTypeOccurrence[];
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -296,6 +333,7 @@ export interface ScanResult {
   redundantTypePatterns: RedundantTypePattern[];
   identityWrappers: IdentityWrapper[];
   duplicateTypeDefinitions: DuplicateTypeDefinition[];
+  duplicateInlineTypes: DuplicateInlineType[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;

@@ -22,6 +22,7 @@ import type {
   ExportReference,
   ImportBinding,
   MemberAccess,
+  InlineTypeContext,
   RedundantTypePatternKind,
 } from "../types.js";
 import { getLineFromOffset, getColumnFromOffset } from "../utils/line-column.js";
@@ -32,6 +33,7 @@ import {
 } from "../utils/detect-redundant-type-pattern.js";
 import { detectIdentityWrapperFromInitializer } from "../utils/detect-identity-wrapper.js";
 import { normalizeTypeAstHash } from "../utils/normalize-type-hash.js";
+import { collectInlineTypeLiterals } from "../utils/collect-inline-type-literals.js";
 
 export interface ParsedRedundantTypePattern {
   typeName: string;
@@ -56,6 +58,16 @@ export interface ParsedTypeDefinitionHash {
   column: number;
 }
 
+export interface ParsedInlineTypeLiteral {
+  structuralHash: string;
+  memberCount: number;
+  preview: string;
+  context: InlineTypeContext;
+  nearestName?: string;
+  line: number;
+  column: number;
+}
+
 export interface ParsedSource {
   imports: ImportReference[];
   exports: ExportReference[];
@@ -65,6 +77,7 @@ export interface ParsedSource {
   redundantTypePatterns: ParsedRedundantTypePattern[];
   identityWrappers: ParsedIdentityWrapper[];
   typeDefinitionHashes: ParsedTypeDefinitionHash[];
+  inlineTypeLiterals: ParsedInlineTypeLiteral[];
 }
 
 const extractMdxImportsExports = (sourceText: string): string => {
@@ -188,6 +201,7 @@ const parseCssImports = (filePath: string): ParsedSource => {
     redundantTypePatterns: [],
     identityWrappers: [],
     typeDefinitionHashes: [],
+    inlineTypeLiterals: [],
   };
 };
 
@@ -250,6 +264,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       redundantTypePatterns: [],
       identityWrappers: [],
       typeDefinitionHashes: [],
+      inlineTypeLiterals: [],
     };
   }
 
@@ -306,6 +321,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       redundantTypePatterns: [],
       identityWrappers: [],
       typeDefinitionHashes: [],
+      inlineTypeLiterals: [],
     };
   }
 
@@ -320,6 +336,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       redundantTypePatterns: [],
       identityWrappers: [],
       typeDefinitionHashes: [],
+      inlineTypeLiterals: [],
     };
   }
 
@@ -362,6 +379,17 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     typeDefinitionHashes,
   );
 
+  const inlineTypeCaptures = collectInlineTypeLiterals(program.body);
+  const inlineTypeLiterals: ParsedInlineTypeLiteral[] = inlineTypeCaptures.map((capture) => ({
+    structuralHash: capture.structuralHash,
+    memberCount: capture.memberCount,
+    preview: capture.preview,
+    context: capture.context,
+    nearestName: capture.nearestName,
+    line: getLineFromOffset(sourceText, capture.startOffset),
+    column: getColumnFromOffset(sourceText, capture.startOffset),
+  }));
+
   return {
     imports,
     exports,
@@ -371,6 +399,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     redundantTypePatterns,
     identityWrappers,
     typeDefinitionHashes,
+    inlineTypeLiterals,
   };
 };
 

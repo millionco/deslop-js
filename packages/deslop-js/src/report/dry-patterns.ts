@@ -2,9 +2,11 @@ import type {
   DependencyGraph,
   DuplicateImport,
   DuplicateImportOccurrence,
+  DuplicateInlineType,
   DuplicateTypeDefinition,
   DuplicateTypeDefinitionInstance,
   IdentityWrapper,
+  InlineTypeOccurrence,
   RedundantTypePattern,
 } from "../types.js";
 
@@ -130,6 +132,57 @@ export const detectDuplicateTypeDefinitions = (
       reason: isAllSameName
         ? `${instances.length} identically-named type definitions of the same shape across ${uniquePaths.size} files — extract a shared definition`
         : `${instances.length} structurally-identical type definitions detected across ${uniquePaths.size} files under different names (${[...uniqueNames].join(", ")}) — confirm whether the rename is intentional`,
+    });
+  }
+
+  return findings;
+};
+
+export const detectDuplicateInlineTypes = (graph: DependencyGraph): DuplicateInlineType[] => {
+  const hashToOccurrences = new Map<
+    string,
+    { memberCount: number; preview: string; occurrences: InlineTypeOccurrence[] }
+  >();
+
+  for (const module of graph.modules) {
+    if (module.isDeclarationFile) continue;
+    for (const inlineLiteral of module.inlineTypeLiterals) {
+      const occurrence: InlineTypeOccurrence = {
+        path: module.fileId.path,
+        line: inlineLiteral.line,
+        column: inlineLiteral.column,
+        context: inlineLiteral.context,
+        nearestName: inlineLiteral.nearestName,
+      };
+      const existing = hashToOccurrences.get(inlineLiteral.structuralHash);
+      if (existing) {
+        existing.occurrences.push(occurrence);
+      } else {
+        hashToOccurrences.set(inlineLiteral.structuralHash, {
+          memberCount: inlineLiteral.memberCount,
+          preview: inlineLiteral.preview,
+          occurrences: [occurrence],
+        });
+      }
+    }
+  }
+
+  const findings: DuplicateInlineType[] = [];
+  for (const [structuralHash, group] of hashToOccurrences) {
+    if (group.occurrences.length < 2) continue;
+    const uniqueSiteKeys = new Set(
+      group.occurrences.map((occurrence) => `${occurrence.path}:${occurrence.line}`),
+    );
+    if (uniqueSiteKeys.size < 2) continue;
+    const uniquePaths = new Set(group.occurrences.map((occurrence) => occurrence.path));
+    const confidence = uniquePaths.size >= 2 || group.memberCount >= 5 ? "medium" : "low";
+    findings.push({
+      structuralHash,
+      memberCount: group.memberCount,
+      preview: group.preview,
+      occurrences: group.occurrences,
+      confidence,
+      reason: `inline object shape ${group.preview} appears at ${group.occurrences.length} sites across ${uniquePaths.size} file(s) — extract a named type`,
     });
   }
 

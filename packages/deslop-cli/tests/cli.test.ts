@@ -43,6 +43,7 @@ const emptyScanResult: ScanResult = {
   redundantTypePatterns: [],
   identityWrappers: [],
   duplicateTypeDefinitions: [],
+  duplicateInlineTypes: [],
   totalFiles: 0,
   totalExports: 0,
   analysisTimeMs: 0,

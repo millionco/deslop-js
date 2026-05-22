@@ -842,3 +842,66 @@ describe("redundancy / round-trip aliases (semantic)", () => {
     assert.deepEqual(roundTrips, []);
   });
 });
+
+describe("redundancy / duplicate inline types (inside functions, returns, locals)", () => {
+  it("flags identical inline shape across parameters, returns, and local type aliases", async () => {
+    const result = await scanFixtureSyntactic("duplicate-inline-types");
+    assert.ok(
+      result.duplicateInlineTypes.length >= 1,
+      `expected at least 1 inline duplicate, got: ${result.duplicateInlineTypes.length}`,
+    );
+    const profileGroup = result.duplicateInlineTypes.find((entry) =>
+      entry.preview.includes("email") && entry.preview.includes("id") && entry.preview.includes("name"),
+    );
+    assert.ok(profileGroup, `expected profile shape, got: ${JSON.stringify(result.duplicateInlineTypes)}`);
+    assert.ok(profileGroup.occurrences.length >= 5, `at least 5 occurrences expected, got ${profileGroup.occurrences.length}`);
+    const contexts = new Set(profileGroup.occurrences.map((occurrence) => occurrence.context));
+    assert.ok(contexts.has("function-parameter"));
+    assert.ok(contexts.has("function-return"));
+    assert.ok(contexts.has("local-type-alias"));
+  });
+
+  it("does NOT flag shapes with fewer than 3 properties (noise threshold)", async () => {
+    const result = await scanFixtureSyntactic("duplicate-inline-types");
+    const twoPropFinding = result.duplicateInlineTypes.find((entry) =>
+      entry.preview.includes("a") && entry.preview.includes("b"),
+    );
+    assert.ok(!twoPropFinding, "2-prop shapes should be below threshold");
+  });
+
+  it("does NOT flag shapes that occur only once", async () => {
+    const result = await scanFixtureSyntactic("duplicate-inline-types");
+    const uniqueFinding = result.duplicateInlineTypes.find((entry) =>
+      entry.preview.includes("onlyHere"),
+    );
+    assert.ok(!uniqueFinding, "single-occurrence shape should not be flagged");
+  });
+
+  it("records nearestName so the user can locate each duplicate", async () => {
+    const result = await scanFixtureSyntactic("duplicate-inline-types");
+    const profileGroup = result.duplicateInlineTypes.find((entry) =>
+      entry.preview.includes("email"),
+    );
+    assert.ok(profileGroup);
+    const namesByContext = new Map<string, string | undefined>();
+    for (const occurrence of profileGroup.occurrences) {
+      namesByContext.set(occurrence.context, occurrence.nearestName);
+    }
+    assert.ok(
+      namesByContext.get("function-return") === "fetchProfile" ||
+        namesByContext.get("function-return") === "buildProfile",
+      `function-return nearestName should be a function name, got: ${namesByContext.get("function-return")}`,
+    );
+    assert.equal(namesByContext.get("local-type-alias"), "ProfileLocal");
+  });
+
+  it("respects reportRedundancy=false", async () => {
+    const result = await analyze(
+      defineConfig({
+        rootDir: resolve(FIXTURES_DIR, "duplicate-inline-types"),
+        reportRedundancy: false,
+      }),
+    );
+    assert.deepEqual(result.duplicateInlineTypes, []);
+  });
+});
