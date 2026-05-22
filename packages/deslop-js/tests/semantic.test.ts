@@ -1090,3 +1090,57 @@ describe("redundancy / simplifiable expressions", () => {
     }
   });
 });
+
+describe("redundancy / cross-file duplicate constants", () => {
+  it("flags same string literal repeated across 3+ files with same name as high confidence", async () => {
+    const result = await scanFixtureSyntactic("duplicate-constants");
+    const apiBaseFinding = result.duplicateConstants.find((finding) =>
+      finding.occurrences.every((occurrence) => occurrence.constantName === "API_BASE_URL"),
+    );
+    assert.ok(apiBaseFinding, `expected API_BASE_URL duplicate, got: ${JSON.stringify(result.duplicateConstants)}`);
+    assert.equal(apiBaseFinding.confidence, "high");
+    assert.equal(apiBaseFinding.occurrences.length, 3);
+  });
+
+  it("does NOT flag short strings below the length threshold", async () => {
+    const result = await scanFixtureSyntactic("duplicate-constants");
+    for (const finding of result.duplicateConstants) {
+      assert.ok(!finding.literalPreview.includes('"x"'));
+    }
+  });
+
+  it("does NOT flag small numeric literals below the threshold", async () => {
+    const result = await scanFixtureSyntactic("duplicate-constants");
+    for (const finding of result.duplicateConstants) {
+      assert.ok(!finding.literalPreview.includes("42"));
+    }
+  });
+
+  it("does NOT flag values that appear in fewer than 3 distinct files", async () => {
+    const result = await scanFixtureSyntactic("duplicate-constants");
+    for (const finding of result.duplicateConstants) {
+      const uniquePaths = new Set(finding.occurrences.map((occurrence) => occurrence.path));
+      assert.ok(uniquePaths.size >= 3);
+    }
+  });
+
+  it("marks duplicates with different names as medium confidence", async () => {
+    const result = await scanFixtureSyntactic("duplicate-constants");
+    const pollFinding = result.duplicateConstants.find((finding) =>
+      finding.occurrences.some((occurrence) => occurrence.constantName === "POLL_INTERVAL_MS"),
+    );
+    if (pollFinding) {
+      assert.equal(pollFinding.confidence, "medium");
+    }
+  });
+
+  it("respects reportRedundancy=false", async () => {
+    const result = await analyze(
+      defineConfig({
+        rootDir: resolve(FIXTURES_DIR, "duplicate-constants"),
+        reportRedundancy: false,
+      }),
+    );
+    assert.deepEqual(result.duplicateConstants, []);
+  });
+});

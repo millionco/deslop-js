@@ -16,6 +16,7 @@ import {
   detectDuplicateInlineTypes,
   detectSimplifiableFunctions,
   detectSimplifiableExpressions,
+  detectDuplicateConstants,
 } from "./dry-patterns.js";
 import { runSemanticAnalysis } from "../semantic/index.js";
 
@@ -41,6 +42,7 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
   const simplifiableExpressions = config.reportRedundancy
     ? detectSimplifiableExpressions(graph)
     : [];
+  const duplicateConstants = config.reportRedundancy ? detectDuplicateConstants(graph) : [];
 
   const semanticResult = runSemanticAnalysis(graph, config);
 
@@ -75,6 +77,7 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     duplicateInlineTypes,
     simplifiableFunctions,
     simplifiableExpressions,
+    duplicateConstants,
     totalFiles: graph.modules.length,
     totalExports,
     analysisTimeMs: performance.now() - analysisStartTime,

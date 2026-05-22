@@ -197,6 +197,24 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
     lines.push("");
   }
 
+  if (result.duplicateConstants.length > 0) {
+    const constLabel =
+      result.duplicateConstants.length === 1
+        ? "constant group"
+        : "constant groups";
+    lines.push(`${result.duplicateConstants.length} duplicate ${constLabel}`);
+    for (const finding of result.duplicateConstants) {
+      lines.push(`  [${finding.confidence}] ${finding.literalPreview} (${finding.occurrences.length} copies)`);
+      for (const occurrence of finding.occurrences.slice(0, 3)) {
+        lines.push(`    ${occurrence.path}:${occurrence.line}  const ${occurrence.constantName}`);
+      }
+      if (finding.occurrences.length > 3) {
+        lines.push(`    … and ${finding.occurrences.length - 3} more`);
+      }
+    }
+    lines.push("");
+  }
+
   const totalIssues =
     result.unusedFiles.length +
     result.unusedExports.length +
@@ -214,7 +232,8 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
     result.duplicateTypeDefinitions.length +
     result.duplicateInlineTypes.length +
     result.simplifiableFunctions.length +
-    result.simplifiableExpressions.length;
+    result.simplifiableExpressions.length +
+    result.duplicateConstants.length;
 
   if (totalIssues === 0) {
     lines.push("No unused files, exports, dependencies, or circular imports found.");
@@ -239,6 +258,7 @@ export const hasUnusedIssues = (result: ScanResult): boolean =>
   result.duplicateTypeDefinitions.length > 0 ||
   result.duplicateInlineTypes.length > 0 ||
   result.simplifiableFunctions.length > 0 ||
-  result.simplifiableExpressions.length > 0;
+  result.simplifiableExpressions.length > 0 ||
+  result.duplicateConstants.length > 0;
 
 export const hasCircularIssues = (result: ScanResult): boolean => result.circularDependencies.length > 0;

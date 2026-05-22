@@ -1,5 +1,7 @@
 import type {
   DependencyGraph,
+  DuplicateConstant,
+  DuplicateConstantOccurrence,
   DuplicateImport,
   DuplicateImportOccurrence,
   DuplicateInlineType,
@@ -11,6 +13,8 @@ import type {
   SimplifiableExpression,
   SimplifiableFunction,
 } from "../types.js";
+
+const MIN_FILES_FOR_DUPLICATE_CONSTANT = 3;
 
 export const detectDuplicateImports = (graph: DependencyGraph): DuplicateImport[] => {
   const findings: DuplicateImport[] = [];
@@ -137,6 +141,52 @@ export const detectDuplicateTypeDefinitions = (
     });
   }
 
+  return findings;
+};
+
+export const detectDuplicateConstants = (graph: DependencyGraph): DuplicateConstant[] => {
+  const hashToBuckets = new Map<
+    string,
+    { literalPreview: string; occurrences: DuplicateConstantOccurrence[] }
+  >();
+
+  for (const module of graph.modules) {
+    if (module.isDeclarationFile) continue;
+    for (const candidate of module.duplicateConstantCandidates) {
+      const occurrence: DuplicateConstantOccurrence = {
+        path: module.fileId.path,
+        constantName: candidate.constantName,
+        line: candidate.line,
+        column: candidate.column,
+      };
+      const existing = hashToBuckets.get(candidate.literalHash);
+      if (existing) {
+        existing.occurrences.push(occurrence);
+      } else {
+        hashToBuckets.set(candidate.literalHash, {
+          literalPreview: candidate.literalPreview,
+          occurrences: [occurrence],
+        });
+      }
+    }
+  }
+
+  const findings: DuplicateConstant[] = [];
+  for (const [literalHash, bucket] of hashToBuckets) {
+    const uniqueFilePaths = new Set(bucket.occurrences.map((occurrence) => occurrence.path));
+    if (uniqueFilePaths.size < MIN_FILES_FOR_DUPLICATE_CONSTANT) continue;
+    const uniqueNames = new Set(bucket.occurrences.map((occurrence) => occurrence.constantName));
+    findings.push({
+      literalHash,
+      literalPreview: bucket.literalPreview,
+      occurrences: bucket.occurrences,
+      confidence: uniqueNames.size === 1 ? "high" : "medium",
+      reason:
+        uniqueNames.size === 1
+          ? `${bucket.occurrences.length} copies of \`const ${[...uniqueNames][0]} = ${bucket.literalPreview}\` across ${uniqueFilePaths.size} files — extract to a shared module`
+          : `${bucket.occurrences.length} constants across ${uniqueFilePaths.size} files share the same literal value ${bucket.literalPreview} under different names (${[...uniqueNames].join(", ")}) — consider extracting`,
+    });
+  }
   return findings;
 };
 

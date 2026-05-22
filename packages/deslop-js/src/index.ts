@@ -84,6 +84,8 @@ export type {
   SimplifiableFunctionKind,
   SimplifiableExpression,
   SimplifiableExpressionKind,
+  DuplicateConstant,
+  DuplicateConstantOccurrence,
 } from "./types.js";
 
 const fillSemanticConfig = (

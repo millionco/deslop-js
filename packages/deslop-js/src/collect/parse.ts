@@ -38,6 +38,7 @@ import { normalizeTypeAstHash } from "../utils/normalize-type-hash.js";
 import { collectInlineTypeLiterals } from "../utils/collect-inline-type-literals.js";
 import { collectSimplifiableFunctions } from "../utils/collect-simplifiable-functions.js";
 import { collectSimplifiableExpressions } from "../utils/collect-simplifiable-expressions.js";
+import { collectDuplicateConstantCandidates } from "../utils/collect-duplicate-constants.js";
 
 export interface ParsedRedundantTypePattern {
   typeName: string;
@@ -90,6 +91,14 @@ export interface ParsedSimplifiableExpression {
   suggestion: string;
 }
 
+export interface ParsedDuplicateConstantCandidate {
+  constantName: string;
+  literalHash: string;
+  literalPreview: string;
+  line: number;
+  column: number;
+}
+
 export interface ParsedSource {
   imports: ImportReference[];
   exports: ExportReference[];
@@ -102,6 +111,7 @@ export interface ParsedSource {
   inlineTypeLiterals: ParsedInlineTypeLiteral[];
   simplifiableFunctions: ParsedSimplifiableFunction[];
   simplifiableExpressions: ParsedSimplifiableExpression[];
+  duplicateConstantCandidates: ParsedDuplicateConstantCandidate[];
 }
 
 const extractMdxImportsExports = (sourceText: string): string => {
@@ -228,6 +238,7 @@ const parseCssImports = (filePath: string): ParsedSource => {
     inlineTypeLiterals: [],
     simplifiableFunctions: [],
     simplifiableExpressions: [],
+    duplicateConstantCandidates: [],
   };
 };
 
@@ -293,6 +304,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       inlineTypeLiterals: [],
     simplifiableFunctions: [],
     simplifiableExpressions: [],
+    duplicateConstantCandidates: [],
     };
   }
 
@@ -352,6 +364,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       inlineTypeLiterals: [],
     simplifiableFunctions: [],
     simplifiableExpressions: [],
+    duplicateConstantCandidates: [],
     };
   }
 
@@ -369,6 +382,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       inlineTypeLiterals: [],
     simplifiableFunctions: [],
     simplifiableExpressions: [],
+    duplicateConstantCandidates: [],
     };
   }
 
@@ -442,6 +456,17 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     suggestion: capture.suggestion,
   }));
 
+  const constantCaptures = collectDuplicateConstantCandidates(program.body);
+  const duplicateConstantCandidates: ParsedDuplicateConstantCandidate[] = constantCaptures.map(
+    (capture) => ({
+      constantName: capture.constantName,
+      literalHash: capture.literalHash,
+      literalPreview: capture.literalPreview,
+      line: getLineFromOffset(sourceText, capture.startOffset),
+      column: getColumnFromOffset(sourceText, capture.startOffset),
+    }),
+  );
+
   return {
     imports,
     exports,
@@ -454,6 +479,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     inlineTypeLiterals,
     simplifiableFunctions,
     simplifiableExpressions,
+    duplicateConstantCandidates,
   };
 };
 

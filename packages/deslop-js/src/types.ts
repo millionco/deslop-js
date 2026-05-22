@@ -94,6 +94,14 @@ export interface SourceModuleSimplifiableExpression {
   suggestion: string;
 }
 
+export interface SourceModuleDuplicateConstantCandidate {
+  constantName: string;
+  literalHash: string;
+  literalPreview: string;
+  line: number;
+  column: number;
+}
+
 export interface SourceModule {
   fileId: SourceFile;
   imports: ImportReference[];
@@ -107,6 +115,7 @@ export interface SourceModule {
   inlineTypeLiterals: SourceModuleInlineTypeLiteral[];
   simplifiableFunctions: SourceModuleSimplifiableFunction[];
   simplifiableExpressions: SourceModuleSimplifiableExpression[];
+  duplicateConstantCandidates: SourceModuleDuplicateConstantCandidate[];
   isEntryPoint: boolean;
   isTestEntry: boolean;
   isReachable: boolean;
@@ -372,6 +381,21 @@ export interface SimplifiableExpression {
   suggestion: string;
 }
 
+export interface DuplicateConstantOccurrence {
+  path: string;
+  constantName: string;
+  line: number;
+  column: number;
+}
+
+export interface DuplicateConstant {
+  literalHash: string;
+  literalPreview: string;
+  occurrences: DuplicateConstantOccurrence[];
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -390,6 +414,7 @@ export interface ScanResult {
   duplicateInlineTypes: DuplicateInlineType[];
   simplifiableFunctions: SimplifiableFunction[];
   simplifiableExpressions: SimplifiableExpression[];
+  duplicateConstants: DuplicateConstant[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
