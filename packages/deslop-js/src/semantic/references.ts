@@ -25,6 +25,18 @@ const resolveAlias = (symbol: ts.Symbol, checker: ts.TypeChecker): ts.Symbol => 
   return symbol;
 };
 
+const symbolDeclarationKey = (symbol: ts.Symbol): string | undefined => {
+  const declarations = symbol.declarations;
+  if (!declarations || declarations.length === 0) return undefined;
+  const keys: string[] = [];
+  for (const declaration of declarations) {
+    const sourceFile = declaration.getSourceFile();
+    keys.push(`${sourceFile.fileName}::${declaration.getStart(sourceFile)}`);
+  }
+  keys.sort();
+  return keys.join("||");
+};
+
 const isInsideExportSpecifier = (node: ts.Node): boolean => {
   let current: ts.Node | undefined = node;
   while (current) {
@@ -80,28 +92,32 @@ export const buildReferenceIndex = (
   program: ts.Program,
   checker: ts.TypeChecker,
 ): ReferenceIndex => {
-  const indexBySymbol = new Map<ts.Symbol, ReferenceSite[]>();
+  const indexByKey = new Map<string, ReferenceSite[]>();
+
   const visit = (sourceFile: ts.SourceFile): void => {
     const collectFromNode = (node: ts.Node): void => {
       if (ts.isIdentifier(node)) {
         const symbol = checker.getSymbolAtLocation(node);
         if (symbol) {
           const resolvedSymbol = resolveAlias(symbol, checker);
-          const lineAndChar = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
-          const site: ReferenceSite = {
-            fileName: sourceFile.fileName,
-            position: node.getStart(sourceFile),
-            line: lineAndChar.line + 1,
-            column: lineAndChar.character,
-            isInsideDeclaration: isInsideDeclaration(node),
-            isInsideExportSpecifier: isInsideExportSpecifier(node),
-            isInsideImportSpecifier: isInsideImportSpecifier(node),
-          };
-          const existing = indexBySymbol.get(resolvedSymbol);
-          if (existing) {
-            existing.push(site);
-          } else {
-            indexBySymbol.set(resolvedSymbol, [site]);
+          const key = symbolDeclarationKey(resolvedSymbol);
+          if (key) {
+            const lineAndChar = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+            const site: ReferenceSite = {
+              fileName: sourceFile.fileName,
+              position: node.getStart(sourceFile),
+              line: lineAndChar.line + 1,
+              column: lineAndChar.character,
+              isInsideDeclaration: isInsideDeclaration(node),
+              isInsideExportSpecifier: isInsideExportSpecifier(node),
+              isInsideImportSpecifier: isInsideImportSpecifier(node),
+            };
+            const existing = indexByKey.get(key);
+            if (existing) {
+              existing.push(site);
+            } else {
+              indexByKey.set(key, [site]);
+            }
           }
         }
       }
@@ -116,6 +132,10 @@ export const buildReferenceIndex = (
   }
 
   return {
-    get: (targetSymbol) => indexBySymbol.get(resolveAlias(targetSymbol, checker)) ?? [],
+    get: (targetSymbol) => {
+      const key = symbolDeclarationKey(resolveAlias(targetSymbol, checker));
+      if (!key) return [];
+      return indexByKey.get(key) ?? [];
+    },
   };
 };
