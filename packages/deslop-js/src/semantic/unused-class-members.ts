@@ -3,8 +3,8 @@ import type { DependencyGraph, DeslopConfig, UnusedClassMember } from "../types.
 import { SEMANTIC_TRACE_MAX_ENTRIES } from "../constants.js";
 import { lookupSourceFile } from "./program.js";
 import type { SemanticContext } from "./program.js";
-import { buildReferenceIndex } from "./utils/build-reference-index.js";
-import type { ReferenceIndex } from "./utils/build-reference-index.js";
+import { buildReferenceIndex } from "./references.js";
+import type { ReferenceIndex } from "./references.js";
 
 type ClassMemberCandidate =
   | {

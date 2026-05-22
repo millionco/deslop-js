@@ -1,9 +1,8 @@
-import ts from "typescript";
 import type { DependencyGraph, DeslopConfig, UnusedType } from "../types.js";
 import { SEMANTIC_TRACE_MAX_ENTRIES } from "../constants.js";
-import { lookupSourceFile } from "./program.js";
 import type { SemanticContext } from "./program.js";
-import { buildReferenceIndex } from "./utils/build-reference-index.js";
+import { buildReferenceIndex } from "./references.js";
+import { resolveExportedTypeSymbol } from "./utils/resolve-export-symbol.js";
 
 interface TypeCandidate {
   modulePath: string;
@@ -99,34 +98,6 @@ const collectTypeCandidates = (graph: DependencyGraph, config: DeslopConfig): Ty
   return candidates;
 };
 
-const lookupExportedSymbol = (
-  context: SemanticContext,
-  modulePath: string,
-  exportName: string,
-): { symbol: ts.Symbol; declaration: ts.Declaration; isInterface: boolean } | undefined => {
-  const sourceFile = lookupSourceFile(context, modulePath);
-  if (!sourceFile) return undefined;
-
-  const moduleSymbol = context.checker.getSymbolAtLocation(sourceFile);
-  if (!moduleSymbol) return undefined;
-
-  const exportedSymbols = context.checker.getExportsOfModule(moduleSymbol);
-  for (const exportedSymbol of exportedSymbols) {
-    if (exportedSymbol.getName() !== exportName) continue;
-    const resolvedSymbol =
-      (exportedSymbol.flags & ts.SymbolFlags.Alias) !== 0
-        ? context.checker.getAliasedSymbol(exportedSymbol)
-        : exportedSymbol;
-    const declaration = resolvedSymbol.declarations?.[0];
-    if (!declaration) continue;
-    const isInterface = ts.isInterfaceDeclaration(declaration);
-    const isTypeAlias = ts.isTypeAliasDeclaration(declaration);
-    if (!isInterface && !isTypeAlias) continue;
-    return { symbol: resolvedSymbol, declaration, isInterface };
-  }
-  return undefined;
-};
-
 export const detectUnusedTypes = (
   graph: DependencyGraph,
   config: DeslopConfig,
@@ -139,7 +110,7 @@ export const detectUnusedTypes = (
   const unusedTypes: UnusedType[] = [];
 
   for (const candidate of candidates) {
-    const lookup = lookupExportedSymbol(context, candidate.modulePath, candidate.exportName);
+    const lookup = resolveExportedTypeSymbol(context, candidate.modulePath, candidate.exportName);
     if (!lookup) continue;
 
     const referenceSites = referenceIndex.get(lookup.symbol);

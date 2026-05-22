@@ -3,8 +3,8 @@ import type { DependencyGraph, DeslopConfig, UnusedEnumMember } from "../types.j
 import { SEMANTIC_TRACE_MAX_ENTRIES } from "../constants.js";
 import { lookupSourceFile } from "./program.js";
 import type { SemanticContext } from "./program.js";
-import { buildReferenceIndex } from "./utils/build-reference-index.js";
-import type { ReferenceIndex } from "./utils/build-reference-index.js";
+import { buildReferenceIndex } from "./references.js";
+import type { ReferenceIndex } from "./references.js";
 
 interface EnumCandidate {
   modulePath: string;
