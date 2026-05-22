@@ -2,7 +2,7 @@
 
 Deslop JavaScript code.
 
-CLI for [deslop-js](https://github.com/aidenybai/deslop-js) — finds unused files, dead exports, dead dependencies, circular imports, redundant aliases, duplicate types, and other DRY violations.
+CLI for [deslop-js](https://github.com/aidenybai/deslop-js). Finds unused files, dead exports, dead dependencies, circular imports, redundant aliases, duplicate types, and other DRY violations.
 
 ## Install
 
@@ -33,7 +33,7 @@ Output JSON for programmatic consumption:
 deslop ./my-app --json
 ```
 
-Fail CI when unused code is found (files, exports, or dependencies — not circular imports):
+Fail CI when unused code is found (files, exports, or dependencies, not circular imports):
 
 ```bash
 deslop ./my-app --fail-on-issues
@@ -59,7 +59,7 @@ The default scan emits the following finding categories (each grouped in human o
 | `duplicateExports`        | Same name exported twice from one module                                         |
 | `duplicateImports`        | Same specifier imported on multiple lines (merge them)                           |
 | `redundantTypePatterns`   | `T & {}`, `Partial<Partial<T>>`, `Pick<T, keyof T>`, empty `extends`             |
-| `identityWrappers`        | `const wrap = (x) => fn(x)` — calls without transforming                         |
+| `identityWrappers`        | `const wrap = (x) => fn(x)`, calls without transforming                          |
 | `duplicateTypeDefinitions`| Same structural type declared in multiple files                                  |
 | `duplicateInlineTypes`    | Anonymous `{ a, b, c }` shapes repeated across modules                           |
 | `simplifiableFunctions`   | `(x) => { return f(x) }`, `await x; return x;`, useless `async`                  |
@@ -67,7 +67,7 @@ The default scan emits the following finding categories (each grouped in human o
 | `duplicateConstants`      | Same literal value used in N files under different names                         |
 | `analysisErrors`          | Structured info / warning / error notes (parse failures, skipped files, etc.)    |
 
-Type-aware findings (`unusedTypes`, `unusedClassMembers`, `misclassifiedDependencies`, etc.) require enabling the semantic layer programmatically — see the [`deslop-js` README](https://github.com/aidenybai/deslop-js#semantic-type-aware-analysis). They are not exposed via CLI flags yet.
+Type-aware findings (`unusedTypes`, `unusedClassMembers`, `misclassifiedDependencies`, etc.) require enabling the semantic layer programmatically. See the [`deslop-js` README](https://github.com/aidenybai/deslop-js#semantic-type-aware-analysis). They are not exposed via CLI flags yet.
 
 ### Options
 
@@ -94,8 +94,8 @@ Type-aware findings (`unusedTypes`, `unusedClassMembers`, `misclassifiedDependen
 
 ### Confidence tiers
 
-Every redundancy finding carries a confidence tier (`high` / `medium` / `low`) visible in human and JSON output. Use `high` for CI gates; `medium` and `low` are best as code-review prompts — some patterns flagged at `medium` (`x ?? null`, single-name `duplicateConstants` across packages) have legitimate intent ripgrep alone can't disambiguate.
+Every redundancy finding carries a confidence tier (`high` / `medium` / `low`) visible in human and JSON output. Use `high` for CI gates; `medium` and `low` are best as code-review prompts. Some patterns flagged at `medium` (`x ?? null`, single-name `duplicateConstants` across packages) have legitimate intent ripgrep alone can't disambiguate.
 
 ### Skipped files
 
-Files identified as empty, binary, or minified bundles are skipped with an `info`-severity `analysisErrors` note. This isn't an error — it means the file looked machine-generated or non-source and was excluded from analysis to avoid producing irrelevant findings.
+Files identified as empty, binary, or minified bundles are skipped with an `info`-severity `analysisErrors` note. This isn't an error. It means the file looked machine-generated or non-source and was excluded from analysis to avoid producing irrelevant findings.

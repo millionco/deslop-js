@@ -5,7 +5,7 @@
 
 Deslop JavaScript code.
 
-Finds unused files, dead exports, dead dependencies, circular imports, redundant aliases, duplicate types, and other DRY violations — with confidence tiers so you can gate CI on the high-signal findings and treat the rest as code-review prompts.
+Finds unused files, dead exports, dead dependencies, circular imports, redundant aliases, duplicate types, and other DRY violations. Each finding carries a confidence tier so you can gate CI on the high-signal ones and treat the rest as code-review prompts.
 
 ## Install
 
@@ -92,7 +92,7 @@ const config = defineConfig({
     enabled: true,
     reportUnusedTypes: true,
     reportUnusedEnumMembers: true,
-    reportUnusedClassMembers: false, // off by default — noisy on framework code
+    reportUnusedClassMembers: false, // off by default, noisy on framework code
     reportMisclassifiedDependencies: true,
     reportRedundantVariableAliases: true,
     reportRoundTripAliases: true,
