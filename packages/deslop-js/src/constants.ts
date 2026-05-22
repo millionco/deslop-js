@@ -267,6 +267,12 @@ export const MAX_SCC_SIZE_FOR_ENUMERATION = 50;
 
 export const SEMANTIC_MAX_PROGRAM_FILES = 5000;
 
+export const MAX_PARSE_FILE_SIZE_BYTES = 2_000_000;
+
+export const MAX_AST_WALK_DEPTH = 200;
+
+export const MAX_ANALYSIS_ERRORS = 5000;
+
 export const SEMANTIC_PROGRAM_BUDGET_MS = 30_000;
 
 export const SEMANTIC_TRACE_MAX_ENTRIES = 5;

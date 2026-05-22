@@ -47,6 +47,7 @@ const emptyScanResult: ScanResult = {
   simplifiableFunctions: [],
   simplifiableExpressions: [],
   duplicateConstants: [],
+  analysisErrors: [],
   totalFiles: 0,
   totalExports: 0,
   analysisTimeMs: 0,

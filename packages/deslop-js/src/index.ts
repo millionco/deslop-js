@@ -1,7 +1,14 @@
 import { resolve, dirname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import fg from "fast-glob";
-import type { DeslopConfig, ScanResult } from "./types.js";
+import type { DeslopConfig, DeslopError, ScanResult } from "./types.js";
+import {
+  ConfigError,
+  DetectorError,
+  ResolverError,
+  WorkspaceError,
+  describeUnknownError,
+} from "./errors.js";
 import {
   DEFAULT_ENTRY_GLOBS,
   DEFAULT_EXTENSIONS,
@@ -86,6 +93,10 @@ export type {
   SimplifiableExpressionKind,
   DuplicateConstant,
   DuplicateConstantOccurrence,
+  DeslopError,
+  DeslopErrorCode,
+  DeslopErrorModule,
+  DeslopErrorSeverity,
 } from "./types.js";
 
 const fillSemanticConfig = (
@@ -120,22 +131,110 @@ export const defineConfig = (
   semantic: fillSemanticConfig(options.semantic),
 });
 
+const buildEmptyScanResult = (errors: DeslopError[], elapsedMs: number): ScanResult => ({
+  unusedFiles: [],
+  unusedExports: [],
+  unusedDependencies: [],
+  circularDependencies: [],
+  unusedTypes: [],
+  misclassifiedDependencies: [],
+  unusedEnumMembers: [],
+  unusedClassMembers: [],
+  redundantAliases: [],
+  duplicateExports: [],
+  duplicateImports: [],
+  redundantTypePatterns: [],
+  identityWrappers: [],
+  duplicateTypeDefinitions: [],
+  duplicateInlineTypes: [],
+  simplifiableFunctions: [],
+  simplifiableExpressions: [],
+  duplicateConstants: [],
+  analysisErrors: errors,
+  totalFiles: 0,
+  totalExports: 0,
+  analysisTimeMs: elapsedMs,
+});
+
+const validateConfig = (config: DeslopConfig): DeslopError | undefined => {
+  if (!config.rootDir || typeof config.rootDir !== "string") {
+    return new ConfigError({ message: "config.rootDir must be a non-empty string" });
+  }
+  if (!existsSync(config.rootDir)) {
+    return new ConfigError({
+      message: `config.rootDir does not exist: ${config.rootDir}`,
+      path: config.rootDir,
+    });
+  }
+  return undefined;
+};
+
 export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
   const pipelineStartTime = performance.now();
+  const setupErrors: DeslopError[] = [];
 
-  const workspaceDiscovery = resolveWorkspaces(resolve(config.rootDir));
+  const configValidationError = validateConfig(config);
+  if (configValidationError) {
+    return buildEmptyScanResult(
+      [configValidationError],
+      performance.now() - pipelineStartTime,
+    );
+  }
+
+  let workspaceDiscovery: ReturnType<typeof resolveWorkspaces>;
+  try {
+    workspaceDiscovery = resolveWorkspaces(resolve(config.rootDir));
+  } catch (workspaceError) {
+    setupErrors.push(
+      new WorkspaceError({
+        code: "workspace-discovery-failed",
+        message: "resolveWorkspaces threw — falling back to single-package mode",
+        path: config.rootDir,
+        detail: describeUnknownError(workspaceError),
+      }),
+    );
+    workspaceDiscovery = {
+      packages: [],
+      excludedDirectories: [],
+      hasRootLevelWorkspacePatterns: false,
+    };
+  }
   const workspacePackages = [...workspaceDiscovery.packages];
 
-  const monorepoRoot = findMonorepoRoot(config.rootDir);
-  if (monorepoRoot) {
-    const monorepoWorkspaces = resolveWorkspaces(monorepoRoot);
-    const existingDirectories = new Set(
-      workspacePackages.map((workspacePackage) => workspacePackage.directory),
+  let monorepoRoot: string | undefined;
+  try {
+    monorepoRoot = findMonorepoRoot(config.rootDir) ?? undefined;
+  } catch (monorepoError) {
+    setupErrors.push(
+      new WorkspaceError({
+        code: "monorepo-discovery-failed",
+        message: "findMonorepoRoot threw",
+        path: config.rootDir,
+        detail: describeUnknownError(monorepoError),
+      }),
     );
-    for (const monorepoPackage of monorepoWorkspaces.packages) {
-      if (!existingDirectories.has(monorepoPackage.directory)) {
-        workspacePackages.push(monorepoPackage);
+    monorepoRoot = undefined;
+  }
+  if (monorepoRoot) {
+    try {
+      const monorepoWorkspaces = resolveWorkspaces(monorepoRoot);
+      const existingDirectories = new Set(
+        workspacePackages.map((workspacePackage) => workspacePackage.directory),
+      );
+      for (const monorepoPackage of monorepoWorkspaces.packages) {
+        if (!existingDirectories.has(monorepoPackage.directory)) {
+          workspacePackages.push(monorepoPackage);
+        }
       }
+    } catch (monorepoWorkspaceError) {
+      setupErrors.push(
+        new WorkspaceError({
+          code: "workspace-discovery-failed",
+          message: "resolveWorkspaces threw on monorepo root",
+          path: monorepoRoot,
+          detail: describeUnknownError(monorepoWorkspaceError),
+        }),
+      );
     }
   }
 
@@ -164,20 +263,67 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
         }
       : config;
 
-  const files = await collectSourceFiles(configWithExclusions);
-  const discoveredEntries = await resolveEntries(configWithExclusions);
+  let files: Awaited<ReturnType<typeof collectSourceFiles>>;
+  try {
+    files = await collectSourceFiles(configWithExclusions);
+  } catch (collectError) {
+    setupErrors.push(
+      new WorkspaceError({
+        code: "workspace-discovery-failed",
+        severity: "fatal",
+        message: "collectSourceFiles failed",
+        path: config.rootDir,
+        detail: describeUnknownError(collectError),
+      }),
+    );
+    return buildEmptyScanResult(setupErrors, performance.now() - pipelineStartTime);
+  }
+
+  let discoveredEntries: Awaited<ReturnType<typeof resolveEntries>>;
+  try {
+    discoveredEntries = await resolveEntries(configWithExclusions);
+  } catch (entriesError) {
+    setupErrors.push(
+      new WorkspaceError({
+        code: "workspace-discovery-failed",
+        message: "resolveEntries failed — defaulting to empty entry set",
+        path: config.rootDir,
+        detail: describeUnknownError(entriesError),
+      }),
+    );
+    discoveredEntries = { productionEntries: [], testEntries: [], alwaysUsedFiles: [] };
+  }
   const productionEntrySet = new Set(discoveredEntries.productionEntries);
   const testEntrySet = new Set(discoveredEntries.testEntries);
   const alwaysUsedFileSet = new Set(discoveredEntries.alwaysUsedFiles);
-  const hasReactNative = detectReactNative(config.rootDir, workspacePackages);
-  const moduleResolver = createResolver(
-    config,
-    workspacePackages.map((workspacePackage) => ({
-      name: workspacePackage.name,
-      directory: workspacePackage.directory,
-    })),
-    { hasReactNative, monorepoRoot },
-  );
+
+  let hasReactNative = false;
+  try {
+    hasReactNative = detectReactNative(config.rootDir, workspacePackages);
+  } catch {
+    hasReactNative = false;
+  }
+
+  let moduleResolver: ReturnType<typeof createResolver>;
+  try {
+    moduleResolver = createResolver(
+      config,
+      workspacePackages.map((workspacePackage) => ({
+        name: workspacePackage.name,
+        directory: workspacePackage.directory,
+      })),
+      { hasReactNative, monorepoRoot },
+    );
+  } catch (resolverError) {
+    setupErrors.push(
+      new ResolverError({
+        message: "createResolver failed",
+        path: config.rootDir,
+        detail: describeUnknownError(resolverError),
+      }),
+    );
+    return buildEmptyScanResult(setupErrors, performance.now() - pipelineStartTime);
+  }
   const graphInputs: ModuleLinkInput[] = [];
 
   for (const file of files) {
@@ -281,14 +427,64 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
     nextFileIndex++;
   }
 
-  const moduleGraph = buildDependencyGraph(graphInputs);
+  let moduleGraph: ReturnType<typeof buildDependencyGraph>;
+  try {
+    moduleGraph = buildDependencyGraph(graphInputs);
+  } catch (graphError) {
+    setupErrors.push(
+      new DetectorError({
+        module: "linker",
+        severity: "fatal",
+        message: "buildDependencyGraph threw",
+        detail: describeUnknownError(graphError),
+      }),
+    );
+    return buildEmptyScanResult(setupErrors, performance.now() - pipelineStartTime);
+  }
 
-  resolveReExportChains(moduleGraph);
+  try {
+    resolveReExportChains(moduleGraph);
+  } catch (reExportError) {
+    setupErrors.push(
+      new DetectorError({
+        module: "linker",
+        message: "resolveReExportChains threw — re-export propagation skipped",
+        detail: describeUnknownError(reExportError),
+      }),
+    );
+  }
 
-  traceReachability(moduleGraph);
+  try {
+    traceReachability(moduleGraph);
+  } catch (reachabilityError) {
+    setupErrors.push(
+      new DetectorError({
+        module: "linker",
+        message: "traceReachability threw — every module marked reachable to avoid over-reporting",
+        detail: describeUnknownError(reachabilityError),
+      }),
+    );
+    for (const module of moduleGraph.modules) module.isReachable = true;
+  }
 
-  const analysisResult = generateReport(moduleGraph, config);
+  let analysisResult: ScanResult;
+  try {
+    analysisResult = generateReport(moduleGraph, config);
+  } catch (reportError) {
+    setupErrors.push(
+      new DetectorError({
+        module: "report",
+        severity: "fatal",
+        message: "generateReport threw at the top level",
+        detail: describeUnknownError(reportError),
+      }),
+    );
+    return buildEmptyScanResult(setupErrors, performance.now() - pipelineStartTime);
+  }
 
+  if (setupErrors.length > 0) {
+    analysisResult.analysisErrors = [...setupErrors, ...analysisResult.analysisErrors];
+  }
   analysisResult.analysisTimeMs = performance.now() - pipelineStartTime;
 
   return analysisResult;

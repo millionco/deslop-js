@@ -1,12 +1,14 @@
 import type {
   DependencyGraph,
   DeslopConfig,
+  DeslopError,
   MisclassifiedDependency,
   RedundantAlias,
   UnusedClassMember,
   UnusedEnumMember,
   UnusedType,
 } from "../types.js";
+import { DetectorError, TypeScriptError, describeUnknownError } from "../errors.js";
 import { createSemanticContext } from "./program.js";
 import { buildReferenceIndex } from "./references.js";
 import { detectUnusedTypes } from "./unused-types.js";
@@ -22,6 +24,7 @@ export interface SemanticAnalysisResult {
   unusedClassMembers: UnusedClassMember[];
   misclassifiedDependencies: MisclassifiedDependency[];
   redundantAliases: RedundantAlias[];
+  errors: DeslopError[];
   contextStatus:
     | "disabled"
     | "ready"
@@ -40,6 +43,7 @@ const EMPTY_RESULT: SemanticAnalysisResult = {
   unusedClassMembers: [],
   misclassifiedDependencies: [],
   redundantAliases: [],
+  errors: [],
   contextStatus: "disabled",
 };
 
@@ -50,8 +54,29 @@ export const runSemanticAnalysis = (
   const semanticConfig = config.semantic;
   if (!semanticConfig?.enabled) return EMPTY_RESULT;
 
+  const errors: DeslopError[] = [];
+
+  const safeDetector = <ResultType>(
+    detectorName: string,
+    detector: () => ResultType,
+    fallback: ResultType,
+  ): ResultType => {
+    try {
+      return detector();
+    } catch (detectorError) {
+      errors.push(
+        new DetectorError({
+          module: "semantic",
+          message: `${detectorName} threw during semantic analysis`,
+          detail: describeUnknownError(detectorError),
+        }),
+      );
+      return fallback;
+    }
+  };
+
   const misclassifiedDependencies = semanticConfig.reportMisclassifiedDependencies
-    ? detectMisclassifiedDependencies(graph, config)
+    ? safeDetector("detectMisclassifiedDependencies", () => detectMisclassifiedDependencies(graph, config), [])
     : [];
 
   const needsTsContext =
@@ -67,11 +92,33 @@ export const runSemanticAnalysis = (
       unusedClassMembers: [],
       misclassifiedDependencies,
       redundantAliases: [],
+      errors,
       contextStatus: "no-context-required",
     };
   }
 
-  const contextResult = createSemanticContext(config.rootDir, config.tsConfigPath);
+  let contextResult: ReturnType<typeof createSemanticContext>;
+  try {
+    contextResult = createSemanticContext(config.rootDir, config.tsConfigPath);
+  } catch (contextError) {
+    return {
+      unusedTypes: [],
+      unusedEnumMembers: [],
+      unusedClassMembers: [],
+      misclassifiedDependencies,
+      redundantAliases: [],
+      errors: [
+        ...errors,
+        new TypeScriptError({
+          code: "ts-not-loadable",
+          message: "createSemanticContext threw before returning a result",
+          detail: describeUnknownError(contextError),
+        }),
+      ],
+      contextStatus: "typescript-load-failed",
+    };
+  }
+
   if (!contextResult.ok) {
     return {
       unusedTypes: [],
@@ -79,6 +126,7 @@ export const runSemanticAnalysis = (
       unusedClassMembers: [],
       misclassifiedDependencies,
       redundantAliases: [],
+      errors: [...errors, contextResult.failure.error],
       contextStatus: contextResult.failure.reason,
       contextMessage: contextResult.failure.message,
     };
@@ -94,25 +142,38 @@ export const runSemanticAnalysis = (
   };
 
   const unusedTypes = semanticConfig.reportUnusedTypes
-    ? detectUnusedTypes(graph, config, context, getReferenceIndex())
+    ? safeDetector("detectUnusedTypes", () => detectUnusedTypes(graph, config, context, getReferenceIndex()), [])
     : [];
   const unusedEnumMembers = semanticConfig.reportUnusedEnumMembers
-    ? detectUnusedEnumMembers(graph, config, context, getReferenceIndex())
+    ? safeDetector(
+        "detectUnusedEnumMembers",
+        () => detectUnusedEnumMembers(graph, config, context, getReferenceIndex()),
+        [],
+      )
     : [];
   const unusedClassMembers = semanticConfig.reportUnusedClassMembers
-    ? detectUnusedClassMembers(
-        graph,
-        config,
-        context,
-        getReferenceIndex(),
-        semanticConfig.decoratorAllowlist,
+    ? safeDetector(
+        "detectUnusedClassMembers",
+        () =>
+          detectUnusedClassMembers(
+            graph,
+            config,
+            context,
+            getReferenceIndex(),
+            semanticConfig.decoratorAllowlist,
+          ),
+        [],
       )
     : [];
   const variableAliases = semanticConfig.reportRedundantVariableAliases
-    ? detectRedundantVariableAliases(graph, context, getReferenceIndex())
+    ? safeDetector(
+        "detectRedundantVariableAliases",
+        () => detectRedundantVariableAliases(graph, context, getReferenceIndex()),
+        [],
+      )
     : [];
   const roundTripAliases = semanticConfig.reportRoundTripAliases
-    ? detectRoundTripAliases(graph, context)
+    ? safeDetector("detectRoundTripAliases", () => detectRoundTripAliases(graph, context), [])
     : [];
 
   return {
@@ -121,6 +182,7 @@ export const runSemanticAnalysis = (
     unusedClassMembers,
     misclassifiedDependencies,
     redundantAliases: [...variableAliases, ...roundTripAliases],
+    errors,
     contextStatus: "ready",
   };
 };

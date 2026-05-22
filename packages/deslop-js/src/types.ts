@@ -1,3 +1,7 @@
+import type { DeslopError } from "./errors.js";
+
+export type { DeslopError, DeslopErrorCode, DeslopErrorModule, DeslopErrorSeverity } from "./errors.js";
+
 export interface SourceFile {
   index: number;
   path: string;
@@ -116,6 +120,7 @@ export interface SourceModule {
   simplifiableFunctions: SourceModuleSimplifiableFunction[];
   simplifiableExpressions: SourceModuleSimplifiableExpression[];
   duplicateConstantCandidates: SourceModuleDuplicateConstantCandidate[];
+  parseErrors: DeslopError[];
   isEntryPoint: boolean;
   isTestEntry: boolean;
   isReachable: boolean;
@@ -415,6 +420,7 @@ export interface ScanResult {
   simplifiableFunctions: SimplifiableFunction[];
   simplifiableExpressions: SimplifiableExpression[];
   duplicateConstants: DuplicateConstant[];
+  analysisErrors: DeslopError[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;

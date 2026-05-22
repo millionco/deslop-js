@@ -157,6 +157,32 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
     lines.push("");
   }
 
+  if (result.analysisErrors.length > 0) {
+    const fatalCount = result.analysisErrors.filter((error) => error.severity === "fatal").length;
+    const warningCount = result.analysisErrors.filter((error) => error.severity === "warning").length;
+    const infoCount = result.analysisErrors.filter((error) => error.severity === "info").length;
+    const counts = [
+      fatalCount > 0 ? `${fatalCount} fatal` : null,
+      warningCount > 0 ? `${warningCount} warning` : null,
+      infoCount > 0 ? `${infoCount} info` : null,
+    ]
+      .filter((entry) => entry !== null)
+      .join(", ");
+    lines.push(
+      `${result.analysisErrors.length} analysis ${result.analysisErrors.length === 1 ? "error" : "errors"} (${counts})`,
+    );
+    for (const error of result.analysisErrors.slice(0, 20)) {
+      const location = error.path ? ` ${error.path}` : "";
+      lines.push(
+        `  [${error.severity}/${error.module}/${error.code}]${location}  ${error.message}`,
+      );
+    }
+    if (result.analysisErrors.length > 20) {
+      lines.push(`  … and ${result.analysisErrors.length - 20} more`);
+    }
+    lines.push("");
+  }
+
   if (result.duplicateInlineTypes.length > 0) {
     const inlineLabel =
       result.duplicateInlineTypes.length === 1

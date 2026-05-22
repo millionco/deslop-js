@@ -1,5 +1,7 @@
 import { parseSync } from "oxc-parser";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
+import { MAX_PARSE_FILE_SIZE_BYTES } from "../constants.js";
+import { type DeslopError, FileReadError, ParseError, describeUnknownError } from "../errors.js";
 import type {
   Statement,
   ImportDeclaration,
@@ -112,6 +114,7 @@ export interface ParsedSource {
   simplifiableFunctions: ParsedSimplifiableFunction[];
   simplifiableExpressions: ParsedSimplifiableExpression[];
   duplicateConstantCandidates: ParsedDuplicateConstantCandidate[];
+  errors: DeslopError[];
 }
 
 const extractMdxImportsExports = (sourceText: string): string => {
@@ -239,6 +242,7 @@ const parseCssImports = (filePath: string): ParsedSource => {
     simplifiableFunctions: [],
     simplifiableExpressions: [],
     duplicateConstantCandidates: [],
+    errors: [],
   };
 };
 
@@ -284,31 +288,133 @@ const collectLocalIdentifierReferences = (statements: Statement[]): string[] => 
   return references;
 };
 
+const EMPTY_PARSED_SOURCE: ParsedSource = {
+  imports: [],
+  exports: [],
+  memberAccesses: [],
+  wholeObjectUses: [],
+  localIdentifierReferences: [],
+  redundantTypePatterns: [],
+  identityWrappers: [],
+  typeDefinitionHashes: [],
+  inlineTypeLiterals: [],
+  simplifiableFunctions: [],
+  simplifiableExpressions: [],
+  duplicateConstantCandidates: [],
+  errors: [],
+};
+
+const stripByteOrderMark = (sourceText: string): string => {
+  if (sourceText.charCodeAt(0) === 0xfeff) return sourceText.slice(1);
+  return sourceText;
+};
+
+const looksLikeBinaryContent = (sourceText: string): boolean => {
+  const sampleLength = Math.min(sourceText.length, 2048);
+  let nullByteCount = 0;
+  for (let scanIndex = 0; scanIndex < sampleLength; scanIndex++) {
+    if (sourceText.charCodeAt(scanIndex) === 0) nullByteCount++;
+    if (nullByteCount > 4) return true;
+  }
+  return false;
+};
+
+const safeReadSourceFile = (
+  filePath: string,
+  errors: DeslopError[],
+): string | undefined => {
+  try {
+    const stats = statSync(filePath);
+    if (stats.size === 0) {
+      errors.push(
+        new FileReadError({
+          code: "file-empty",
+          severity: "info",
+          message: "file is empty — nothing to analyze",
+          path: filePath,
+        }),
+      );
+      return undefined;
+    }
+    if (stats.size > MAX_PARSE_FILE_SIZE_BYTES) {
+      errors.push(
+        new FileReadError({
+          code: "file-too-large",
+          message: `file size ${stats.size}B exceeds MAX_PARSE_FILE_SIZE_BYTES (${MAX_PARSE_FILE_SIZE_BYTES})`,
+          path: filePath,
+        }),
+      );
+      return undefined;
+    }
+  } catch (statError) {
+    errors.push(
+      new FileReadError({
+        code: "file-read-failed",
+        message: "could not stat source file",
+        path: filePath,
+        detail: describeUnknownError(statError),
+      }),
+    );
+    return undefined;
+  }
+  try {
+    const rawSourceText = readFileSync(filePath, "utf-8");
+    const sourceText = stripByteOrderMark(rawSourceText);
+    if (looksLikeBinaryContent(sourceText)) {
+      errors.push(
+        new FileReadError({
+          code: "file-binary",
+          severity: "info",
+          message: "file appears to be binary — skipping",
+          path: filePath,
+        }),
+      );
+      return undefined;
+    }
+    return sourceText;
+  } catch (readError) {
+    errors.push(
+      new FileReadError({
+        code: "file-read-failed",
+        message: "could not read source file",
+        path: filePath,
+        detail: describeUnknownError(readError),
+      }),
+    );
+    return undefined;
+  }
+};
+
 export const parseSourceFile = (filePath: string): ParsedSource => {
   const isCss = CSS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   if (isCss) {
-    return parseCssImports(filePath);
+    try {
+      return parseCssImports(filePath);
+    } catch (cssError) {
+      return {
+        ...EMPTY_PARSED_SOURCE,
+        errors: [
+          new ParseError({
+            code: "parse-failed",
+            message: "CSS import parsing crashed",
+            path: filePath,
+            detail: describeUnknownError(cssError),
+          }),
+        ],
+      };
+    }
   }
 
   const isNonJsFile = NON_JS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   if (isNonJsFile) {
-    return {
-      imports: [],
-      exports: [],
-      memberAccesses: [],
-      wholeObjectUses: [],
-      localIdentifierReferences: [],
-      redundantTypePatterns: [],
-      identityWrappers: [],
-      typeDefinitionHashes: [],
-      inlineTypeLiterals: [],
-    simplifiableFunctions: [],
-    simplifiableExpressions: [],
-    duplicateConstantCandidates: [],
-    };
+    return EMPTY_PARSED_SOURCE;
   }
 
-  const sourceText = readFileSync(filePath, "utf-8");
+  const earlyErrors: DeslopError[] = [];
+  const sourceText = safeReadSourceFile(filePath, earlyErrors);
+  if (sourceText === undefined) {
+    return { ...EMPTY_PARSED_SOURCE, errors: earlyErrors };
+  }
   const imports: ImportReference[] = [];
   const exports: ExportReference[] = [];
 
@@ -330,7 +436,23 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       ? filePath.replace(/\.(mdx|astro|vue|svelte)$/, ".tsx")
       : filePath;
 
-  let result = parseSync(parseFileName, textToParse);
+  let result: ReturnType<typeof parseSync>;
+  try {
+    result = parseSync(parseFileName, textToParse);
+  } catch (parseError) {
+    return {
+      ...EMPTY_PARSED_SOURCE,
+      errors: [
+        ...earlyErrors,
+        new ParseError({
+          code: "parse-failed",
+          message: "oxc-parser threw during initial parse",
+          path: filePath,
+          detail: describeUnknownError(parseError),
+        }),
+      ],
+    };
+  }
 
   const isPlainJsFile =
     parseFileName.endsWith(".js") ||
@@ -338,51 +460,54 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     parseFileName.endsWith(".cjs");
 
   if (isPlainJsFile && result.errors.length > 0) {
-    const jsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".jsx");
-    const jsxResult = parseSync(jsxFileName, textToParse);
-    if (jsxResult.errors.length === 0) {
-      result = jsxResult;
-    } else {
-      const tsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".tsx");
-      const tsxResult = parseSync(tsxFileName, textToParse);
-      if (tsxResult.errors.length === 0) {
-        result = tsxResult;
+    try {
+      const jsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".jsx");
+      const jsxResult = parseSync(jsxFileName, textToParse);
+      if (jsxResult.errors.length === 0) {
+        result = jsxResult;
+      } else {
+        const tsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".tsx");
+        const tsxResult = parseSync(tsxFileName, textToParse);
+        if (tsxResult.errors.length === 0) {
+          result = tsxResult;
+        }
       }
+    } catch {
+      // fall through with the existing (error-laden) result
     }
   }
 
   if (result.errors.length > 0) {
     return {
+      ...EMPTY_PARSED_SOURCE,
       imports,
       exports,
-      memberAccesses: [],
-      wholeObjectUses: [],
-      localIdentifierReferences: [],
-      redundantTypePatterns: [],
-      identityWrappers: [],
-      typeDefinitionHashes: [],
-      inlineTypeLiterals: [],
-    simplifiableFunctions: [],
-    simplifiableExpressions: [],
-    duplicateConstantCandidates: [],
+      errors: [
+        ...earlyErrors,
+        new ParseError({
+          code: "parse-recovered",
+          severity: "info",
+          message: `oxc-parser reported ${result.errors.length} syntax issue(s); skipping deep analysis for this file`,
+          path: filePath,
+        }),
+      ],
     };
   }
 
   const program = result.program;
   if (!program?.body) {
     return {
+      ...EMPTY_PARSED_SOURCE,
       imports,
       exports,
-      memberAccesses: [],
-      wholeObjectUses: [],
-      localIdentifierReferences: [],
-      redundantTypePatterns: [],
-      identityWrappers: [],
-      typeDefinitionHashes: [],
-      inlineTypeLiterals: [],
-    simplifiableFunctions: [],
-    simplifiableExpressions: [],
-    duplicateConstantCandidates: [],
+      errors: [
+        ...earlyErrors,
+        new ParseError({
+          code: "parse-failed",
+          message: "oxc-parser returned no program body",
+          path: filePath,
+        }),
+      ],
     };
   }
 
@@ -403,29 +528,80 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     }
   }
 
-  collectDynamicImports(program.body, sourceText, imports);
+  const detectorErrors: DeslopError[] = [];
+
+  const safeWalk = <ResultType>(
+    walkerName: string,
+    walker: () => ResultType,
+    fallback: ResultType,
+  ): ResultType => {
+    try {
+      return walker();
+    } catch (walkError) {
+      detectorErrors.push(
+        new ParseError({
+          code: "ast-walk-failed",
+          message: `${walkerName} threw during AST traversal`,
+          path: filePath,
+          detail: describeUnknownError(walkError),
+        }),
+      );
+      return fallback;
+    }
+  };
+
+  safeWalk(
+    "collectDynamicImports",
+    () => {
+      collectDynamicImports(program.body, sourceText, imports);
+      return undefined;
+    },
+    undefined,
+  );
 
   const namespaceLocalNames = collectNamespaceLocalNames(imports);
   const memberAccesses: MemberAccess[] = [];
   const wholeObjectUses: string[] = [];
   if (namespaceLocalNames.size > 0) {
-    collectMemberAccesses(program.body, namespaceLocalNames, memberAccesses, wholeObjectUses);
+    safeWalk(
+      "collectMemberAccesses",
+      () => {
+        collectMemberAccesses(program.body, namespaceLocalNames, memberAccesses, wholeObjectUses);
+        return undefined;
+      },
+      undefined,
+    );
   }
 
-  const localIdentifierReferences = collectLocalIdentifierReferences(program.body);
+  const localIdentifierReferences = safeWalk(
+    "collectLocalIdentifierReferences",
+    () => collectLocalIdentifierReferences(program.body),
+    [],
+  );
 
   const redundantTypePatterns: ParsedRedundantTypePattern[] = [];
   const identityWrappers: ParsedIdentityWrapper[] = [];
   const typeDefinitionHashes: ParsedTypeDefinitionHash[] = [];
-  collectDryPatterns(
-    program.body,
-    sourceText,
-    redundantTypePatterns,
-    identityWrappers,
-    typeDefinitionHashes,
+  safeWalk(
+    "collectDryPatterns",
+    () => {
+      collectDryPatterns(
+        program.body,
+        sourceText,
+        redundantTypePatterns,
+        identityWrappers,
+        typeDefinitionHashes,
+      );
+      return undefined;
+    },
+    undefined,
   );
 
-  const inlineTypeCaptures = collectInlineTypeLiterals(program.body);
+  const inlineTypeCaptures = safeWalk(
+    "collectInlineTypeLiterals",
+    () => collectInlineTypeLiterals(program.body),
+    [],
+  );
   const inlineTypeLiterals: ParsedInlineTypeLiteral[] = inlineTypeCaptures.map((capture) => ({
     structuralHash: capture.structuralHash,
     memberCount: capture.memberCount,
@@ -436,7 +612,11 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     column: getColumnFromOffset(sourceText, capture.startOffset),
   }));
 
-  const simplifiableCaptures = collectSimplifiableFunctions(program.body);
+  const simplifiableCaptures = safeWalk(
+    "collectSimplifiableFunctions",
+    () => collectSimplifiableFunctions(program.body),
+    [],
+  );
   const simplifiableFunctions: ParsedSimplifiableFunction[] = simplifiableCaptures.map((capture) => ({
     kind: capture.kind,
     functionName: capture.functionName,
@@ -446,7 +626,11 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     suggestion: capture.suggestion,
   }));
 
-  const expressionCaptures = collectSimplifiableExpressions(program.body);
+  const expressionCaptures = safeWalk(
+    "collectSimplifiableExpressions",
+    () => collectSimplifiableExpressions(program.body),
+    [],
+  );
   const simplifiableExpressions: ParsedSimplifiableExpression[] = expressionCaptures.map((capture) => ({
     kind: capture.kind,
     snippet: capture.snippet,
@@ -456,7 +640,11 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     suggestion: capture.suggestion,
   }));
 
-  const constantCaptures = collectDuplicateConstantCandidates(program.body);
+  const constantCaptures = safeWalk(
+    "collectDuplicateConstantCandidates",
+    () => collectDuplicateConstantCandidates(program.body),
+    [],
+  );
   const duplicateConstantCandidates: ParsedDuplicateConstantCandidate[] = constantCaptures.map(
     (capture) => ({
       constantName: capture.constantName,
@@ -480,6 +668,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     simplifiableFunctions,
     simplifiableExpressions,
     duplicateConstantCandidates,
+    errors: [...earlyErrors, ...detectorErrors],
   };
 };
 
