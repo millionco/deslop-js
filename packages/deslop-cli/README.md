@@ -1,6 +1,8 @@
 # deslop-cli
 
-CLI for [deslop-js](https://github.com/aidenybai/deslop-js) — find unused files, exports, dependencies, circular imports, redundant patterns, and DRY violations in JavaScript and TypeScript projects.
+Deslop JavaScript code.
+
+CLI for [deslop-js](https://github.com/aidenybai/deslop-js) — finds unused files, dead exports, dead dependencies, circular imports, redundant aliases, duplicate types, and other DRY violations.
 
 ## Install
 

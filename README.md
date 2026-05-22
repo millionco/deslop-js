@@ -3,7 +3,9 @@
 [![version](https://img.shields.io/npm/v/deslop-js?style=flat&colorA=000000&colorB=000000)](https://npmjs.com/package/deslop-js)
 [![downloads](https://img.shields.io/npm/dt/deslop-js.svg?style=flat&colorA=000000&colorB=000000)](https://npmjs.com/package/deslop-js)
 
-Find unused code, dead exports, redundant patterns, and DRY violations in JavaScript and TypeScript projects.
+Deslop JavaScript code.
+
+Finds unused files, dead exports, dead dependencies, circular imports, redundant aliases, duplicate types, and other DRY violations — with confidence tiers so you can gate CI on the high-signal findings and treat the rest as code-review prompts.
 
 ## Install
 
