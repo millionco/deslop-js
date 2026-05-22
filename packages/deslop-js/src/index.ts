@@ -82,6 +82,8 @@ export type {
   InlineTypeContext,
   SimplifiableFunction,
   SimplifiableFunctionKind,
+  SimplifiableExpression,
+  SimplifiableExpressionKind,
 } from "./types.js";
 
 const fillSemanticConfig = (

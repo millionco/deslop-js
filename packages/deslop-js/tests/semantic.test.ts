@@ -988,3 +988,64 @@ describe("redundancy / simplifiable functions", () => {
     assert.deepEqual(result.simplifiableFunctions, []);
   });
 });
+
+describe("redundancy / simplifiable expressions", () => {
+  it("flags `!!x` as double-bang-boolean with high confidence", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-expressions");
+    const doubleBangs = result.simplifiableExpressions.filter(
+      (finding) => finding.kind === "double-bang-boolean",
+    );
+    assert.ok(doubleBangs.length >= 3, `expected at least 3 double-bang findings, got: ${doubleBangs.length}`);
+    for (const finding of doubleBangs) {
+      assert.equal(finding.confidence, "high");
+    }
+  });
+
+  it("flags `x ? x : y` as self-fallback-ternary", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-expressions");
+    const selfFallbacks = result.simplifiableExpressions.filter(
+      (finding) => finding.kind === "self-fallback-ternary",
+    );
+    assert.ok(
+      selfFallbacks.some((finding) => finding.snippet.startsWith("config ? config")),
+      `expected config self-fallback, got: ${JSON.stringify(selfFallbacks.map((finding) => finding.snippet))}`,
+    );
+  });
+
+  it("does NOT flag legitimate ternaries where consequent differs from test", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-expressions");
+    const selfFallbacks = result.simplifiableExpressions.filter(
+      (finding) => finding.kind === "self-fallback-ternary",
+    );
+    for (const finding of selfFallbacks) {
+      assert.ok(
+        !finding.snippet.includes(`legitTernary`),
+        `legit ternary must not be flagged: ${finding.snippet}`,
+      );
+    }
+  });
+
+  it("flags `cond ? true : false` and `cond ? false : true`", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-expressions");
+    const ternaryBools = result.simplifiableExpressions.filter(
+      (finding) => finding.kind === "ternary-returns-boolean",
+    );
+    assert.equal(ternaryBools.length, 2);
+    const snippets = ternaryBools.map((finding) => finding.snippet);
+    assert.ok(snippets.includes("cond ? true : false"));
+    assert.ok(snippets.includes("cond ? false : true"));
+  });
+
+  it("does NOT flag boolean-returning ternaries with non-boolean consequents", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-expressions");
+    const ternaryBools = result.simplifiableExpressions.filter(
+      (finding) => finding.kind === "ternary-returns-boolean",
+    );
+    for (const finding of ternaryBools) {
+      assert.ok(
+        finding.snippet !== "cond ? 'yes' : 'no'",
+        `non-boolean ternary must not flag: ${finding.snippet}`,
+      );
+    }
+  });
+});

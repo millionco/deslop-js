@@ -8,6 +8,7 @@ import type {
   IdentityWrapper,
   InlineTypeOccurrence,
   RedundantTypePattern,
+  SimplifiableExpression,
   SimplifiableFunction,
 } from "../types.js";
 
@@ -136,6 +137,32 @@ export const detectDuplicateTypeDefinitions = (
     });
   }
 
+  return findings;
+};
+
+export const detectSimplifiableExpressions = (
+  graph: DependencyGraph,
+): SimplifiableExpression[] => {
+  const findings: SimplifiableExpression[] = [];
+  for (const module of graph.modules) {
+    if (module.isDeclarationFile) continue;
+    for (const parsedExpression of module.simplifiableExpressions) {
+      findings.push({
+        path: module.fileId.path,
+        kind: parsedExpression.kind,
+        snippet: parsedExpression.snippet,
+        line: parsedExpression.line,
+        column: parsedExpression.column,
+        confidence:
+          parsedExpression.kind === "double-bang-boolean" ||
+          parsedExpression.kind === "ternary-returns-boolean"
+            ? "high"
+            : "medium",
+        reason: parsedExpression.reason,
+        suggestion: parsedExpression.suggestion,
+      });
+    }
+  }
   return findings;
 };
 

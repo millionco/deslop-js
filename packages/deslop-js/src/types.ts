@@ -85,6 +85,15 @@ export interface SourceModuleSimplifiableFunction {
   suggestion: string;
 }
 
+export interface SourceModuleSimplifiableExpression {
+  kind: SimplifiableExpressionKind;
+  snippet: string;
+  line: number;
+  column: number;
+  reason: string;
+  suggestion: string;
+}
+
 export interface SourceModule {
   fileId: SourceFile;
   imports: ImportReference[];
@@ -97,6 +106,7 @@ export interface SourceModule {
   typeDefinitionHashes: SourceModuleTypeDefinitionHash[];
   inlineTypeLiterals: SourceModuleInlineTypeLiteral[];
   simplifiableFunctions: SourceModuleSimplifiableFunction[];
+  simplifiableExpressions: SourceModuleSimplifiableExpression[];
   isEntryPoint: boolean;
   isTestEntry: boolean;
   isReachable: boolean;
@@ -344,6 +354,22 @@ export interface SimplifiableFunction {
   suggestion: string;
 }
 
+export type SimplifiableExpressionKind =
+  | "self-fallback-ternary"
+  | "double-bang-boolean"
+  | "ternary-returns-boolean";
+
+export interface SimplifiableExpression {
+  path: string;
+  kind: SimplifiableExpressionKind;
+  snippet: string;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+  suggestion: string;
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -361,6 +387,7 @@ export interface ScanResult {
   duplicateTypeDefinitions: DuplicateTypeDefinition[];
   duplicateInlineTypes: DuplicateInlineType[];
   simplifiableFunctions: SimplifiableFunction[];
+  simplifiableExpressions: SimplifiableExpression[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
