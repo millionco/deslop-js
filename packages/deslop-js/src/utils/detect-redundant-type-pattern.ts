@@ -156,20 +156,20 @@ const detectOmitNoKeys = (node: TypeNodeLike): RedundantTypePatternDetection | u
   };
 };
 
-const isDeclarationMergingInferExtension = (parentExpression: TypeNodeLike | undefined): boolean => {
+const isZodInferDeclarationMergingExtension = (
+  parentExpression: TypeNodeLike | undefined,
+): boolean => {
   if (!parentExpression || parentExpression.type !== "MemberExpression") return false;
   const propertyNode = parentExpression.property as TypeNodeLike | undefined;
   if (!propertyNode || propertyNode.type !== "Identifier") return false;
-  const propertyName = (propertyNode as { name?: string }).name;
-  return propertyName === "infer" || propertyName === "Type" || propertyName === "infer_";
+  return (propertyNode as { name?: string }).name === "infer";
 };
 
-const isUiPrimitivePropsExtension = (parentExpression: TypeNodeLike | undefined): boolean => {
+const isRadixStylePropsAliasExtension = (parentExpression: TypeNodeLike | undefined): boolean => {
   if (!parentExpression || parentExpression.type !== "MemberExpression") return false;
   const propertyNode = parentExpression.property as TypeNodeLike | undefined;
   if (!propertyNode || propertyNode.type !== "Identifier") return false;
-  const propertyName = (propertyNode as { name?: string }).name ?? "";
-  return propertyName === "Props" || propertyName === "props" || propertyName === "ComponentProps";
+  return (propertyNode as { name?: string }).name === "Props";
 };
 
 const detectEmptyInterfaceExtendsOne = (
@@ -183,8 +183,8 @@ const detectEmptyInterfaceExtendsOne = (
   const declarationName = (declarationNode.id as { name?: string } | undefined)?.name;
   const parentNode = extendsClauses[0] as TypeNodeLike | undefined;
   const parentExpression = parentNode?.expression as TypeNodeLike | undefined;
-  if (isDeclarationMergingInferExtension(parentExpression)) return undefined;
-  if (isUiPrimitivePropsExtension(parentExpression)) return undefined;
+  if (isZodInferDeclarationMergingExtension(parentExpression)) return undefined;
+  if (isRadixStylePropsAliasExtension(parentExpression)) return undefined;
   const parentName =
     parentExpression && parentExpression.type === "Identifier"
       ? (parentExpression as { name?: string }).name

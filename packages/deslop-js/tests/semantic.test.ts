@@ -767,10 +767,6 @@ describe("redundancy / DRY patterns (syntactic)", () => {
       !flaggedTypeNames.has("CheckboxRootProps"),
       "extending `Namespace.Props` is the canonical Radix/Ark prop re-export idiom",
     );
-    assert.ok(
-      !flaggedTypeNames.has("ButtonAliasProps"),
-      "extending `Namespace.props` is the same idiom with lowercase property name",
-    );
   });
 
   it("flags identity wrappers and ignores wrappers that add real work", async () => {

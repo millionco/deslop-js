@@ -17,8 +17,6 @@ export const ZodMergedSchemaShape = { ref: 1 };
 
 export interface CheckboxRootProps extends CheckboxPrimitive.Root.Props {}
 
-export interface ButtonAliasProps extends Button.props {}
-
 declare namespace ZodSchema {
   type infer<TParsed> = TParsed;
 }
@@ -27,11 +25,6 @@ declare namespace CheckboxPrimitive {
     interface Props {
       checked: boolean;
     }
-  }
-}
-declare namespace Button {
-  interface props {
-    onClick: () => void;
   }
 }
 

@@ -21,7 +21,7 @@ import {
 import type { MutationProposal, RunArtifact, RunMetrics } from "../types.js";
 
 const RESULTS_TSV_HEADER =
-  "iter\ttimestamp\tcorpus\tcommit\tparent\tscore\tlikely_tp\tlikely_fp\tfp_rate\tcrashes\ttimeouts\tstatus\tdescription";
+  "iter\ttimestamp\tcorpus\tcommit\tparent\tscore\tlikely_tp\tlikely_fp\tskipped\tconfirmed_fp_rate\tverified_fp_rate\tcoverage\tcrashes\ttimeouts\tstatus\tdescription";
 
 const ensureResultsTsv = (): void => {
   if (existsSync(RESULTS_TSV_PATH)) return;
@@ -44,7 +44,10 @@ const appendResultsRow = (
     metrics.score,
     metrics.combined.likelyTrue,
     metrics.combined.likelyFalse,
-    metrics.combined.fpRate.toFixed(4),
+    metrics.combined.skipped,
+    metrics.combined.confirmedFpRate.toFixed(4),
+    metrics.combined.verifiedFpRate.toFixed(4),
+    metrics.combined.verificationCoverage.toFixed(4),
     metrics.crashes,
     metrics.timeouts,
     status,
@@ -75,7 +78,9 @@ const writeStatus = (state: LoopState, currentStage: string): void => {
         branchName: state.branchName,
         startedAtIso: state.startedAtIso,
         bestScore: state.bestMetrics.score,
-        bestFpRate: state.bestMetrics.combined.fpRate,
+        bestConfirmedFpRate: state.bestMetrics.combined.confirmedFpRate,
+        bestVerifiedFpRate: state.bestMetrics.combined.verifiedFpRate,
+        bestVerificationCoverage: state.bestMetrics.combined.verificationCoverage,
         bestLikelyTrue: state.bestMetrics.combined.likelyTrue,
         bestLikelyFalse: state.bestMetrics.combined.likelyFalse,
         currentStage,
