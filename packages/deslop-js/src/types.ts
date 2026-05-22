@@ -93,6 +93,9 @@ export interface UnusedExport {
   line: number;
   column: number;
   isTypeOnly: boolean;
+  confidence?: "high" | "medium" | "low";
+  reason?: string;
+  trace?: string[];
 }
 
 export interface UnusedDependency {

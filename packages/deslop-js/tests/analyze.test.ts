@@ -4378,3 +4378,27 @@ describe("unused-parameters-underscore (semantic enabled)", () => {
     );
   });
 });
+
+describe("unused-exports trace fields (Stretch DoD)", () => {
+  it("populates confidence/reason/trace on unused exports", async () => {
+    const result = await scanFixture("simple-app");
+    const unusedExport = result.unusedExports.find(
+      (entry) => entry.name === "unusedFunction" || entry.name === "anotherUnused",
+    );
+    assert.ok(unusedExport, "simple-app should expose at least one unused export");
+    assert.ok(
+      unusedExport!.confidence === "high" ||
+        unusedExport!.confidence === "medium" ||
+        unusedExport!.confidence === "low",
+      `confidence should be one of high/medium/low, got ${unusedExport!.confidence}`,
+    );
+    assert.ok(
+      typeof unusedExport!.reason === "string" && unusedExport!.reason.length > 0,
+      "reason should be a non-empty string",
+    );
+    assert.ok(
+      Array.isArray(unusedExport!.trace) && unusedExport!.trace.length > 0,
+      "trace should be a non-empty array",
+    );
+  });
+});

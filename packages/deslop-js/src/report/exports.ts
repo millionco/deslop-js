@@ -7,8 +7,64 @@ import type {
   MemberAccess,
 } from "../types.js";
 
+const buildModuleImporterIndex = (
+  graph: DependencyGraph,
+): Map<number, { count: number; importerPaths: string[] }> => {
+  const importerIndex = new Map<number, { count: number; importerPaths: string[] }>();
+  for (const edge of graph.edges) {
+    if (edge.isReExportEdge) continue;
+    const existing = importerIndex.get(edge.target);
+    const sourceModule = graph.modules[edge.source];
+    const importerPath = sourceModule?.fileId.path;
+    if (existing) {
+      existing.count += 1;
+      if (importerPath && !existing.importerPaths.includes(importerPath)) {
+        existing.importerPaths.push(importerPath);
+      }
+    } else {
+      importerIndex.set(edge.target, {
+        count: 1,
+        importerPaths: importerPath ? [importerPath] : [],
+      });
+    }
+  }
+  return importerIndex;
+};
+
+const explainDeadExport = (
+  module: SourceModule,
+  exportInfo: ExportReference,
+  importerStats: { count: number; importerPaths: string[] } | undefined,
+): { confidence: "high" | "medium" | "low"; reason: string; trace: string[] } => {
+  const importerCount = importerStats?.count ?? 0;
+  const importerPaths = importerStats?.importerPaths ?? [];
+
+  let confidence: "high" | "medium" | "low";
+  let reason: string;
+  if (importerCount === 0) {
+    confidence = "high";
+    reason = `'${exportInfo.name}' exported from a reachable module that has no direct importers`;
+  } else if (exportInfo.isTypeOnly) {
+    confidence = "medium";
+    reason = `type-only export '${exportInfo.name}' not referenced by any of ${importerCount} importer${importerCount === 1 ? "" : "s"}`;
+  } else {
+    confidence = "high";
+    reason = `'${exportInfo.name}' not in any importer's named-import set across ${importerCount} importer${importerCount === 1 ? "" : "s"}`;
+  }
+
+  const trace = [
+    `${module.fileId.path}: exports '${exportInfo.name}' at L${exportInfo.line}:${exportInfo.column}`,
+    `${importerCount} importer${importerCount === 1 ? "" : "s"} of this module`,
+    importerPaths.length > 0
+      ? `sample importers: ${importerPaths.slice(0, 3).join(" | ")}`
+      : "no importers reference this module",
+  ];
+  return { confidence, reason, trace };
+};
+
 export const detectDeadExports = (graph: DependencyGraph, config: DeslopConfig): UnusedExport[] => {
   const usageMap = buildUsageMap(graph);
+  const importerIndex = buildModuleImporterIndex(graph);
   const unusedExports: UnusedExport[] = [];
 
   for (const module of graph.modules) {
@@ -35,12 +91,15 @@ export const detectDeadExports = (graph: DependencyGraph, config: DeslopConfig):
       const usageKey = `${module.fileId.path}::${exportInfo.name}`;
       if (usageMap.has(usageKey)) continue;
 
-      if (
-        !exportInfo.isDefault &&
-        defaultExportLinkedNames.has(exportInfo.name)
-      ) {
+      if (!exportInfo.isDefault && defaultExportLinkedNames.has(exportInfo.name)) {
         continue;
       }
+
+      const explanation = explainDeadExport(
+        module,
+        exportInfo,
+        importerIndex.get(module.fileId.index),
+      );
 
       unusedExports.push({
         path: module.fileId.path,
@@ -48,6 +107,9 @@ export const detectDeadExports = (graph: DependencyGraph, config: DeslopConfig):
         line: exportInfo.line,
         column: exportInfo.column,
         isTypeOnly: exportInfo.isTypeOnly,
+        confidence: explanation.confidence,
+        reason: explanation.reason,
+        trace: explanation.trace,
       });
     }
   }
