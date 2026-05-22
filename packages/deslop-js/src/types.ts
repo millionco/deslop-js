@@ -121,12 +121,24 @@ export interface UnusedType {
   suppressionHint?: string;
 }
 
+export type DependencyDeclaredAs = "dependencies" | "peerDependencies";
+
+export interface MisclassifiedDependency {
+  name: string;
+  declaredAs: DependencyDeclaredAs;
+  suggestedAs: "devDependencies";
+  confidence: SemanticConfidence;
+  reason: string;
+  trace: string[];
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
   unusedDependencies: UnusedDependency[];
   circularDependencies: CircularDependency[];
   unusedTypes: UnusedType[];
+  misclassifiedDependencies: MisclassifiedDependency[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
@@ -145,6 +157,7 @@ export interface SemanticConfig {
   reportUnusedClassMembers: boolean;
   reportRedundantExports: boolean;
   reportPrivateTypeLeaks: boolean;
+  reportMisclassifiedDependencies: boolean;
   decoratorAllowlist: string[];
 }
 

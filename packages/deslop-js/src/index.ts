@@ -61,6 +61,8 @@ export type {
   UnusedTypeKind,
   SemanticConfig,
   SemanticConfidence,
+  MisclassifiedDependency,
+  DependencyDeclaredAs,
 } from "./types.js";
 
 const fillSemanticConfig = (
@@ -74,6 +76,7 @@ const fillSemanticConfig = (
     reportUnusedClassMembers: semanticOverrides.reportUnusedClassMembers ?? false,
     reportRedundantExports: semanticOverrides.reportRedundantExports ?? false,
     reportPrivateTypeLeaks: semanticOverrides.reportPrivateTypeLeaks ?? false,
+    reportMisclassifiedDependencies: semanticOverrides.reportMisclassifiedDependencies ?? true,
     decoratorAllowlist: semanticOverrides.decoratorAllowlist ?? DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
   };
 };

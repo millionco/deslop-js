@@ -241,3 +241,102 @@ describe("semantic / unused-types: entry export gating", () => {
     assert.deepEqual(result.unusedTypes, []);
   });
 });
+
+const misclassifiedNames = (result: ScanResult): string[] =>
+  result.misclassifiedDependencies.map((finding) => finding.name).sort();
+
+describe("semantic / misclassified-dependencies", () => {
+  it("populates the additive misclassifiedDependencies field as [] when semantic disabled", async () => {
+    const result = await analyze(
+      defineConfig({ rootDir: resolve(FIXTURES_DIR, "misclassified-deps-typeonly") }),
+    );
+    assert.deepEqual(result.misclassifiedDependencies, []);
+  });
+
+  it("flags dependencies that are only consumed via `import type`", async () => {
+    const result = await scanFixtureWithSemantic(
+      "misclassified-deps-typeonly",
+      { reportUnusedTypes: false },
+    );
+    const names = misclassifiedNames(result);
+    assert.ok(
+      names.includes("type-only-lib"),
+      `type-only-lib should be flagged, got: ${names}`,
+    );
+  });
+
+  it("flags dependencies that are only consumed via `export type ... from`", async () => {
+    const result = await scanFixtureWithSemantic(
+      "misclassified-deps-typeonly",
+      { reportUnusedTypes: false },
+    );
+    assert.ok(misclassifiedNames(result).includes("reexported-type-lib"));
+  });
+
+  it("does NOT flag dependencies imported with value bindings", async () => {
+    const result = await scanFixtureWithSemantic(
+      "misclassified-deps-typeonly",
+      { reportUnusedTypes: false },
+    );
+    const names = misclassifiedNames(result);
+    assert.ok(!names.includes("value-used-lib"), `value-used-lib used at runtime, got: ${names}`);
+  });
+
+  it("does NOT flag side-effect imports (always runtime)", async () => {
+    const result = await scanFixtureWithSemantic(
+      "misclassified-deps-typeonly",
+      { reportUnusedTypes: false },
+    );
+    assert.ok(!misclassifiedNames(result).includes("side-effect-lib"));
+  });
+
+  it("does NOT flag mixed-use packages (any value import wins)", async () => {
+    const result = await scanFixtureWithSemantic(
+      "misclassified-deps-typeonly",
+      { reportUnusedTypes: false },
+    );
+    assert.ok(!misclassifiedNames(result).includes("mixed-use-lib"));
+  });
+
+  it("does NOT flag value re-exports `export { x } from`", async () => {
+    const result = await scanFixtureWithSemantic(
+      "misclassified-deps-typeonly",
+      { reportUnusedTypes: false },
+    );
+    assert.ok(!misclassifiedNames(result).includes("reexported-value-lib"));
+  });
+
+  it("includes a trace with at least one import site path", async () => {
+    const result = await scanFixtureWithSemantic(
+      "misclassified-deps-typeonly",
+      { reportUnusedTypes: false },
+    );
+    const finding = result.misclassifiedDependencies.find(
+      (entry) => entry.name === "type-only-lib",
+    );
+    assert.ok(finding);
+    assert.ok(finding.trace.length > 0);
+    assert.ok(
+      finding.trace[0].includes("src/index.ts"),
+      `expected trace to mention src/index.ts, got: ${finding.trace[0]}`,
+    );
+  });
+
+  it("marks suggestedAs as devDependencies for all current findings", async () => {
+    const result = await scanFixtureWithSemantic(
+      "misclassified-deps-typeonly",
+      { reportUnusedTypes: false },
+    );
+    for (const finding of result.misclassifiedDependencies) {
+      assert.equal(finding.suggestedAs, "devDependencies");
+    }
+  });
+
+  it("respects reportMisclassifiedDependencies=false", async () => {
+    const result = await scanFixtureWithSemantic(
+      "misclassified-deps-typeonly",
+      { reportUnusedTypes: false, reportMisclassifiedDependencies: false },
+    );
+    assert.deepEqual(result.misclassifiedDependencies, []);
+  });
+});
