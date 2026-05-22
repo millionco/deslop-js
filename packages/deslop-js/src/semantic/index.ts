@@ -4,6 +4,7 @@ import type {
   PrivateTypeLeak,
   UnusedClassMember,
   UnusedEnumMember,
+  UnusedParameter,
   UnusedType,
 } from "../types.js";
 import { createSemanticContext } from "./program.js";
@@ -11,12 +12,14 @@ import { detectUnusedTypes } from "./unused-types.js";
 import { detectUnusedEnumMembers } from "./unused-enum-members.js";
 import { detectUnusedClassMembers } from "./unused-class-members.js";
 import { detectPrivateTypeLeaks } from "./private-type-leaks.js";
+import { detectUnusedParameters } from "./unused-parameters.js";
 
 export interface SemanticAnalysisResult {
   unusedTypes: UnusedType[];
   unusedEnumMembers: UnusedEnumMember[];
   unusedClassMembers: UnusedClassMember[];
   privateTypeLeaks: PrivateTypeLeak[];
+  unusedParameters: UnusedParameter[];
 }
 
 export const runSemanticAnalysis = (
@@ -28,6 +31,7 @@ export const runSemanticAnalysis = (
     unusedEnumMembers: [],
     unusedClassMembers: [],
     privateTypeLeaks: [],
+    unusedParameters: [],
   };
 
   if (!config.semantic.enabled) return emptyResult;
@@ -51,5 +55,15 @@ export const runSemanticAnalysis = (
     ? detectPrivateTypeLeaks(graph, config, semanticContext)
     : [];
 
-  return { unusedTypes, unusedEnumMembers, unusedClassMembers, privateTypeLeaks };
+  const unusedParameters = config.semantic.reportUnusedParameters
+    ? detectUnusedParameters(graph, config, semanticContext)
+    : [];
+
+  return {
+    unusedTypes,
+    unusedEnumMembers,
+    unusedClassMembers,
+    privateTypeLeaks,
+    unusedParameters,
+  };
 };

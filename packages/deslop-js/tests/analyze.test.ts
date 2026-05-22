@@ -4341,3 +4341,40 @@ describe("misclassified-deps-mixed (semantic enabled)", () => {
     );
   });
 });
+
+const unusedParameterKeys = (result: ScanResult): string[] =>
+  result.unusedParameters.map((entry) => `${entry.functionName}.${entry.parameterName}`).sort();
+
+describe("unused-parameters: default (semantic disabled)", () => {
+  it("should not surface unusedParameters by default", async () => {
+    const result = await scanFixture("unused-parameters-basic");
+    assert.deepEqual(result.unusedParameters, []);
+  });
+});
+
+describe("unused-parameters-basic (semantic enabled)", () => {
+  it("flags parameter that is declared but never referenced inside function body", async () => {
+    const result = await scanFixture("unused-parameters-basic", {
+      semantic: { enabled: true, reportUnusedParameters: true },
+    });
+    const keys = unusedParameterKeys(result);
+    assert.ok(
+      keys.includes("greet.salutation"),
+      `greet.salutation should be flagged, got: ${keys.join(", ")}`,
+    );
+    assert.ok(!keys.some((key) => key.startsWith("usedAll")), "usedAll params must not be flagged");
+  });
+});
+
+describe("unused-parameters-underscore (semantic enabled)", () => {
+  it("should NOT flag parameters whose name starts with underscore", async () => {
+    const result = await scanFixture("unused-parameters-underscore", {
+      semantic: { enabled: true, reportUnusedParameters: true },
+    });
+    assert.deepEqual(
+      result.unusedParameters,
+      [],
+      "underscore-prefixed params must be skipped (TS / community convention)",
+    );
+  });
+});

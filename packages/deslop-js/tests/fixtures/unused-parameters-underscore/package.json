@@ -1,0 +1,4 @@
+{
+  "name": "unused-parameters-underscore",
+  "main": "src/index.ts"
+}

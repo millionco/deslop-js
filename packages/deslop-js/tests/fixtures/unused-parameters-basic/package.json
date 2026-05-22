@@ -1,0 +1,4 @@
+{
+  "name": "unused-parameters-basic",
+  "main": "src/index.ts"
+}
