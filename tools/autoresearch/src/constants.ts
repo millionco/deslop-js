@@ -42,48 +42,29 @@ export const FULL_TIER_MAX_ENTRIES = 200;
  */
 export const FP_PENALTY_WEIGHT = 4;
 
-export const VERIFIABLE_EXPORT_MIN_NAME_LENGTH = 4;
+/**
+ * Names shorter than this are skipped from grep-based verification.
+ * Previously 4 (skipped 3-char names like `Tab`, `Btn`, `Dot`). Lowered to 2
+ * so the verifier attempts the same path-targeted check that long names get;
+ * single-char names are still skipped because they collide with TS generics
+ * (`T`, `K`) and minified identifiers.
+ */
+export const VERIFIABLE_EXPORT_MIN_NAME_LENGTH = 2;
 
-export const SKIP_EXPORT_NAMES = new Set([
-  "default",
-  "*",
-  "index",
-  "main",
-  "Main",
-  "App",
-  "Page",
-  "Layout",
-  "Loading",
-  "Error",
-  "config",
-  "Config",
-  "metadata",
-  "Metadata",
-  "options",
-  "Options",
-  "data",
-  "props",
-  "Props",
-  "params",
-  "Params",
-  "schema",
-  "Schema",
-  "type",
-  "Type",
-  "name",
-  "Name",
-  "value",
-  "Value",
-  "items",
-  "list",
-  "List",
-  "item",
-  "Item",
-  "id",
-  "key",
-  "Key",
-  "url",
-  "Url",
-]);
+/**
+ * Names that fundamentally cannot be path-resolved via ripgrep import lines.
+ * Previously this list held 40 entries (Next.js conventions like `Page`,
+ * `Layout`, `Loading`, `Error`, `metadata`, `Props`, `Config`, etc.); those
+ * were skipped before any verification was attempted, which silently moved
+ * common-named findings out of the FP/TP denominator. Now reduced to the
+ * two cases that ripgrep genuinely cannot disambiguate:
+ *   - "default" — every default-import line is a candidate and the consumer's
+ *     local binding name doesn't have to match anything verifiable.
+ *   - "*"      — namespace re-exports have no identifier to grep for.
+ * Everything else is verified via the same path-targeted matching that
+ * non-common names get; if multiple files export the same identifier the
+ * `countExportDeclarationsForIdentifier` ambiguity check still kicks in.
+ */
+export const SKIP_EXPORT_NAMES = new Set(["default", "*"]);
 
 export const SCRIPT_TIMEOUT_MS = 60_000;

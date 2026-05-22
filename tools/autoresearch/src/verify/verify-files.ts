@@ -7,103 +7,23 @@ import {
   escapeRipgrepLiteral,
 } from "./grep-corpus.js";
 
+/**
+ * Previously this file held a 86-name "COMMON_BASENAMES" allowlist that
+ * skipped verification for every file named `button.tsx`, `dialog.tsx`,
+ * `index.ts`, etc. — driving the `files` row of `verificationCoverage`
+ * down to 45% by hiding half the file findings from the FP denominator.
+ *
+ * The list is gone. Verification now runs uniformly: the explicit-relative-
+ * path check (`escapedRelative`) still catches consumers who import the
+ * full path regardless of basename, and the basename-based fallback now
+ * relies on `findOtherFilesWithSameBasename` (line ~204) to detect real
+ * cross-file ambiguity: if 2+ files in the corpus share the same basename,
+ * the basename-match candidate is discarded, leaving the finding as
+ * `likely_tp` (no false `likely_fp` from cross-file confusion).
+ */
 const SKIPPED_VERDICT: VerificationVerdict = {
   kind: "skipped",
-  reason: "ambiguous-basename",
-};
-
-const COMMON_BASENAMES = new Set([
-  "index",
-  "main",
-  "app",
-  "page",
-  "layout",
-  "route",
-  "loading",
-  "error",
-  "default",
-  "button",
-  "input",
-  "dialog",
-  "select",
-  "popover",
-  "tooltip",
-  "card",
-  "table",
-  "form",
-  "list",
-  "menu",
-  "label",
-  "alert",
-  "avatar",
-  "badge",
-  "checkbox",
-  "switch",
-  "tabs",
-  "drawer",
-  "modal",
-  "sheet",
-  "command",
-  "field",
-  "separator",
-  "spinner",
-  "loader",
-  "header",
-  "footer",
-  "sidebar",
-  "nav",
-  "navigation",
-  "icon",
-  "logo",
-  "image",
-  "link",
-  "text",
-  "title",
-  "heading",
-  "section",
-  "container",
-  "wrapper",
-  "panel",
-  "row",
-  "column",
-  "grid",
-  "stack",
-  "flex",
-  "box",
-  "div",
-  "span",
-  "p",
-  "h1",
-  "h2",
-  "h3",
-  "utils",
-  "helpers",
-  "constants",
-  "types",
-  "schema",
-  "config",
-  "client",
-  "server",
-  "api",
-  "actions",
-  "hooks",
-  "store",
-  "context",
-  "provider",
-  "reducer",
-  "slice",
-  "selector",
-  "service",
-  "model",
-  "view",
-  "controller",
-]);
-
-const isAmbiguousBasename = (basenameWithoutExt: string): boolean => {
-  const lowered = basenameWithoutExt.toLowerCase();
-  if (lowered.length < 5) return true;
-  if (COMMON_BASENAMES.has(lowered)) return true;
-  return false;
+  reason: "no-extension",
 };
 
 const isDocumentationPath = (filePath: string): boolean => {
@@ -319,68 +239,68 @@ export const verifyUnusedFile = async (
     }
   }
 
-  if (!isAmbiguousBasename(basenameWithoutExt)) {
-    const sameBasenameFiles = await findOtherFilesWithSameBasename(
-      flaggedFile.path,
-      basenameWithoutExt,
-      extension,
-      searchDir,
-    );
-
-    const importContextPattern = `(?:from|import|require)\\s*\\(?\\s*['"\`][^'"\`\\n]*?${escapedBasename}(?:\\.[cm]?[jt]sx?)?['"\`]`;
-    const lineMatches = await ripgrepLineMatches(importContextPattern, searchDir, {
-      timeoutMs: 15_000,
-    });
-    const relativeWithoutExt = relativeFromSearchDir.slice(
-      0,
-      relativeFromSearchDir.length - extension.length,
-    );
-    for (const lineMatch of lineMatches) {
-      if (exclude.has(lineMatch.filePath)) continue;
-      if (isDocumentationPath(lineMatch.filePath)) continue;
-      if (isCommentedImportLine(lineMatch.lineText)) continue;
-      if (
-        !doesImportPathPlausiblyTargetFlagged(
-          lineMatch.lineText,
-          relativeWithoutExt,
-          flaggedFile.path,
-          lineMatch.filePath,
-        )
-      ) {
-        continue;
-      }
-      if (sameBasenameFiles.length > 0) continue;
-      return {
-        ...flaggedFile,
-        verdict: {
-          kind: "likely_fp",
-          reason: "basename imported from non-flagged source",
-          evidence: lineMatch.filePath,
-        },
-      };
-    }
-
-    const tsConfigPattern = `['"\`](?:[^'"\`\\n]*?[/.])?${escapedBasename}\\.[cm]?[jt]sx?['"\`]`;
-    const tsConfigHits = await ripgrepFilesWithMatches(tsConfigPattern, searchDir, {
-      timeoutMs: 15_000,
-      extraArgs: ["--glob", "tsconfig*.json", "--glob", "package.json"],
-    });
-    for (const filePath of tsConfigHits.files) {
-      if (exclude.has(filePath)) continue;
-      if (isTsConfigPathsOnlyReference(filePath, basenameWithoutExt)) continue;
-      if (isTsConfigExcludeOnlyReference(filePath, basenameWithoutExt)) continue;
-      if (!looksLikeSourceFileReference(filePath, basenameWithoutExt, extension)) continue;
-      return {
-        ...flaggedFile,
-        verdict: {
-          kind: "likely_fp",
-          reason: "referenced from tsconfig include/files or package.json",
-          evidence: filePath,
-        },
-      };
-    }
-  } else {
+  if (!basenameWithoutExt) {
     return { ...flaggedFile, verdict: SKIPPED_VERDICT };
+  }
+
+  const sameBasenameFiles = await findOtherFilesWithSameBasename(
+    flaggedFile.path,
+    basenameWithoutExt,
+    extension,
+    searchDir,
+  );
+
+  const importContextPattern = `(?:from|import|require)\\s*\\(?\\s*['"\`][^'"\`\\n]*?${escapedBasename}(?:\\.[cm]?[jt]sx?)?['"\`]`;
+  const lineMatches = await ripgrepLineMatches(importContextPattern, searchDir, {
+    timeoutMs: 15_000,
+  });
+  const relativeWithoutExt = relativeFromSearchDir.slice(
+    0,
+    relativeFromSearchDir.length - extension.length,
+  );
+  for (const lineMatch of lineMatches) {
+    if (exclude.has(lineMatch.filePath)) continue;
+    if (isDocumentationPath(lineMatch.filePath)) continue;
+    if (isCommentedImportLine(lineMatch.lineText)) continue;
+    if (
+      !doesImportPathPlausiblyTargetFlagged(
+        lineMatch.lineText,
+        relativeWithoutExt,
+        flaggedFile.path,
+        lineMatch.filePath,
+      )
+    ) {
+      continue;
+    }
+    if (sameBasenameFiles.length > 0) continue;
+    return {
+      ...flaggedFile,
+      verdict: {
+        kind: "likely_fp",
+        reason: "basename imported from non-flagged source",
+        evidence: lineMatch.filePath,
+      },
+    };
+  }
+
+  const tsConfigPattern = `['"\`](?:[^'"\`\\n]*?[/.])?${escapedBasename}\\.[cm]?[jt]sx?['"\`]`;
+  const tsConfigHits = await ripgrepFilesWithMatches(tsConfigPattern, searchDir, {
+    timeoutMs: 15_000,
+    extraArgs: ["--glob", "tsconfig*.json", "--glob", "package.json"],
+  });
+  for (const filePath of tsConfigHits.files) {
+    if (exclude.has(filePath)) continue;
+    if (isTsConfigPathsOnlyReference(filePath, basenameWithoutExt)) continue;
+    if (isTsConfigExcludeOnlyReference(filePath, basenameWithoutExt)) continue;
+    if (!looksLikeSourceFileReference(filePath, basenameWithoutExt, extension)) continue;
+    return {
+      ...flaggedFile,
+      verdict: {
+        kind: "likely_fp",
+        reason: "referenced from tsconfig include/files or package.json",
+        evidence: filePath,
+      },
+    };
   }
 
   return {
