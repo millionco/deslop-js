@@ -1,5 +1,4 @@
 import ts from "typescript";
-import { resolve as resolvePath } from "node:path";
 import type {
   DependencyGraph,
   DeslopConfig,
@@ -10,6 +9,7 @@ import type {
 import type { SemanticContext } from "./program.js";
 import type { ReferenceIndex, SymbolReferenceSite } from "./references.js";
 import { SEMANTIC_TRACE_MAX_ENTRIES } from "../constants.js";
+import { buildSourceFileLookup, normalizeSourcePath } from "./utils/source-file-lookup.js";
 
 interface TypeExportCandidate {
   module: SourceModule;
@@ -56,17 +56,6 @@ const collectTypeExportCandidates = (
     }
   }
   return candidates;
-};
-
-const normalizePath = (filePath: string): string => resolvePath(filePath);
-
-const buildSourceFileLookup = (program: ts.Program): Map<string, ts.SourceFile> => {
-  const lookup = new Map<string, ts.SourceFile>();
-  for (const sourceFile of program.getSourceFiles()) {
-    if (sourceFile.isDeclarationFile) continue;
-    lookup.set(normalizePath(sourceFile.fileName), sourceFile);
-  }
-  return lookup;
 };
 
 const resolveExportSymbol = (
@@ -139,7 +128,7 @@ export const detectUnusedTypes = (
   const sourceFileLookup = buildSourceFileLookup(context.program);
 
   for (const candidate of candidates) {
-    const sourceFile = sourceFileLookup.get(normalizePath(candidate.module.fileId.path));
+    const sourceFile = sourceFileLookup.get(normalizeSourcePath(candidate.module.fileId.path));
     if (!sourceFile) continue;
 
     const exportSymbol = resolveExportSymbol(sourceFile, candidate.exportName, context.checker);
@@ -159,11 +148,11 @@ export const detectUnusedTypes = (
     const declarations = exportSymbol.declarations ?? [];
     if (declarations.length > 1) {
       const declarationFiles = new Set(
-        declarations.map((decl) => normalizePath(decl.getSourceFile().fileName)),
+        declarations.map((decl) => normalizeSourcePath(decl.getSourceFile().fileName)),
       );
       if (declarationFiles.size > 1) {
         const mergedHasExternalRef = meaningfulReferences.some((site) => {
-          const referenceFileName = normalizePath(site.sourceFile.fileName);
+          const referenceFileName = normalizeSourcePath(site.sourceFile.fileName);
           return !declarationFiles.has(referenceFileName);
         });
         if (mergedHasExternalRef) continue;

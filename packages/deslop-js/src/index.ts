@@ -63,6 +63,7 @@ export type {
   SemanticConfidence,
   MisclassifiedDependency,
   DependencyDeclaredAs,
+  UnusedEnumMember,
 } from "./types.js";
 
 const fillSemanticConfig = (
@@ -72,7 +73,7 @@ const fillSemanticConfig = (
   return {
     enabled: semanticOverrides.enabled ?? false,
     reportUnusedTypes: semanticOverrides.reportUnusedTypes ?? true,
-    reportUnusedEnumMembers: semanticOverrides.reportUnusedEnumMembers ?? false,
+    reportUnusedEnumMembers: semanticOverrides.reportUnusedEnumMembers ?? true,
     reportUnusedClassMembers: semanticOverrides.reportUnusedClassMembers ?? false,
     reportRedundantExports: semanticOverrides.reportRedundantExports ?? false,
     reportPrivateTypeLeaks: semanticOverrides.reportPrivateTypeLeaks ?? false,

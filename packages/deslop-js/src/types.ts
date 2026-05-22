@@ -132,6 +132,17 @@ export interface MisclassifiedDependency {
   trace: string[];
 }
 
+export interface UnusedEnumMember {
+  path: string;
+  enumName: string;
+  memberName: string;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+  trace: string[];
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -139,6 +150,7 @@ export interface ScanResult {
   circularDependencies: CircularDependency[];
   unusedTypes: UnusedType[];
   misclassifiedDependencies: MisclassifiedDependency[];
+  unusedEnumMembers: UnusedEnumMember[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;

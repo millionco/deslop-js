@@ -2,15 +2,18 @@ import type {
   DependencyGraph,
   DeslopConfig,
   MisclassifiedDependency,
+  UnusedEnumMember,
   UnusedType,
 } from "../types.js";
 import { createSemanticContext } from "./program.js";
 import { buildReferenceIndex } from "./references.js";
 import { detectUnusedTypes } from "./unused-types.js";
+import { detectUnusedEnumMembers } from "./unused-enum-members.js";
 import { detectMisclassifiedDependencies } from "./misclassified-dependencies.js";
 
 export interface SemanticAnalysisResult {
   unusedTypes: UnusedType[];
+  unusedEnumMembers: UnusedEnumMember[];
   misclassifiedDependencies: MisclassifiedDependency[];
   contextStatus:
     | "disabled"
@@ -26,6 +29,7 @@ export interface SemanticAnalysisResult {
 
 const EMPTY_RESULT: SemanticAnalysisResult = {
   unusedTypes: [],
+  unusedEnumMembers: [],
   misclassifiedDependencies: [],
   contextStatus: "disabled",
 };
@@ -41,10 +45,12 @@ export const runSemanticAnalysis = (
     ? detectMisclassifiedDependencies(graph, config)
     : [];
 
-  const needsTsContext = semanticConfig.reportUnusedTypes;
+  const needsTsContext =
+    semanticConfig.reportUnusedTypes || semanticConfig.reportUnusedEnumMembers;
   if (!needsTsContext) {
     return {
       unusedTypes: [],
+      unusedEnumMembers: [],
       misclassifiedDependencies,
       contextStatus: "no-context-required",
     };
@@ -54,6 +60,7 @@ export const runSemanticAnalysis = (
   if (!contextResult.ok) {
     return {
       unusedTypes: [],
+      unusedEnumMembers: [],
       misclassifiedDependencies,
       contextStatus: contextResult.failure.reason,
       contextMessage: contextResult.failure.message,
@@ -72,9 +79,13 @@ export const runSemanticAnalysis = (
   const unusedTypes = semanticConfig.reportUnusedTypes
     ? detectUnusedTypes(graph, config, context, getReferenceIndex())
     : [];
+  const unusedEnumMembers = semanticConfig.reportUnusedEnumMembers
+    ? detectUnusedEnumMembers(graph, config, context, getReferenceIndex())
+    : [];
 
   return {
     unusedTypes,
+    unusedEnumMembers,
     misclassifiedDependencies,
     contextStatus: "ready",
   };

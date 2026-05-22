@@ -69,7 +69,9 @@ describe("semantic (Phase 0)", () => {
     assert.ok(config.semantic, "semantic should be set");
     assert.equal(config.semantic.enabled, false);
     assert.equal(config.semantic.reportUnusedTypes, true);
-    assert.equal(config.semantic.reportUnusedEnumMembers, false);
+    assert.equal(config.semantic.reportUnusedEnumMembers, true);
+    assert.equal(config.semantic.reportMisclassifiedDependencies, true);
+    assert.equal(config.semantic.reportUnusedClassMembers, false);
     assert.ok(Array.isArray(config.semantic.decoratorAllowlist));
     assert.ok(config.semantic.decoratorAllowlist.length > 0);
   });
@@ -338,5 +340,92 @@ describe("semantic / misclassified-dependencies", () => {
       { reportUnusedTypes: false, reportMisclassifiedDependencies: false },
     );
     assert.deepEqual(result.misclassifiedDependencies, []);
+  });
+});
+
+const enumMemberLabels = (result: ScanResult): string[] =>
+  result.unusedEnumMembers
+    .map((finding) => `${finding.enumName}.${finding.memberName}`)
+    .sort();
+
+describe("semantic / unused-enum-members: string enum", () => {
+  it("flags unreferenced members with high confidence", async () => {
+    const result = await scanFixtureWithSemantic("unused-enum-members-string", {
+      reportUnusedTypes: false,
+      reportMisclassifiedDependencies: false,
+    });
+    const labels = enumMemberLabels(result);
+    assert.deepEqual(labels, ["Status.Archived", "Status.Deprecated"]);
+    for (const finding of result.unusedEnumMembers) {
+      assert.equal(finding.confidence, "high");
+    }
+  });
+
+  it("does NOT flag members that are referenced via dot access", async () => {
+    const result = await scanFixtureWithSemantic("unused-enum-members-string", {
+      reportUnusedTypes: false,
+      reportMisclassifiedDependencies: false,
+    });
+    const labels = enumMemberLabels(result);
+    assert.ok(!labels.includes("Status.Active"));
+    assert.ok(!labels.includes("Status.Pending"));
+  });
+});
+
+describe("semantic / unused-enum-members: numeric enum", () => {
+  it("flags unreferenced numeric members with medium confidence", async () => {
+    const result = await scanFixtureWithSemantic("unused-enum-members-numeric", {
+      reportUnusedTypes: false,
+      reportMisclassifiedDependencies: false,
+    });
+    const labels = enumMemberLabels(result);
+    assert.deepEqual(labels, ["Level.High", "Level.Low", "Level.Medium"]);
+    for (const finding of result.unusedEnumMembers) {
+      assert.equal(finding.confidence, "medium");
+    }
+  });
+});
+
+describe("semantic / unused-enum-members: reverse-lookup pattern", () => {
+  it("does NOT flag any member when Enum[X] computed access exists", async () => {
+    const result = await scanFixtureWithSemantic("unused-enum-members-reverse-lookup", {
+      reportUnusedTypes: false,
+      reportMisclassifiedDependencies: false,
+    });
+    assert.deepEqual(result.unusedEnumMembers, []);
+  });
+});
+
+describe("semantic / unused-enum-members: const enum", () => {
+  it("flags unreferenced const-enum members with low confidence (inlining caveat)", async () => {
+    const result = await scanFixtureWithSemantic("unused-enum-members-const", {
+      reportUnusedTypes: false,
+      reportMisclassifiedDependencies: false,
+    });
+    const labels = enumMemberLabels(result);
+    assert.deepEqual(labels, ["Flags.Execute", "Flags.None"]);
+    for (const finding of result.unusedEnumMembers) {
+      assert.equal(finding.confidence, "low");
+    }
+  });
+});
+
+describe("semantic / unused-enum-members: feature flag", () => {
+  it("respects reportUnusedEnumMembers=false", async () => {
+    const result = await scanFixtureWithSemantic("unused-enum-members-string", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+    });
+    assert.deepEqual(result.unusedEnumMembers, []);
+  });
+
+  it("populates the additive unusedEnumMembers field as [] when semantic disabled", async () => {
+    const result = await analyze(
+      defineConfig({
+        rootDir: resolve(FIXTURES_DIR, "unused-enum-members-string"),
+      }),
+    );
+    assert.deepEqual(result.unusedEnumMembers, []);
   });
 });
