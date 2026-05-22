@@ -1,0 +1,4 @@
+{
+  "name": "unused-types-wildcard-reexport",
+  "main": "src/index.ts"
+}

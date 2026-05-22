@@ -4402,3 +4402,34 @@ describe("unused-exports trace fields (Stretch DoD)", () => {
     );
   });
 });
+
+describe("unused-types-wildcard-reexport (FP-class fix)", () => {
+  it("should NOT flag types in a module whose exports flow through an entry's export * chain", async () => {
+    const result = await scanFixture("unused-types-wildcard-reexport", {
+      semantic: { enabled: true },
+    });
+    const names = result.unusedTypes.map((entry) => entry.name).sort();
+    assert.deepEqual(
+      names,
+      [],
+      "wildcard-re-exported types must not be flagged when default config hides entry exports",
+    );
+  });
+});
+
+describe("unused-types-named-reexport (FP-class fix)", () => {
+  it("skips named-re-exported type, flags the sibling that wasn't re-exported", async () => {
+    const result = await scanFixture("unused-types-named-reexport", {
+      semantic: { enabled: true },
+    });
+    const names = result.unusedTypes.map((entry) => entry.name).sort();
+    assert.ok(
+      !names.includes("PublishedA"),
+      `PublishedA is named-re-exported from entry; must not be flagged, got: ${names.join(", ")}`,
+    );
+    assert.ok(
+      names.includes("LeakedInternal"),
+      `LeakedInternal is declared but not re-exported; should be flagged, got: ${names.join(", ")}`,
+    );
+  });
+});
