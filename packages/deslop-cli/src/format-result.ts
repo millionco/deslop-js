@@ -47,11 +47,80 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
     lines.push("");
   }
 
+  if (result.unusedTypes.length > 0) {
+    const typeLabel = result.unusedTypes.length === 1 ? "type" : "types";
+    lines.push(`${result.unusedTypes.length} unused ${typeLabel}`);
+    for (const unusedType of result.unusedTypes) {
+      lines.push(
+        `  ${unusedType.path}:${unusedType.line}  ${unusedType.name} (${unusedType.kind}, ${unusedType.confidence})`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (result.unusedEnumMembers.length > 0) {
+    const memberLabel = result.unusedEnumMembers.length === 1 ? "enum member" : "enum members";
+    lines.push(`${result.unusedEnumMembers.length} unused ${memberLabel}`);
+    for (const unusedMember of result.unusedEnumMembers) {
+      lines.push(
+        `  ${unusedMember.path}:${unusedMember.line}  ${unusedMember.enumName}.${unusedMember.memberName} (${unusedMember.confidence})`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (result.unusedClassMembers.length > 0) {
+    const classLabel = result.unusedClassMembers.length === 1 ? "class member" : "class members";
+    lines.push(`${result.unusedClassMembers.length} unused ${classLabel}`);
+    for (const unusedMember of result.unusedClassMembers) {
+      lines.push(
+        `  ${unusedMember.path}:${unusedMember.line}  ${unusedMember.className}.${unusedMember.memberName} (${unusedMember.memberKind}, ${unusedMember.confidence})`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (result.misclassifiedDependencies.length > 0) {
+    const depLabel =
+      result.misclassifiedDependencies.length === 1 ? "dependency" : "dependencies";
+    lines.push(`${result.misclassifiedDependencies.length} misclassified ${depLabel}`);
+    for (const finding of result.misclassifiedDependencies) {
+      lines.push(`  ${finding.name}  ${finding.declaredAs} → ${finding.suggestedAs} (${finding.confidence})`);
+    }
+    lines.push("");
+  }
+
+  if (result.redundantAliases.length > 0) {
+    const aliasLabel = result.redundantAliases.length === 1 ? "alias" : "aliases";
+    lines.push(`${result.redundantAliases.length} redundant ${aliasLabel}`);
+    for (const finding of result.redundantAliases) {
+      lines.push(
+        `  ${finding.path}:${finding.line}  [${finding.kind}] ${finding.name}`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (result.duplicateExports.length > 0) {
+    const exportLabel = result.duplicateExports.length === 1 ? "export" : "exports";
+    lines.push(`${result.duplicateExports.length} duplicate ${exportLabel}`);
+    for (const finding of result.duplicateExports) {
+      lines.push(`  ${finding.path}  ${finding.name} (${finding.occurrences.length}x)`);
+    }
+    lines.push("");
+  }
+
   const totalIssues =
     result.unusedFiles.length +
     result.unusedExports.length +
     result.unusedDependencies.length +
-    result.circularDependencies.length;
+    result.circularDependencies.length +
+    result.unusedTypes.length +
+    result.unusedEnumMembers.length +
+    result.unusedClassMembers.length +
+    result.misclassifiedDependencies.length +
+    result.redundantAliases.length +
+    result.duplicateExports.length;
 
   if (totalIssues === 0) {
     lines.push("No unused files, exports, dependencies, or circular imports found.");
@@ -63,6 +132,12 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
 export const hasUnusedIssues = (result: ScanResult): boolean =>
   result.unusedFiles.length > 0 ||
   result.unusedExports.length > 0 ||
-  result.unusedDependencies.length > 0;
+  result.unusedDependencies.length > 0 ||
+  result.unusedTypes.length > 0 ||
+  result.unusedEnumMembers.length > 0 ||
+  result.unusedClassMembers.length > 0 ||
+  result.misclassifiedDependencies.length > 0 ||
+  result.redundantAliases.length > 0 ||
+  result.duplicateExports.length > 0;
 
 export const hasCircularIssues = (result: ScanResult): boolean => result.circularDependencies.length > 0;
