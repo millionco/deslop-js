@@ -1048,4 +1048,45 @@ describe("redundancy / simplifiable expressions", () => {
       );
     }
   });
+
+  it("flags `x ?? null` and `x ?? undefined` as nullish-no-op", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-expressions");
+    const nullish = result.simplifiableExpressions.filter(
+      (finding) => finding.kind === "nullish-coalescing-with-nullish",
+    );
+    const snippets = nullish.map((finding) => finding.snippet);
+    assert.ok(snippets.includes("someValue ?? null"));
+    assert.ok(snippets.includes("someValue ?? undefined"));
+  });
+
+  it("does NOT flag `x ?? value` with a real fallback", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-expressions");
+    const nullish = result.simplifiableExpressions.filter(
+      (finding) => finding.kind === "nullish-coalescing-with-nullish",
+    );
+    for (const finding of nullish) {
+      assert.ok(!finding.snippet.includes('"fallback"'));
+    }
+  });
+
+  it("flags `x !== null && x !== undefined` in either order", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-expressions");
+    const redundantChecks = result.simplifiableExpressions.filter(
+      (finding) => finding.kind === "redundant-null-and-undefined-check",
+    );
+    assert.equal(redundantChecks.length, 2);
+    for (const finding of redundantChecks) {
+      assert.ok(finding.suggestion.includes("!= null"));
+    }
+  });
+
+  it("does NOT flag mixed null/typeof checks", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-expressions");
+    const redundantChecks = result.simplifiableExpressions.filter(
+      (finding) => finding.kind === "redundant-null-and-undefined-check",
+    );
+    for (const finding of redundantChecks) {
+      assert.ok(!finding.snippet.includes("typeof"));
+    }
+  });
 });

@@ -85,6 +85,69 @@ const detectTernaryReturnsBoolean = (
   };
 };
 
+const isNullLiteral = (node: NodeLike): boolean =>
+  node.type === "Literal" && (node as { value?: unknown }).value === null;
+
+const isUndefinedIdentifier = (node: NodeLike): boolean =>
+  node.type === "Identifier" && (node as { name?: string }).name === "undefined";
+
+const detectNullishCoalescingWithNullish = (
+  logicalNode: NodeLike,
+): SimplifiableExpressionCapture | undefined => {
+  if (logicalNode.type !== "LogicalExpression") return undefined;
+  if ((logicalNode as { operator?: string }).operator !== "??") return undefined;
+  const rightNode = (logicalNode as { right?: NodeLike }).right;
+  if (!rightNode) return undefined;
+  const isNullish = isNullLiteral(rightNode) || isUndefinedIdentifier(rightNode);
+  if (!isNullish) return undefined;
+  const leftNode = (logicalNode as { left?: NodeLike }).left;
+  const leftText = leftNode ? memberAccessText(leftNode) ?? "expr" : "expr";
+  const rightLabel = isNullLiteral(rightNode) ? "null" : "undefined";
+  return {
+    kind: "nullish-coalescing-with-nullish",
+    snippet: `${leftText} ?? ${rightLabel}`,
+    startOffset: logicalNode.start ?? 0,
+    reason: `\`x ?? ${rightLabel}\` is a no-op — the coalesce target equals what \`??\` would have returned anyway`,
+    suggestion: `drop the \`?? ${rightLabel}\` — the expression already resolves to ${rightLabel} when nullish`,
+  };
+};
+
+const detectRedundantNullAndUndefinedCheck = (
+  logicalNode: NodeLike,
+): SimplifiableExpressionCapture | undefined => {
+  if (logicalNode.type !== "LogicalExpression") return undefined;
+  if ((logicalNode as { operator?: string }).operator !== "&&") return undefined;
+  const leftNode = (logicalNode as { left?: NodeLike }).left;
+  const rightNode = (logicalNode as { right?: NodeLike }).right;
+  if (!leftNode || !rightNode) return undefined;
+  if (leftNode.type !== "BinaryExpression" || rightNode.type !== "BinaryExpression") return undefined;
+  const leftOp = (leftNode as { operator?: string }).operator;
+  const rightOp = (rightNode as { operator?: string }).operator;
+  if (leftOp !== "!==" || rightOp !== "!==") return undefined;
+  const leftLeft = (leftNode as { left?: NodeLike }).left;
+  const leftRight = (leftNode as { right?: NodeLike }).right;
+  const rightLeft = (rightNode as { left?: NodeLike }).left;
+  const rightRight = (rightNode as { right?: NodeLike }).right;
+  if (!leftLeft || !leftRight || !rightLeft || !rightRight) return undefined;
+  const leftLeftText = memberAccessText(leftLeft);
+  const rightLeftText = memberAccessText(rightLeft);
+  if (!leftLeftText || leftLeftText !== rightLeftText) return undefined;
+  const leftRhsIsNull = isNullLiteral(leftRight);
+  const leftRhsIsUndefined = isUndefinedIdentifier(leftRight);
+  const rightRhsIsNull = isNullLiteral(rightRight);
+  const rightRhsIsUndefined = isUndefinedIdentifier(rightRight);
+  const coversBoth =
+    (leftRhsIsNull && rightRhsIsUndefined) || (leftRhsIsUndefined && rightRhsIsNull);
+  if (!coversBoth) return undefined;
+  return {
+    kind: "redundant-null-and-undefined-check",
+    snippet: `${leftLeftText} !== null && ${leftLeftText} !== undefined`,
+    startOffset: logicalNode.start ?? 0,
+    reason: `\`x !== null && x !== undefined\` is equivalent to \`x != null\` (loose comparison checks both)`,
+    suggestion: `replace with \`${leftLeftText} != null\``,
+  };
+};
+
 const detectDoubleBangBoolean = (
   unaryNode: NodeLike,
 ): SimplifiableExpressionCapture | undefined => {
@@ -114,6 +177,10 @@ const visit = (node: NodeLike, captures: SimplifiableExpressionCapture[], depth:
 
   const doubleBangCapture = detectDoubleBangBoolean(node);
   if (doubleBangCapture) captures.push(doubleBangCapture);
+
+  const logicalCapture =
+    detectNullishCoalescingWithNullish(node) ?? detectRedundantNullAndUndefinedCheck(node);
+  if (logicalCapture) captures.push(logicalCapture);
 
   for (const value of Object.values(node)) {
     if (Array.isArray(value)) {

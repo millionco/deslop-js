@@ -357,7 +357,9 @@ export interface SimplifiableFunction {
 export type SimplifiableExpressionKind =
   | "self-fallback-ternary"
   | "double-bang-boolean"
-  | "ternary-returns-boolean";
+  | "ternary-returns-boolean"
+  | "nullish-coalescing-with-nullish"
+  | "redundant-null-and-undefined-check";
 
 export interface SimplifiableExpression {
   path: string;

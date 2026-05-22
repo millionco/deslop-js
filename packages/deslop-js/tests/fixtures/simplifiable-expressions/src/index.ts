@@ -18,4 +18,23 @@ export const condBooleanInverse = config ? false : true;
 
 export const legitBoolean = config ? "yes" : "no";
 
-console.log(value, nested, legitTernary, coerced, nested_coerced, notNotNotIsNot, condBoolean, condBooleanInverse, legitBoolean);
+const someValue: string | null | undefined = "x";
+
+export const nullCoalesced = someValue ?? null;
+
+export const undefinedCoalesced = someValue ?? undefined;
+
+export const legitCoalesced = someValue ?? "fallback";
+
+export const wordy = someValue !== null && someValue !== undefined;
+
+export const wordyReversed = someValue !== undefined && someValue !== null;
+
+export const legitCheck = someValue !== null && typeof someValue === "string";
+
+console.log(
+  value, nested, legitTernary, coerced, nested_coerced, notNotNotIsNot,
+  condBoolean, condBooleanInverse, legitBoolean,
+  nullCoalesced, undefinedCoalesced, legitCoalesced,
+  wordy, wordyReversed, legitCheck,
+);
