@@ -12,6 +12,14 @@ interface ExportedValue {
   isModuleEntry: boolean;
 }
 
+const NON_API_ENTRY_PATTERN =
+  /\.(?:stories|story|spec|test|cy|bench)\.[cm]?[jt]sx?$|(?:^|\/)__tests__\/|(?:^|\/)__stories__\//;
+
+const isPublicApiEntry = (modulePath: string): boolean => {
+  if (NON_API_ENTRY_PATTERN.test(modulePath)) return false;
+  return true;
+};
+
 const collectEntryExportedSymbols = (
   graph: DependencyGraph,
   context: SemanticContext,
@@ -19,6 +27,7 @@ const collectEntryExportedSymbols = (
   const exposedSymbols = new Set<ts.Symbol>();
   for (const module of graph.modules) {
     if (!module.isEntryPoint) continue;
+    if (!isPublicApiEntry(module.fileId.path)) continue;
     const sourceFile = lookupSourceFile(context, module.fileId.path);
     if (!sourceFile) continue;
     const moduleSymbol = context.checker.getSymbolAtLocation(sourceFile);
@@ -43,6 +52,7 @@ const collectReachableExportedValues = (
     if (!module.isReachable) continue;
     if (module.isDeclarationFile) continue;
     if (!module.isEntryPoint) continue;
+    if (!isPublicApiEntry(module.fileId.path)) continue;
 
     const sourceFile = lookupSourceFile(context, module.fileId.path);
     if (!sourceFile) continue;

@@ -4557,3 +4557,16 @@ describe("redundant-exports barrel-pollution (semantic enabled, plan-literal)", 
     assert.equal(finding!.paths.length, 2);
   });
 });
+
+describe("private-type-leak-story-skip (FP-class fix)", () => {
+  it("should NOT flag leaks from .stories.tsx entries (tooling entries are not public API)", async () => {
+    const result = await scanFixture("private-type-leak-story-skip", {
+      semantic: { enabled: true, reportPrivateTypeLeaks: true },
+    });
+    assert.deepEqual(
+      result.privateTypeLeaks,
+      [],
+      "story files should be excluded from private-type-leak walk",
+    );
+  });
+});
