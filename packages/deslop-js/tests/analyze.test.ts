@@ -4018,3 +4018,91 @@ describe("unused-types: graceful fallback without tsconfig", () => {
     assert.ok(Array.isArray(result.unusedTypes), "unusedTypes should always be an array");
   });
 });
+
+const unusedEnumMemberNames = (result: ScanResult): string[] =>
+  result.unusedEnumMembers.map((member) => `${member.enumName}.${member.memberName}`).sort();
+
+describe("unused-enum-members: default (semantic disabled)", () => {
+  it("should not surface unusedEnumMembers when semantic disabled", async () => {
+    const result = await scanFixture("unused-enum-members-string");
+    assert.deepEqual(result.unusedEnumMembers, []);
+  });
+
+  it("should not surface unusedEnumMembers when only reportUnusedTypes is on", async () => {
+    const result = await scanFixture("unused-enum-members-string", {
+      semantic: { enabled: true },
+    });
+    assert.deepEqual(
+      result.unusedEnumMembers,
+      [],
+      "default semantic config keeps enum member reporting off",
+    );
+  });
+});
+
+describe("unused-enum-members-string (semantic enum-members enabled)", () => {
+  it("flags string enum members with no references", async () => {
+    const result = await scanFixture("unused-enum-members-string", {
+      semantic: { enabled: true, reportUnusedEnumMembers: true },
+    });
+    const flagged = unusedEnumMemberNames(result);
+    assert.ok(
+      flagged.includes("Status.Inactive"),
+      `Status.Inactive should be flagged, got: ${flagged.join(", ")}`,
+    );
+    assert.ok(
+      flagged.includes("Status.Pending"),
+      `Status.Pending should be flagged, got: ${flagged.join(", ")}`,
+    );
+  });
+
+  it("should NOT flag string enum member referenced via enum-dot access", async () => {
+    const result = await scanFixture("unused-enum-members-string", {
+      semantic: { enabled: true, reportUnusedEnumMembers: true },
+    });
+    const flagged = unusedEnumMemberNames(result);
+    assert.ok(
+      !flagged.includes("Status.Active"),
+      `Status.Active must not be flagged, got: ${flagged.join(", ")}`,
+    );
+  });
+
+  it("emits high confidence for string enum member findings", async () => {
+    const result = await scanFixture("unused-enum-members-string", {
+      semantic: { enabled: true, reportUnusedEnumMembers: true },
+    });
+    for (const member of result.unusedEnumMembers) {
+      assert.equal(
+        member.confidence,
+        "high",
+        `string-enum member ${member.enumName}.${member.memberName} should have high confidence`,
+      );
+    }
+  });
+});
+
+describe("unused-enum-members-numeric-reverse (semantic enum-members enabled)", () => {
+  it("should NOT flag any numeric enum member when whole enum reverse-lookup is used", async () => {
+    const result = await scanFixture("unused-enum-members-numeric-reverse", {
+      semantic: { enabled: true, reportUnusedEnumMembers: true },
+    });
+    assert.deepEqual(
+      result.unusedEnumMembers,
+      [],
+      "numeric enum with reverse lookup must not flag any member",
+    );
+  });
+});
+
+describe("unused-enum-members-const (semantic enum-members enabled)", () => {
+  it("should NOT flag any const enum member", async () => {
+    const result = await scanFixture("unused-enum-members-const", {
+      semantic: { enabled: true, reportUnusedEnumMembers: true },
+    });
+    assert.deepEqual(
+      result.unusedEnumMembers,
+      [],
+      "const enums must be skipped (compile-time erased)",
+    );
+  });
+});

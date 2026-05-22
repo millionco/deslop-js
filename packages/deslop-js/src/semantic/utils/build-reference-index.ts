@@ -47,6 +47,21 @@ const isInsideImportSpecifier = (node: ts.Node): boolean => {
 };
 
 const isInsideDeclaration = (node: ts.Node): boolean => {
+  const directParent = node.parent;
+  if (directParent && ts.isEnumMember(directParent) && directParent.name === node) return true;
+  if (
+    directParent &&
+    (ts.isPropertyDeclaration(directParent) ||
+      ts.isPropertySignature(directParent) ||
+      ts.isMethodDeclaration(directParent) ||
+      ts.isMethodSignature(directParent) ||
+      ts.isGetAccessorDeclaration(directParent) ||
+      ts.isSetAccessorDeclaration(directParent)) &&
+    directParent.name === node
+  ) {
+    return true;
+  }
+
   let current: ts.Node | undefined = node.parent;
   while (current) {
     if (

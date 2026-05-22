@@ -116,12 +116,24 @@ export interface UnusedType {
   suppressionHint?: string;
 }
 
+export interface UnusedEnumMember {
+  path: string;
+  enumName: string;
+  memberName: string;
+  line: number;
+  column: number;
+  confidence: "high" | "medium" | "low";
+  reason: string;
+  trace: string[];
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
   unusedDependencies: UnusedDependency[];
   circularDependencies: CircularDependency[];
   unusedTypes: UnusedType[];
+  unusedEnumMembers: UnusedEnumMember[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
