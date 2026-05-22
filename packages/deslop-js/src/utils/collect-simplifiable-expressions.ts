@@ -107,8 +107,8 @@ const detectNullishCoalescingWithNullish = (
     kind: "nullish-coalescing-with-nullish",
     snippet: `${leftText} ?? ${rightLabel}`,
     startOffset: logicalNode.start ?? 0,
-    reason: `\`x ?? ${rightLabel}\` is a no-op — the coalesce target equals what \`??\` would have returned anyway`,
-    suggestion: `drop the \`?? ${rightLabel}\` — the expression already resolves to ${rightLabel} when nullish`,
+    reason: `\`x ?? ${rightLabel}\` looks like a no-op — but may be intentional when a caller's signature requires \`${rightLabel}\` (PropTypes, form-control onChange, etc.)`,
+    suggestion: `if \`x\` is already \`T | ${rightLabel}\`, drop the \`?? ${rightLabel}\`; otherwise keep — the coercion changes the resolved type`,
   };
 };
 

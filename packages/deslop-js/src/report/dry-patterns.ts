@@ -206,7 +206,6 @@ export const detectSimplifiableExpressions = (
         confidence:
           parsedExpression.kind === "double-bang-boolean" ||
           parsedExpression.kind === "ternary-returns-boolean" ||
-          parsedExpression.kind === "nullish-coalescing-with-nullish" ||
           parsedExpression.kind === "redundant-null-and-undefined-check"
             ? "high"
             : "medium",

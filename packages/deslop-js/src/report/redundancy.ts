@@ -4,14 +4,49 @@ import type {
   DuplicateExportOccurrence,
   RedundantAlias,
 } from "../types.js";
+import { PLATFORM_SUFFIXES } from "../constants.js";
+
+const isPlatformSpecificModulePath = (modulePath: string): boolean => {
+  const extensionIndex = modulePath.lastIndexOf(".");
+  if (extensionIndex === -1) return false;
+  const withoutExtension = modulePath.slice(0, extensionIndex);
+  return PLATFORM_SUFFIXES.some((suffix) => withoutExtension.endsWith(suffix));
+};
+
+const platformStrippedBasePath = (modulePath: string): string => {
+  const extensionIndex = modulePath.lastIndexOf(".");
+  if (extensionIndex === -1) return modulePath;
+  const withoutExtension = modulePath.slice(0, extensionIndex);
+  for (const suffix of PLATFORM_SUFFIXES) {
+    if (withoutExtension.endsWith(suffix)) {
+      return withoutExtension.slice(0, -suffix.length) + modulePath.slice(extensionIndex);
+    }
+  }
+  return modulePath;
+};
+
+const buildPlatformSiblingGroupSizes = (graph: DependencyGraph): Map<string, number> => {
+  const baseToCount = new Map<string, number>();
+  for (const module of graph.modules) {
+    const base = platformStrippedBasePath(module.fileId.path);
+    baseToCount.set(base, (baseToCount.get(base) ?? 0) + 1);
+  }
+  return baseToCount;
+};
 
 export const detectUselessAliasedReExports = (graph: DependencyGraph): RedundantAlias[] => {
   const findings: RedundantAlias[] = [];
 
   const moduleConsumerImportedNames = new Map<number, Set<string>>();
+  const moduleConsumedWholesale = new Set<number>();
+  const platformSiblingGroupSizes = buildPlatformSiblingGroupSizes(graph);
+
   for (const edge of graph.edges) {
     if (edge.isReExportEdge) {
       const reExportedSet = moduleConsumerImportedNames.get(edge.target);
+      if (edge.reExportedNames.includes("*")) {
+        moduleConsumedWholesale.add(edge.target);
+      }
       if (reExportedSet) {
         for (const reExportedName of edge.reExportedNames) reExportedSet.add(reExportedName);
       } else {
@@ -19,20 +54,29 @@ export const detectUselessAliasedReExports = (graph: DependencyGraph): Redundant
       }
       continue;
     }
+    if (edge.importedSymbols.length === 0) {
+      moduleConsumedWholesale.add(edge.target);
+      continue;
+    }
     const importedSet = moduleConsumerImportedNames.get(edge.target);
-    const importedNames = edge.importedSymbols.map((symbol) =>
-      symbol.isDefault ? "default" : symbol.importedName,
-    );
-    if (importedSet) {
-      for (const importedName of importedNames) importedSet.add(importedName);
-    } else {
-      moduleConsumerImportedNames.set(edge.target, new Set(importedNames));
+    for (const symbol of edge.importedSymbols) {
+      if (symbol.isNamespace || symbol.importedName === "*") {
+        moduleConsumedWholesale.add(edge.target);
+        continue;
+      }
+      const importedName = symbol.isDefault ? "default" : symbol.importedName;
+      if (importedSet) importedSet.add(importedName);
+      else moduleConsumerImportedNames.set(edge.target, new Set([importedName]));
     }
   }
 
   for (const module of graph.modules) {
     if (!module.isReachable) continue;
     if (module.isDeclarationFile) continue;
+    if (moduleConsumedWholesale.has(module.fileId.index)) continue;
+    if (isPlatformSpecificModulePath(module.fileId.path)) continue;
+    const platformBase = platformStrippedBasePath(module.fileId.path);
+    if ((platformSiblingGroupSizes.get(platformBase) ?? 0) > 1) continue;
 
     const consumerImportedNames =
       moduleConsumerImportedNames.get(module.fileId.index) ?? new Set();
@@ -45,6 +89,8 @@ export const detectUselessAliasedReExports = (graph: DependencyGraph): Redundant
       const originalName = exportInfo.reExportOriginalName;
       if (exportedName === originalName) continue;
       if (exportedName === "*") continue;
+      if (originalName === "*") continue;
+      if (originalName === "default") continue;
       if (exportInfo.isNamespaceReExport) continue;
       if (consumerImportedNames.has(exportedName)) continue;
 

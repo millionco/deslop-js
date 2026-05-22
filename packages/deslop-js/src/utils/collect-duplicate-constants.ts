@@ -14,6 +14,31 @@ export interface DuplicateConstantCandidate {
 const MIN_STRING_LITERAL_LENGTH = 8;
 const MIN_NUMBER_LITERAL_VALUE = 1000;
 
+const FRAMEWORK_RESERVED_CONSTANT_NAMES = new Set([
+  "dynamic",
+  "dynamicParams",
+  "revalidate",
+  "runtime",
+  "fetchCache",
+  "preferredRegion",
+  "maxDuration",
+  "metadata",
+  "viewport",
+  "generateStaticParams",
+  "generateMetadata",
+  "config",
+  "loader",
+  "action",
+  "links",
+  "meta",
+  "headers",
+  "handle",
+  "shouldRevalidate",
+  "ErrorBoundary",
+  "HydrateFallback",
+  "Layout",
+]);
+
 const isNode = (value: unknown): value is NodeLike =>
   Boolean(value) && typeof value === "object" && typeof (value as NodeLike).type === "string";
 
@@ -121,6 +146,7 @@ const visitForConstants = (
     if (idNode.type !== "Identifier") continue;
     const constantName = (idNode as { name?: string }).name;
     if (!constantName) continue;
+    if (FRAMEWORK_RESERVED_CONSTANT_NAMES.has(constantName)) continue;
     if (!isLiteralCandidate(initializerNode)) continue;
     candidates.push({
       constantName,
