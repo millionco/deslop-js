@@ -4433,3 +4433,58 @@ describe("unused-types-named-reexport (FP-class fix)", () => {
     );
   });
 });
+
+const duplicateTypeKeys = (result: ScanResult): string[] =>
+  result.duplicateTypeDefinitions.map((entry) => `${entry.kind}:${entry.name}`).sort();
+
+describe("duplicate-types: default (semantic disabled)", () => {
+  it("should not surface duplicateTypeDefinitions by default", async () => {
+    const result = await scanFixture("duplicate-types-positive");
+    assert.deepEqual(result.duplicateTypeDefinitions, []);
+  });
+});
+
+describe("duplicate-types-positive (semantic enabled)", () => {
+  it("flags structurally identical interface declared in two modules at high confidence", async () => {
+    const result = await scanFixture("duplicate-types-positive", {
+      semantic: { enabled: true, reportDuplicateTypeDefinitions: true },
+    });
+    const keys = duplicateTypeKeys(result);
+    assert.ok(keys.includes("interface:Point"), `Point should be flagged, got: ${keys.join(", ")}`);
+    const entry = result.duplicateTypeDefinitions.find(
+      (finding) => finding.name === "Point" && finding.kind === "interface",
+    );
+    assert.equal(entry?.confidence, "high");
+    assert.equal(entry?.paths.length, 2);
+  });
+});
+
+describe("duplicate-types-distinct (semantic enabled)", () => {
+  it("should NOT flag structurally distinct types", async () => {
+    const result = await scanFixture("duplicate-types-distinct", {
+      semantic: { enabled: true, reportDuplicateTypeDefinitions: true },
+    });
+    assert.deepEqual(
+      result.duplicateTypeDefinitions,
+      [],
+      "structurally distinct types should not be flagged",
+    );
+  });
+});
+
+describe("duplicate-types-aliases (semantic enabled)", () => {
+  it("flags structurally identical aliases under different names at medium confidence", async () => {
+    const result = await scanFixture("duplicate-types-aliases", {
+      semantic: { enabled: true, reportDuplicateTypeDefinitions: true },
+    });
+    assert.equal(
+      result.duplicateTypeDefinitions.length,
+      1,
+      `expected one duplicate-types finding, got: ${JSON.stringify(result.duplicateTypeDefinitions)}`,
+    );
+    const finding = result.duplicateTypeDefinitions[0];
+    assert.equal(finding.kind, "type-alias");
+    assert.equal(finding.confidence, "medium");
+    assert.ok(finding.name.includes("StringId") && finding.name.includes("UserId"));
+  });
+});

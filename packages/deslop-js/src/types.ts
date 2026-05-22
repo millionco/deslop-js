@@ -130,6 +130,15 @@ export interface UnusedEnumMember {
   trace: string[];
 }
 
+export interface DuplicateTypeDefinition {
+  name: string;
+  kind: "interface" | "type-alias";
+  paths: string[];
+  confidence: "high" | "medium" | "low";
+  reason: string;
+  trace: string[];
+}
+
 export interface UnusedParameter {
   path: string;
   functionName: string;
@@ -194,6 +203,7 @@ export interface ScanResult {
   privateTypeLeaks: PrivateTypeLeak[];
   misclassifiedDependencies: MisclassifiedDependency[];
   unusedParameters: UnusedParameter[];
+  duplicateTypeDefinitions: DuplicateTypeDefinition[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
@@ -215,6 +225,7 @@ export interface SemanticConfig {
   decoratorAllowlist: string[];
   reportMisclassifiedDependencies: boolean;
   reportUnusedParameters: boolean;
+  reportDuplicateTypeDefinitions: boolean;
 }
 
 export interface DeslopConfig {

@@ -1,0 +1,4 @@
+{
+  "name": "duplicate-types-aliases",
+  "main": "src/index.ts"
+}

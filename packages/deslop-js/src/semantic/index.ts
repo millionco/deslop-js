@@ -1,6 +1,7 @@
 import type {
   DependencyGraph,
   DeslopConfig,
+  DuplicateTypeDefinition,
   PrivateTypeLeak,
   UnusedClassMember,
   UnusedEnumMember,
@@ -13,6 +14,7 @@ import { detectUnusedEnumMembers } from "./unused-enum-members.js";
 import { detectUnusedClassMembers } from "./unused-class-members.js";
 import { detectPrivateTypeLeaks } from "./private-type-leaks.js";
 import { detectUnusedParameters } from "./unused-parameters.js";
+import { detectDuplicateTypeDefinitions } from "./duplicate-types.js";
 
 export interface SemanticAnalysisResult {
   unusedTypes: UnusedType[];
@@ -20,6 +22,7 @@ export interface SemanticAnalysisResult {
   unusedClassMembers: UnusedClassMember[];
   privateTypeLeaks: PrivateTypeLeak[];
   unusedParameters: UnusedParameter[];
+  duplicateTypeDefinitions: DuplicateTypeDefinition[];
 }
 
 export const runSemanticAnalysis = (
@@ -32,6 +35,7 @@ export const runSemanticAnalysis = (
     unusedClassMembers: [],
     privateTypeLeaks: [],
     unusedParameters: [],
+    duplicateTypeDefinitions: [],
   };
 
   if (!config.semantic.enabled) return emptyResult;
@@ -59,11 +63,16 @@ export const runSemanticAnalysis = (
     ? detectUnusedParameters(graph, config, semanticContext)
     : [];
 
+  const duplicateTypeDefinitions = config.semantic.reportDuplicateTypeDefinitions
+    ? detectDuplicateTypeDefinitions(graph, config, semanticContext)
+    : [];
+
   return {
     unusedTypes,
     unusedEnumMembers,
     unusedClassMembers,
     privateTypeLeaks,
     unusedParameters,
+    duplicateTypeDefinitions,
   };
 };

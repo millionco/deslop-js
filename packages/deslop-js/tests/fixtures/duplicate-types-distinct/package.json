@@ -1,0 +1,4 @@
+{
+  "name": "duplicate-types-distinct",
+  "main": "src/index.ts"
+}

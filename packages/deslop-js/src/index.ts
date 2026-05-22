@@ -64,6 +64,7 @@ export type {
   PrivateTypeLeak,
   MisclassifiedDependency,
   UnusedParameter,
+  DuplicateTypeDefinition,
 } from "./types.js";
 import type { SemanticConfig } from "./types.js";
 export type { SemanticConfig };
@@ -78,6 +79,7 @@ const DEFAULT_SEMANTIC_CONFIG: SemanticConfig = {
   decoratorAllowlist: DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
   reportMisclassifiedDependencies: false,
   reportUnusedParameters: false,
+  reportDuplicateTypeDefinitions: false,
 };
 
 const resolveSemanticConfig = (override: Partial<SemanticConfig> | undefined): SemanticConfig => ({
