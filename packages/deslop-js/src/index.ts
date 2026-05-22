@@ -59,6 +59,7 @@ export type {
   CircularDependency,
   UnusedType,
   UnusedEnumMember,
+  UnusedClassMember,
 } from "./types.js";
 import type { SemanticConfig } from "./types.js";
 export type { SemanticConfig };

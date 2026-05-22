@@ -1,0 +1,4 @@
+{
+  "name": "unused-class-members-public",
+  "main": "src/index.ts"
+}

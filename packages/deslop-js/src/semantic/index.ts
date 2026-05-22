@@ -1,11 +1,19 @@
-import type { DependencyGraph, DeslopConfig, UnusedEnumMember, UnusedType } from "../types.js";
+import type {
+  DependencyGraph,
+  DeslopConfig,
+  UnusedClassMember,
+  UnusedEnumMember,
+  UnusedType,
+} from "../types.js";
 import { createSemanticContext } from "./program.js";
 import { detectUnusedTypes } from "./unused-types.js";
 import { detectUnusedEnumMembers } from "./unused-enum-members.js";
+import { detectUnusedClassMembers } from "./unused-class-members.js";
 
 export interface SemanticAnalysisResult {
   unusedTypes: UnusedType[];
   unusedEnumMembers: UnusedEnumMember[];
+  unusedClassMembers: UnusedClassMember[];
 }
 
 export const runSemanticAnalysis = (
@@ -15,6 +23,7 @@ export const runSemanticAnalysis = (
   const emptyResult: SemanticAnalysisResult = {
     unusedTypes: [],
     unusedEnumMembers: [],
+    unusedClassMembers: [],
   };
 
   if (!config.semantic.enabled) return emptyResult;
@@ -30,5 +39,9 @@ export const runSemanticAnalysis = (
     ? detectUnusedEnumMembers(graph, config, semanticContext)
     : [];
 
-  return { unusedTypes, unusedEnumMembers };
+  const unusedClassMembers = config.semantic.reportUnusedClassMembers
+    ? detectUnusedClassMembers(graph, config, semanticContext)
+    : [];
+
+  return { unusedTypes, unusedEnumMembers, unusedClassMembers };
 };

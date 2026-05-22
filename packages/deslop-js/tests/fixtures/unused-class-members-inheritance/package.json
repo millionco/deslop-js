@@ -1,0 +1,4 @@
+{
+  "name": "unused-class-members-inheritance",
+  "main": "src/index.ts"
+}

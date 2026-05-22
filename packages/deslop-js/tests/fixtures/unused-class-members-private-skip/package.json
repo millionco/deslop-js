@@ -1,0 +1,4 @@
+{
+  "name": "unused-class-members-private-skip",
+  "main": "src/index.ts"
+}

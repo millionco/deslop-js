@@ -127,6 +127,18 @@ export interface UnusedEnumMember {
   trace: string[];
 }
 
+export interface UnusedClassMember {
+  path: string;
+  className: string;
+  memberName: string;
+  memberKind: "method" | "property" | "accessor";
+  line: number;
+  column: number;
+  confidence: "high" | "medium" | "low";
+  reason: string;
+  trace: string[];
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -134,6 +146,7 @@ export interface ScanResult {
   circularDependencies: CircularDependency[];
   unusedTypes: UnusedType[];
   unusedEnumMembers: UnusedEnumMember[];
+  unusedClassMembers: UnusedClassMember[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;

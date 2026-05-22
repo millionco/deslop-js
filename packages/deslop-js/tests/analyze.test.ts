@@ -4106,3 +4106,84 @@ describe("unused-enum-members-const (semantic enum-members enabled)", () => {
     );
   });
 });
+
+const unusedClassMemberKeys = (result: ScanResult): string[] =>
+  result.unusedClassMembers.map((member) => `${member.className}.${member.memberName}`).sort();
+
+describe("unused-class-members: default (semantic disabled)", () => {
+  it("should not surface unusedClassMembers by default", async () => {
+    const result = await scanFixture("unused-class-members-public");
+    assert.deepEqual(result.unusedClassMembers, []);
+  });
+});
+
+describe("unused-class-members-public (semantic class-members enabled)", () => {
+  it("flags public methods never referenced", async () => {
+    const result = await scanFixture("unused-class-members-public", {
+      semantic: { enabled: true, reportUnusedClassMembers: true },
+    });
+    const keys = unusedClassMemberKeys(result);
+    assert.ok(
+      keys.includes("Service.unusedMethod"),
+      `Service.unusedMethod should be flagged, got: ${keys.join(", ")}`,
+    );
+  });
+
+  it("should NOT flag public method that is referenced", async () => {
+    const result = await scanFixture("unused-class-members-public", {
+      semantic: { enabled: true, reportUnusedClassMembers: true },
+    });
+    const keys = unusedClassMemberKeys(result);
+    assert.ok(
+      !keys.includes("Service.greet"),
+      `Service.greet must not be flagged, got: ${keys.join(", ")}`,
+    );
+  });
+});
+
+describe("unused-class-members-inheritance (semantic class-members enabled)", () => {
+  it("should NOT flag base method when subclass overrides it (override credit)", async () => {
+    const result = await scanFixture("unused-class-members-inheritance", {
+      semantic: { enabled: true, reportUnusedClassMembers: true },
+    });
+    const keys = unusedClassMemberKeys(result);
+    assert.ok(
+      !keys.includes("Base.describe"),
+      `Base.describe must not be flagged when overridden by Child, got: ${keys.join(", ")}`,
+    );
+    assert.ok(
+      !keys.includes("Child.describe"),
+      `Child.describe must not be flagged when referenced, got: ${keys.join(", ")}`,
+    );
+  });
+});
+
+describe("unused-class-members-decorated (semantic class-members enabled)", () => {
+  it("should NOT flag decorated method when decorator is on allowlist (NestJS-style)", async () => {
+    const result = await scanFixture("unused-class-members-decorated", {
+      semantic: { enabled: true, reportUnusedClassMembers: true },
+    });
+    const keys = unusedClassMemberKeys(result);
+    assert.ok(
+      !keys.includes("UsersController.list"),
+      `UsersController.list must not be flagged because of @Get, got: ${keys.join(", ")}`,
+    );
+  });
+});
+
+describe("unused-class-members-private-skip (semantic class-members enabled)", () => {
+  it("should NOT flag private (modifier or #) members regardless of usage", async () => {
+    const result = await scanFixture("unused-class-members-private-skip", {
+      semantic: { enabled: true, reportUnusedClassMembers: true },
+    });
+    const keys = unusedClassMemberKeys(result);
+    assert.ok(
+      !keys.includes("Widget.hiddenHelper"),
+      `Widget.hiddenHelper (private modifier) must not be flagged, got: ${keys.join(", ")}`,
+    );
+    assert.ok(
+      !keys.some((key) => key.includes("brandPrivate")),
+      `Widget.#brandPrivate must not be flagged, got: ${keys.join(", ")}`,
+    );
+  });
+});

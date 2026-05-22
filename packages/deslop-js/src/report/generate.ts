@@ -30,6 +30,7 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     circularDependencies,
     unusedTypes: semanticResult.unusedTypes,
     unusedEnumMembers: semanticResult.unusedEnumMembers,
+    unusedClassMembers: semanticResult.unusedClassMembers,
     totalFiles: graph.modules.length,
     totalExports,
     analysisTimeMs: performance.now() - analysisStartTime,
