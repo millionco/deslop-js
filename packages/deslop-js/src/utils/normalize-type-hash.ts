@@ -41,16 +41,22 @@ const sanitizeNode = (input: unknown): unknown => {
 
 const extractMemberKey = (member: unknown): string => {
   if (!member || typeof member !== "object") return "";
-  const record = member as { key?: { name?: string; value?: string }; type?: string };
+  const record = member as { key?: { name?: unknown; value?: unknown }; type?: string };
   if (record.key) {
-    return record.key.name ?? record.key.value ?? "";
+    const candidate = record.key.name ?? record.key.value;
+    if (candidate === undefined || candidate === null) return "";
+    return String(candidate);
   }
   return `__${record.type ?? ""}__`;
 };
 
 const sortMembersByKey = (members: unknown[]): unknown[] => {
   const tagged = members.map((member) => ({ key: extractMemberKey(member), member }));
-  tagged.sort((leftEntry, rightEntry) => leftEntry.key.localeCompare(rightEntry.key));
+  tagged.sort((leftEntry, rightEntry) => {
+    if (leftEntry.key < rightEntry.key) return -1;
+    if (leftEntry.key > rightEntry.key) return 1;
+    return 0;
+  });
   return tagged.map((entry) => entry.member);
 };
 

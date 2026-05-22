@@ -1144,3 +1144,12 @@ describe("redundancy / cross-file duplicate constants", () => {
     assert.deepEqual(result.duplicateConstants, []);
   });
 });
+
+describe("redundancy / regression: numeric / symbol / call-signature keys", () => {
+  it("does not crash on interfaces with numeric property keys, index signatures, or call signatures", async () => {
+    const result = await scanFixtureSyntactic("numeric-keys-types");
+    assert.ok(Array.isArray(result.duplicateTypeDefinitions));
+    assert.ok(Array.isArray(result.duplicateInlineTypes));
+    assert.ok(result.totalFiles > 0);
+  });
+});
