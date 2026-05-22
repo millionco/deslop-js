@@ -60,6 +60,7 @@ export type {
   UnusedType,
   UnusedEnumMember,
   UnusedClassMember,
+  RedundantExport,
 } from "./types.js";
 import type { SemanticConfig } from "./types.js";
 export type { SemanticConfig };

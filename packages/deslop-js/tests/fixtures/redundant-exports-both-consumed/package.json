@@ -1,0 +1,4 @@
+{
+  "name": "redundant-exports-both-consumed",
+  "main": "src/index.ts"
+}

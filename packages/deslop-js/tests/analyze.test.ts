@@ -4187,3 +4187,57 @@ describe("unused-class-members-private-skip (semantic class-members enabled)", (
     );
   });
 });
+
+const redundantExportNames = (result: ScanResult): string[] =>
+  result.redundantExports.map((entry) => entry.name).sort();
+
+describe("redundant-exports: default (semantic disabled)", () => {
+  it("should not surface redundantExports by default", async () => {
+    const result = await scanFixture("redundant-exports-duplicate");
+    assert.deepEqual(result.redundantExports, []);
+  });
+});
+
+describe("redundant-exports-duplicate (semantic enabled)", () => {
+  it("flags duplicate-named export with mixed consumption", async () => {
+    const result = await scanFixture("redundant-exports-duplicate", {
+      semantic: { enabled: true, reportRedundantExports: true },
+    });
+    const names = redundantExportNames(result);
+    assert.ok(
+      names.includes("formatValue"),
+      `formatValue should be flagged, got: ${names.join(", ")}`,
+    );
+    const entry = result.redundantExports.find((finding) => finding.name === "formatValue");
+    assert.equal(entry?.confidence, "medium");
+    assert.equal(entry?.paths.length, 2);
+  });
+});
+
+describe("redundant-exports-distinct (semantic enabled)", () => {
+  it("should NOT flag exports with distinct names across modules", async () => {
+    const result = await scanFixture("redundant-exports-distinct", {
+      semantic: { enabled: true, reportRedundantExports: true },
+    });
+    assert.deepEqual(
+      result.redundantExports,
+      [],
+      "distinct exports should not appear in redundantExports",
+    );
+  });
+});
+
+describe("redundant-exports-both-consumed (semantic enabled)", () => {
+  it("flags same-name exports across modules at low confidence when both consumed", async () => {
+    const result = await scanFixture("redundant-exports-both-consumed", {
+      semantic: { enabled: true, reportRedundantExports: true },
+    });
+    const names = redundantExportNames(result);
+    assert.ok(
+      names.includes("transform"),
+      `transform should be flagged at low confidence, got: ${names.join(", ")}`,
+    );
+    const entry = result.redundantExports.find((finding) => finding.name === "transform");
+    assert.equal(entry?.confidence, "low");
+  });
+});

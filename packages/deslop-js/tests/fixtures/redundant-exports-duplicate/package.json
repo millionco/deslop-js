@@ -1,0 +1,4 @@
+{
+  "name": "redundant-exports-duplicate",
+  "main": "src/index.ts"
+}

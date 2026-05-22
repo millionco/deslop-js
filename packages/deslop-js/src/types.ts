@@ -127,6 +127,14 @@ export interface UnusedEnumMember {
   trace: string[];
 }
 
+export interface RedundantExport {
+  name: string;
+  paths: string[];
+  confidence: "high" | "medium" | "low";
+  reason: string;
+  trace: string[];
+}
+
 export interface UnusedClassMember {
   path: string;
   className: string;
@@ -147,6 +155,7 @@ export interface ScanResult {
   unusedTypes: UnusedType[];
   unusedEnumMembers: UnusedEnumMember[];
   unusedClassMembers: UnusedClassMember[];
+  redundantExports: RedundantExport[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
