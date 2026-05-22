@@ -6,7 +6,7 @@ export default defineConfig({
       entry: ["./src/index.ts"],
       format: ["cjs", "esm"],
       dts: true,
-      clean: false,
+      clean: true,
       platform: "node",
       sourcemap: false,
       minify: process.env.NODE_ENV === "production",

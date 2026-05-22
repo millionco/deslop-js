@@ -4,7 +4,15 @@ import fg from "fast-glob";
 import type { DependencyGraph, UnusedDependency, DeslopConfig } from "../types.js";
 import { IMPLICIT_DEPENDENCIES } from "../constants.js";
 import { extractPackageName } from "../utils/package-name.js";
+import { collectOverrideMappingsFromRecord } from "../utils/collect-override-mappings-from-record.js";
+import { collectPnpmWorkspaceOverrideMappings } from "../utils/parse-pnpm-workspace-overrides.js";
+import { matchesPackageImportReference } from "../utils/matches-package-import-reference.js";
 import { findMonorepoRoot } from "../utils/find-monorepo-root.js";
+
+interface OverrideMapping {
+  fromPackage: string;
+  toPackage: string;
+}
 
 interface PackageJsonDependencies {
   dependencies?: Record<string, string>;
@@ -167,6 +175,18 @@ export const detectStalePackages = (
   );
   for (const packageName of implicitCompanionPackages) usedPackageNames.add(packageName);
 
+  const overrideMappings = collectOverrideMappings(
+    configSearchRoots,
+    allPackageJsonPaths,
+    monorepoRoot,
+  );
+  for (const { fromPackage, toPackage } of overrideMappings) {
+    if (declaredNames.has(toPackage)) usedPackageNames.add(toPackage);
+    if (usedPackageNames.has(fromPackage) && declaredNames.has(toPackage)) {
+      usedPackageNames.add(toPackage);
+    }
+  }
+
   const candidateUnused = new Set<string>();
   for (const [dependencyName] of declaredDependencies) {
     if (isAlwaysConsideredUsed(dependencyName)) continue;
@@ -304,6 +324,7 @@ const collectStaticPeerSatisfiedPackages = (
 const IMPLICIT_COMPANION_DEPENDENCY_MAP: Record<string, string[]> = {
   jest: ["jest-config"],
   "jest-cli": ["jest-config"],
+  "vite-plus": ["@voidzero-dev/vite-plus-core"],
 };
 
 const collectImplicitCompanionPackages = (
@@ -357,6 +378,10 @@ const CLI_BINARY_TO_PACKAGE: Record<string, string> = {
   "simple-git-hooks": "simple-git-hooks",
   "generate-arg-types": "@webstudio-is/generate-arg-types",
   email: "@react-email/preview-server",
+  vp: "vite-plus",
+  turbo: "turbo",
+  changeset: "@changesets/cli",
+  tsx: "tsx",
 };
 
 const CLI_BINARY_FALLBACK_PACKAGES: Record<string, string[]> = {
@@ -579,6 +604,63 @@ const PACKAGE_JSON_CONFIG_SECTIONS = [
   "overrides",
 ] as const;
 
+const collectOverrideMappingsFromPackageJson = (
+  packageJsonPath: string,
+): OverrideMapping[] => {
+  const mappings: OverrideMapping[] = [];
+
+  try {
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+
+    const overrideSections = [
+      packageJson.overrides,
+      packageJson.resolutions,
+      packageJson.pnpm?.overrides,
+    ];
+
+    for (const overrideSection of overrideSections) {
+      if (!overrideSection || typeof overrideSection !== "object") continue;
+      mappings.push(...collectOverrideMappingsFromRecord(overrideSection));
+    }
+  } catch {
+    return mappings;
+  }
+
+  return mappings;
+};
+
+const collectOverrideMappings = (
+  configSearchRoots: string[],
+  packageJsonPaths: string[],
+  monorepoRoot: string | undefined,
+): OverrideMapping[] => {
+  const mappings: OverrideMapping[] = [];
+  const seenMappings = new Set<string>();
+
+  const addMappings = (nextMappings: OverrideMapping[]): void => {
+    for (const mapping of nextMappings) {
+      const mappingKey = `${mapping.fromPackage}->${mapping.toPackage}`;
+      if (seenMappings.has(mappingKey)) continue;
+      seenMappings.add(mappingKey);
+      mappings.push(mapping);
+    }
+  };
+
+  for (const packageJsonPath of packageJsonPaths) {
+    addMappings(collectOverrideMappingsFromPackageJson(packageJsonPath));
+  }
+
+  const workspaceRoots = new Set(configSearchRoots);
+  if (monorepoRoot) workspaceRoots.add(monorepoRoot);
+
+  for (const workspaceRoot of workspaceRoots) {
+    addMappings(collectPnpmWorkspaceOverrideMappings(workspaceRoot));
+  }
+
+  return mappings;
+};
+
 const collectPackageJsonConfigReferences = (
   packageJsonPath: string,
   declaredNames: Set<string>,
@@ -757,12 +839,7 @@ const scanSourceFilesForPackageImports = (
     try {
       const content = readFileSync(filePath, "utf-8");
       for (const packageName of candidatePackages) {
-        if (
-          content.includes(`'${packageName}'`) ||
-          content.includes(`"${packageName}"`) ||
-          content.includes(`'${packageName}/`) ||
-          content.includes(`"${packageName}/`)
-        ) {
+        if (matchesPackageImportReference(content, packageName)) {
           found.add(packageName);
           candidatePackages.delete(packageName);
         }
