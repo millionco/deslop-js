@@ -37,7 +37,7 @@ export interface SemanticAnalysisResult {
   contextMessage?: string;
 }
 
-const EMPTY_RESULT: SemanticAnalysisResult = {
+const createDisabledSemanticResult = (): SemanticAnalysisResult => ({
   unusedTypes: [],
   unusedEnumMembers: [],
   unusedClassMembers: [],
@@ -45,14 +45,14 @@ const EMPTY_RESULT: SemanticAnalysisResult = {
   redundantAliases: [],
   errors: [],
   contextStatus: "disabled",
-};
+});
 
 export const runSemanticAnalysis = (
   graph: DependencyGraph,
   config: DeslopConfig,
 ): SemanticAnalysisResult => {
   const semanticConfig = config.semantic;
-  if (!semanticConfig?.enabled) return EMPTY_RESULT;
+  if (!semanticConfig?.enabled) return createDisabledSemanticResult();
 
   const errors: DeslopError[] = [];
 

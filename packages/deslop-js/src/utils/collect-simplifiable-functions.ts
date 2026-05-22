@@ -1,4 +1,5 @@
 import type { SimplifiableFunctionKind } from "../types.js";
+import { MAX_AST_WALK_DEPTH } from "../constants.js";
 import { detectSimplifiableFunctionPatterns } from "./detect-simplifiable-function.js";
 
 interface NodeLike {
@@ -39,6 +40,7 @@ const visitFunctionAndDescend = (
   functionNode: NodeLike,
   captures: SimplifiableFunctionCapture[],
   contextName: string | undefined,
+  recursionDepth: number,
 ): void => {
   const functionName = inferFunctionName(functionNode, contextName);
   const detections = detectSimplifiableFunctionPatterns(functionNode);
@@ -52,10 +54,10 @@ const visitFunctionAndDescend = (
     });
   }
   const bodyNode = (functionNode as { body?: NodeLike }).body;
-  if (isNode(bodyNode)) walkForFunctions(bodyNode, captures, functionName);
+  if (isNode(bodyNode)) walkForFunctions(bodyNode, captures, functionName, recursionDepth + 1);
   const parameters = (functionNode as { params?: unknown[] }).params ?? [];
   for (const parameter of parameters) {
-    if (isNode(parameter)) walkForFunctions(parameter, captures, functionName);
+    if (isNode(parameter)) walkForFunctions(parameter, captures, functionName, recursionDepth + 1);
   }
 };
 
@@ -63,9 +65,11 @@ const walkForFunctions = (
   node: NodeLike,
   captures: SimplifiableFunctionCapture[],
   contextName: string | undefined,
+  recursionDepth: number = 0,
 ): void => {
+  if (recursionDepth > MAX_AST_WALK_DEPTH) return;
   if (looksLikeFunction(node)) {
-    visitFunctionAndDescend(node, captures, contextName);
+    visitFunctionAndDescend(node, captures, contextName, recursionDepth);
     return;
   }
 
@@ -86,10 +90,10 @@ const walkForFunctions = (
   for (const value of Object.values(node)) {
     if (Array.isArray(value)) {
       for (const element of value) {
-        if (isNode(element)) walkForFunctions(element, captures, nextContext);
+        if (isNode(element)) walkForFunctions(element, captures, nextContext, recursionDepth + 1);
       }
     } else if (isNode(value)) {
-      walkForFunctions(value, captures, nextContext);
+      walkForFunctions(value, captures, nextContext, recursionDepth + 1);
     }
   }
 };
@@ -99,7 +103,7 @@ export const collectSimplifiableFunctions = (
 ): SimplifiableFunctionCapture[] => {
   const captures: SimplifiableFunctionCapture[] = [];
   for (const statement of programBody) {
-    if (isNode(statement)) walkForFunctions(statement, captures, undefined);
+    if (isNode(statement)) walkForFunctions(statement, captures, undefined, 0);
   }
   return captures;
 };

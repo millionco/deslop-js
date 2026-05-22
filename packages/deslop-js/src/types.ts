@@ -437,9 +437,7 @@ export interface SemanticConfig {
   reportUnusedTypes: boolean;
   reportUnusedEnumMembers: boolean;
   reportUnusedClassMembers: boolean;
-  reportRedundantExports: boolean;
   reportRedundantVariableAliases: boolean;
-  reportPrivateTypeLeaks: boolean;
   reportMisclassifiedDependencies: boolean;
   reportRoundTripAliases: boolean;
   decoratorAllowlist: string[];

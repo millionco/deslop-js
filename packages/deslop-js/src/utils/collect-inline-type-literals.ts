@@ -1,4 +1,5 @@
 import type { InlineTypeContext } from "../types.js";
+import { MAX_AST_WALK_DEPTH } from "../constants.js";
 import { normalizeTypeAstHash } from "./normalize-type-hash.js";
 
 const MIN_MEMBER_COUNT_FOR_INLINE_TYPE = 3;
@@ -252,7 +253,9 @@ const walkBodyForInlineTypes = (
   bodyNode: unknown,
   captures: InlineTypeLiteralCapture[],
   enclosingName: string | undefined,
+  recursionDepth: number = 0,
 ): void => {
+  if (recursionDepth > MAX_AST_WALK_DEPTH) return;
   if (!isNode(bodyNode)) return;
   const statements = (bodyNode.body as unknown[]) ?? [];
   if (!Array.isArray(statements)) return;
@@ -272,11 +275,11 @@ const walkBodyForInlineTypes = (
         typeAliasName,
       );
     } else if (statement.type === "ReturnStatement") {
-      walkExpressionForInlineTypes(statement.argument, captures, enclosingName);
+      walkExpressionForInlineTypes(statement.argument, captures, enclosingName, recursionDepth + 1);
     } else if (statement.type === "BlockStatement") {
-      walkBodyForInlineTypes(statement, captures, enclosingName);
+      walkBodyForInlineTypes(statement, captures, enclosingName, recursionDepth + 1);
     } else if (statement.type === "ExpressionStatement") {
-      walkExpressionForInlineTypes(statement.expression, captures, enclosingName);
+      walkExpressionForInlineTypes(statement.expression, captures, enclosingName, recursionDepth + 1);
     }
   }
 };
@@ -285,7 +288,9 @@ const walkExpressionForInlineTypes = (
   expressionNode: unknown,
   captures: InlineTypeLiteralCapture[],
   enclosingName: string | undefined,
+  recursionDepth: number = 0,
 ): void => {
+  if (recursionDepth > MAX_AST_WALK_DEPTH) return;
   if (!isNode(expressionNode)) return;
   if (
     expressionNode.type === "ArrowFunctionExpression" ||
@@ -296,9 +301,11 @@ const walkExpressionForInlineTypes = (
   }
   for (const value of Object.values(expressionNode)) {
     if (Array.isArray(value)) {
-      for (const element of value) walkExpressionForInlineTypes(element, captures, enclosingName);
+      for (const element of value) {
+        walkExpressionForInlineTypes(element, captures, enclosingName, recursionDepth + 1);
+      }
     } else if (isNode(value)) {
-      walkExpressionForInlineTypes(value, captures, enclosingName);
+      walkExpressionForInlineTypes(value, captures, enclosingName, recursionDepth + 1);
     }
   }
 };

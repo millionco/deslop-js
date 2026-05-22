@@ -288,7 +288,7 @@ const collectLocalIdentifierReferences = (statements: Statement[]): string[] => 
   return references;
 };
 
-const EMPTY_PARSED_SOURCE: ParsedSource = {
+const createEmptyParsedSource = (): ParsedSource => ({
   imports: [],
   exports: [],
   memberAccesses: [],
@@ -302,7 +302,7 @@ const EMPTY_PARSED_SOURCE: ParsedSource = {
   simplifiableExpressions: [],
   duplicateConstantCandidates: [],
   errors: [],
-};
+});
 
 const stripByteOrderMark = (sourceText: string): string => {
   if (sourceText.charCodeAt(0) === 0xfeff) return sourceText.slice(1);
@@ -392,7 +392,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       return parseCssImports(filePath);
     } catch (cssError) {
       return {
-        ...EMPTY_PARSED_SOURCE,
+        ...createEmptyParsedSource(),
         errors: [
           new ParseError({
             code: "parse-failed",
@@ -407,13 +407,13 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
 
   const isNonJsFile = NON_JS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   if (isNonJsFile) {
-    return EMPTY_PARSED_SOURCE;
+    return createEmptyParsedSource();
   }
 
   const earlyErrors: DeslopError[] = [];
   const sourceText = safeReadSourceFile(filePath, earlyErrors);
   if (sourceText === undefined) {
-    return { ...EMPTY_PARSED_SOURCE, errors: earlyErrors };
+    return { ...createEmptyParsedSource(), errors: earlyErrors };
   }
   const imports: ImportReference[] = [];
   const exports: ExportReference[] = [];
@@ -441,7 +441,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     result = parseSync(parseFileName, textToParse);
   } catch (parseError) {
     return {
-      ...EMPTY_PARSED_SOURCE,
+      ...createEmptyParsedSource(),
       errors: [
         ...earlyErrors,
         new ParseError({
@@ -479,7 +479,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
 
   if (result.errors.length > 0) {
     return {
-      ...EMPTY_PARSED_SOURCE,
+      ...createEmptyParsedSource(),
       imports,
       exports,
       errors: [
@@ -497,7 +497,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
   const program = result.program;
   if (!program?.body) {
     return {
-      ...EMPTY_PARSED_SOURCE,
+      ...createEmptyParsedSource(),
       imports,
       exports,
       errors: [
@@ -509,23 +509,6 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
         }),
       ],
     };
-  }
-
-  for (const node of program.body) {
-    switch (node.type) {
-      case "ImportDeclaration":
-        extractImportDeclaration(node, sourceText, imports);
-        break;
-      case "ExportNamedDeclaration":
-        extractNamedExportDeclaration(node, sourceText, exports);
-        break;
-      case "ExportDefaultDeclaration":
-        extractDefaultExportDeclaration(node, sourceText, exports);
-        break;
-      case "ExportAllDeclaration":
-        extractExportAllDeclaration(node, sourceText, exports);
-        break;
-    }
   }
 
   const detectorErrors: DeslopError[] = [];
@@ -549,6 +532,30 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       return fallback;
     }
   };
+
+  safeWalk(
+    "extractImportsAndExports",
+    () => {
+      for (const node of program.body) {
+        switch (node.type) {
+          case "ImportDeclaration":
+            extractImportDeclaration(node, sourceText, imports);
+            break;
+          case "ExportNamedDeclaration":
+            extractNamedExportDeclaration(node, sourceText, exports);
+            break;
+          case "ExportDefaultDeclaration":
+            extractDefaultExportDeclaration(node, sourceText, exports);
+            break;
+          case "ExportAllDeclaration":
+            extractExportAllDeclaration(node, sourceText, exports);
+            break;
+        }
+      }
+      return undefined;
+    },
+    undefined,
+  );
 
   safeWalk(
     "collectDynamicImports",

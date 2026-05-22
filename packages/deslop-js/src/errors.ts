@@ -56,16 +56,27 @@ export interface DeslopErrorJson {
   detail?: string;
 }
 
+import { MAX_ANALYSIS_ERRORS, MAX_ERROR_DETAIL_LENGTH } from "./constants.js";
+
+const truncateDetail = (text: string): string => {
+  if (text.length <= MAX_ERROR_DETAIL_LENGTH) return text;
+  return `${text.slice(0, MAX_ERROR_DETAIL_LENGTH)}… [truncated ${text.length - MAX_ERROR_DETAIL_LENGTH} chars]`;
+};
+
 export const describeUnknownError = (caughtValue: unknown): string => {
+  let rawText: string;
   if (caughtValue instanceof Error) {
-    return caughtValue.message || caughtValue.name || "unknown error";
+    rawText = caughtValue.message || caughtValue.name || "unknown error";
+  } else if (typeof caughtValue === "string") {
+    rawText = caughtValue;
+  } else {
+    try {
+      rawText = JSON.stringify(caughtValue);
+    } catch {
+      rawText = String(caughtValue);
+    }
   }
-  if (typeof caughtValue === "string") return caughtValue;
-  try {
-    return JSON.stringify(caughtValue);
-  } catch {
-    return String(caughtValue);
-  }
+  return truncateDetail(rawText ?? "");
 };
 
 export class DeslopError extends Error {
@@ -203,13 +214,11 @@ export class DetectorError extends DeslopError {
 export const createDeslopError = (input: DeslopErrorInput): DeslopError =>
   new DeslopError(input);
 
-const MAX_COLLECTED_ERRORS = 5000;
-
 export class DeslopErrorCollector {
   private readonly entries: DeslopError[] = [];
   private readonly maxEntries: number;
 
-  constructor(maxEntries: number = MAX_COLLECTED_ERRORS) {
+  constructor(maxEntries: number = MAX_ANALYSIS_ERRORS) {
     this.maxEntries = maxEntries;
   }
 

@@ -108,9 +108,7 @@ const fillSemanticConfig = (
     reportUnusedTypes: semanticOverrides.reportUnusedTypes ?? true,
     reportUnusedEnumMembers: semanticOverrides.reportUnusedEnumMembers ?? true,
     reportUnusedClassMembers: semanticOverrides.reportUnusedClassMembers ?? false,
-    reportRedundantExports: semanticOverrides.reportRedundantExports ?? false,
     reportRedundantVariableAliases: semanticOverrides.reportRedundantVariableAliases ?? true,
-    reportPrivateTypeLeaks: semanticOverrides.reportPrivateTypeLeaks ?? false,
     reportMisclassifiedDependencies: semanticOverrides.reportMisclassifiedDependencies ?? true,
     reportRoundTripAliases: semanticOverrides.reportRoundTripAliases ?? true,
     decoratorAllowlist: semanticOverrides.decoratorAllowlist ?? DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
@@ -238,7 +236,19 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
     }
   }
 
-  const frameworkIgnorePatterns = getFrameworkExclusions(config.rootDir);
+  let frameworkIgnorePatterns: string[] = [];
+  try {
+    frameworkIgnorePatterns = getFrameworkExclusions(config.rootDir);
+  } catch (frameworkError) {
+    setupErrors.push(
+      new WorkspaceError({
+        code: "workspace-discovery-failed",
+        message: "getFrameworkExclusions failed — proceeding without framework exclusion patterns",
+        path: config.rootDir,
+        detail: describeUnknownError(frameworkError),
+      }),
+    );
+  }
 
   const absoluteRoot = resolve(config.rootDir);
   const outputDirectoryExclusions = OUTPUT_DIRECTORIES.flatMap((outputDirectory) => {
@@ -330,15 +340,45 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
     const parsedModule = parseSourceFile(file.path);
     const resolvedImportMap = new Map<string, ReturnType<typeof moduleResolver.resolveModule>>();
 
+    const safeResolveImport = (
+      specifier: string,
+    ): ReturnType<typeof moduleResolver.resolveModule> => {
+      try {
+        return moduleResolver.resolveModule(specifier, file.path);
+      } catch (resolveError) {
+        setupErrors.push(
+          new ResolverError({
+            severity: "warning",
+            message: `moduleResolver.resolveModule threw on specifier "${specifier}"`,
+            path: file.path,
+            detail: describeUnknownError(resolveError),
+          }),
+        );
+        return { resolvedPath: undefined, isExternal: false, packageName: undefined };
+      }
+    };
+
     for (const importInfo of parsedModule.imports) {
       if (importInfo.isGlob) {
         const fileDir = dirname(file.path);
-        const expandedFiles = fg.sync(importInfo.specifier, {
-          cwd: fileDir,
-          absolute: true,
-          onlyFiles: true,
-          ignore: ["**/node_modules/**"],
-        });
+        let expandedFiles: string[] = [];
+        try {
+          expandedFiles = fg.sync(importInfo.specifier, {
+            cwd: fileDir,
+            absolute: true,
+            onlyFiles: true,
+            ignore: ["**/node_modules/**"],
+          });
+        } catch (globError) {
+          setupErrors.push(
+            new WorkspaceError({
+              code: "workspace-discovery-failed",
+              message: `fast-glob threw on import glob "${importInfo.specifier}"`,
+              path: file.path,
+              detail: describeUnknownError(globError),
+            }),
+          );
+        }
         for (const expandedFile of expandedFiles) {
           resolvedImportMap.set(expandedFile, {
             resolvedPath: expandedFile,
@@ -353,15 +393,16 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
         });
         continue;
       }
-      const resolvedImport = moduleResolver.resolveModule(importInfo.specifier, file.path);
-      resolvedImportMap.set(importInfo.specifier, resolvedImport);
+      resolvedImportMap.set(importInfo.specifier, safeResolveImport(importInfo.specifier));
     }
 
     for (const exportInfo of parsedModule.exports) {
       if (exportInfo.isReExport && exportInfo.reExportSource) {
         if (!resolvedImportMap.has(exportInfo.reExportSource)) {
-          const resolvedImport = moduleResolver.resolveModule(exportInfo.reExportSource, file.path);
-          resolvedImportMap.set(exportInfo.reExportSource, resolvedImport);
+          resolvedImportMap.set(
+            exportInfo.reExportSource,
+            safeResolveImport(exportInfo.reExportSource),
+          );
         }
       }
     }
@@ -404,7 +445,20 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
     >();
 
     for (const importInfo of parsedStyleModule.imports) {
-      const resolvedImport = moduleResolver.resolveModule(importInfo.specifier, styleFilePath);
+      let resolvedImport: ReturnType<typeof moduleResolver.resolveModule>;
+      try {
+        resolvedImport = moduleResolver.resolveModule(importInfo.specifier, styleFilePath);
+      } catch (styleResolveError) {
+        setupErrors.push(
+          new ResolverError({
+            severity: "warning",
+            message: `moduleResolver.resolveModule threw on style import "${importInfo.specifier}"`,
+            path: styleFilePath,
+            detail: describeUnknownError(styleResolveError),
+          }),
+        );
+        resolvedImport = { resolvedPath: undefined, isExternal: false, packageName: undefined };
+      }
       resolvedStyleImportMap.set(importInfo.specifier, resolvedImport);
       if (resolvedImport.resolvedPath && !discoveredFilePaths.has(resolvedImport.resolvedPath)) {
         const isNestedStyle = STYLE_EXTENSIONS.some((ext) =>

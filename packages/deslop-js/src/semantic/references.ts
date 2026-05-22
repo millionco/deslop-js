@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { MAX_AST_WALK_DEPTH } from "../constants.js";
 
 export interface SymbolReferenceSite {
   sourceFile: ts.SourceFile;
@@ -89,7 +90,12 @@ const resolveSymbolForIdentifier = (
   identifier: ts.Identifier,
   checker: ts.TypeChecker,
 ): ts.Symbol | undefined => {
-  const symbol = checker.getSymbolAtLocation(identifier);
+  let symbol: ts.Symbol | undefined;
+  try {
+    symbol = checker.getSymbolAtLocation(identifier);
+  } catch {
+    return undefined;
+  }
   if (!symbol) return undefined;
   if (symbol.flags & ts.SymbolFlags.Alias) {
     try {
@@ -142,17 +148,22 @@ export const buildReferenceIndex = (
     }
   };
 
-  const visitNode = (node: ts.Node, sourceFile: ts.SourceFile): void => {
+  const visitNode = (
+    node: ts.Node,
+    sourceFile: ts.SourceFile,
+    recursionDepth: number,
+  ): void => {
+    if (recursionDepth > MAX_AST_WALK_DEPTH) return;
     if (ts.isIdentifier(node)) {
       recordIdentifier(node, sourceFile);
     }
-    visitJsDocNodes(node, (jsDocNode) => visitNode(jsDocNode, sourceFile));
-    node.forEachChild((child) => visitNode(child, sourceFile));
+    visitJsDocNodes(node, (jsDocNode) => visitNode(jsDocNode, sourceFile, recursionDepth + 1));
+    node.forEachChild((child) => visitNode(child, sourceFile, recursionDepth + 1));
   };
 
   for (const sourceFile of program.getSourceFiles()) {
     if (sourceFile.isDeclarationFile) continue;
-    visitNode(sourceFile, sourceFile);
+    visitNode(sourceFile, sourceFile, 0);
   }
 
   return {

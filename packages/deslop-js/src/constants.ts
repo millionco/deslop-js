@@ -273,6 +273,8 @@ export const MAX_AST_WALK_DEPTH = 200;
 
 export const MAX_ANALYSIS_ERRORS = 5000;
 
+export const MAX_ERROR_DETAIL_LENGTH = 1000;
+
 export const SEMANTIC_PROGRAM_BUDGET_MS = 30_000;
 
 export const SEMANTIC_TRACE_MAX_ENTRIES = 5;
