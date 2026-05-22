@@ -64,18 +64,13 @@ const isInsideDeclaration = (node: ts.Node): boolean => {
 
   let current: ts.Node | undefined = node.parent;
   while (current) {
-    if (
-      ts.isInterfaceDeclaration(current) ||
-      ts.isTypeAliasDeclaration(current) ||
-      ts.isEnumDeclaration(current) ||
-      ts.isClassDeclaration(current) ||
-      ts.isFunctionDeclaration(current) ||
-      ts.isVariableDeclaration(current) ||
-      ts.isModuleDeclaration(current)
-    ) {
-      const declarationName = (current as ts.NamedDeclaration).name;
-      if (declarationName === node) return true;
-    }
+    if (ts.isInterfaceDeclaration(current) && current.name === node) return true;
+    if (ts.isTypeAliasDeclaration(current) && current.name === node) return true;
+    if (ts.isEnumDeclaration(current) && current.name === node) return true;
+    if (ts.isClassDeclaration(current) && current.name === node) return true;
+    if (ts.isFunctionDeclaration(current) && current.name === node) return true;
+    if (ts.isVariableDeclaration(current) && current.name === node) return true;
+    if (ts.isModuleDeclaration(current) && current.name === node) return true;
     current = current.parent;
   }
   return false;

@@ -10,7 +10,7 @@ import { buildEntryExposureIndex } from "./utils/entry-exposed-modules.js";
 type ClassMemberCandidate =
   | {
       kind: "method";
-      node: ts.MethodDeclaration | ts.MethodSignature;
+      node: ts.MethodDeclaration;
       container: ts.ClassDeclaration;
     }
   | { kind: "property"; node: ts.PropertyDeclaration; container: ts.ClassDeclaration }
@@ -20,13 +20,17 @@ type ClassMemberCandidate =
       container: ts.ClassDeclaration;
     };
 
+const getClassElementName = (node: ts.ClassElement): ts.PropertyName | undefined =>
+  ts.isMethodDeclaration(node) ||
+  ts.isPropertyDeclaration(node) ||
+  ts.isGetAccessorDeclaration(node) ||
+  ts.isSetAccessorDeclaration(node)
+    ? node.name
+    : undefined;
+
 const isPrivateLike = (node: ts.ClassElement): boolean => {
-  if (
-    (node as { name?: ts.Node }).name &&
-    ts.isPrivateIdentifier((node as { name: ts.Node }).name as ts.Node)
-  ) {
-    return true;
-  }
+  const elementName = getClassElementName(node);
+  if (elementName && ts.isPrivateIdentifier(elementName)) return true;
   const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
   if (!modifiers) return false;
   return modifiers.some(
@@ -92,11 +96,11 @@ const collectClassMembers = (
     if (ts.isConstructorDeclaration(member)) continue;
     if (isPrivateLike(member)) continue;
     if (hasDecorator(member, decoratorAllowlist)) continue;
-    if (!(member as { name?: ts.Node }).name) continue;
-    const memberName = (member as { name: ts.Node }).name;
+    const memberName = getClassElementName(member);
+    if (!memberName) continue;
     if (!ts.isIdentifier(memberName) && !ts.isStringLiteral(memberName)) continue;
 
-    if (ts.isMethodDeclaration(member) || ts.isMethodSignature(member)) {
+    if (ts.isMethodDeclaration(member)) {
       candidates.push({ kind: "method", node: member, container: classDeclaration });
     } else if (ts.isPropertyDeclaration(member)) {
       candidates.push({ kind: "property", node: member, container: classDeclaration });
@@ -122,11 +126,10 @@ const collectOverrideNames = (
       const declaration = symbol.declarations?.[0];
       if (!declaration || !ts.isClassDeclaration(declaration)) continue;
       for (const baseMember of declaration.members) {
-        if ((baseMember as { name?: ts.Node }).name) {
-          const baseName = (baseMember as { name: ts.Node }).name;
-          if (ts.isIdentifier(baseName)) overrides.add(baseName.text);
-          else if (ts.isStringLiteral(baseName)) overrides.add(baseName.text);
-        }
+        const baseName = getClassElementName(baseMember);
+        if (!baseName) continue;
+        if (ts.isIdentifier(baseName)) overrides.add(baseName.text);
+        else if (ts.isStringLiteral(baseName)) overrides.add(baseName.text);
       }
     }
   }
@@ -167,7 +170,7 @@ const collectSubclassOverrideNamesByBase = (
             }
             for (const member of node.members) {
               if (ts.isConstructorDeclaration(member)) continue;
-              const memberName = (member as { name?: ts.Node }).name;
+              const memberName = getClassElementName(member);
               if (!memberName) continue;
               if (ts.isIdentifier(memberName)) names.add(memberName.text);
               else if (ts.isStringLiteral(memberName)) names.add(memberName.text);
@@ -238,11 +241,14 @@ export const detectUnusedClassMembers = (
           : new Set<string>();
 
         for (const candidate of candidates) {
-          const memberNameNode = (candidate.node as { name: ts.Node }).name;
+          const memberNameNode = getClassElementName(candidate.node);
+          if (!memberNameNode) continue;
           const memberSymbol = context.checker.getSymbolAtLocation(memberNameNode);
           const memberName = ts.isIdentifier(memberNameNode)
             ? memberNameNode.text
-            : (memberNameNode as ts.StringLiteral).text;
+            : ts.isStringLiteral(memberNameNode)
+              ? memberNameNode.text
+              : memberNameNode.getText(sourceFile);
 
           if (!memberSymbol) continue;
           if (overrides.has(memberName)) continue;
@@ -253,9 +259,7 @@ export const detectUnusedClassMembers = (
             memberNameNode.getStart(sourceFile),
           );
 
-          const confidence: UnusedClassMember["confidence"] = isStatic(
-            candidate.node as ts.ClassElement,
-          )
+          const confidence: UnusedClassMember["confidence"] = isStatic(candidate.node)
             ? "medium"
             : "high";
 
