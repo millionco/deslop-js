@@ -2,6 +2,7 @@ import type {
   DependencyGraph,
   DeslopConfig,
   DuplicateTypeDefinition,
+  MisclassifiedDependency,
   PrivateTypeLeak,
   UnusedClassMember,
   UnusedEnumMember,
@@ -15,6 +16,7 @@ import { detectUnusedClassMembers } from "./unused-class-members.js";
 import { detectPrivateTypeLeaks } from "./private-type-leaks.js";
 import { detectUnusedParameters } from "./unused-parameters.js";
 import { detectDuplicateTypeDefinitions } from "./duplicate-types.js";
+import { detectMisclassifiedDependencies as detectMisclassifiedDependenciesSemantic } from "./misclassified-dependencies.js";
 
 export interface SemanticAnalysisResult {
   unusedTypes: UnusedType[];
@@ -23,6 +25,7 @@ export interface SemanticAnalysisResult {
   privateTypeLeaks: PrivateTypeLeak[];
   unusedParameters: UnusedParameter[];
   duplicateTypeDefinitions: DuplicateTypeDefinition[];
+  misclassifiedDependencies: MisclassifiedDependency[];
 }
 
 export const runSemanticAnalysis = (
@@ -36,12 +39,19 @@ export const runSemanticAnalysis = (
     privateTypeLeaks: [],
     unusedParameters: [],
     duplicateTypeDefinitions: [],
+    misclassifiedDependencies: [],
   };
 
   if (!config.semantic.enabled) return emptyResult;
 
   const semanticContext = createSemanticContext(graph, config);
-  if (!semanticContext) return emptyResult;
+  const misclassifiedDependencies = config.semantic.reportMisclassifiedDependencies
+    ? detectMisclassifiedDependenciesSemantic(graph, config, semanticContext)
+    : [];
+
+  if (!semanticContext) {
+    return { ...emptyResult, misclassifiedDependencies };
+  }
 
   const unusedTypes = config.semantic.reportUnusedTypes
     ? detectUnusedTypes(graph, config, semanticContext)
@@ -74,5 +84,6 @@ export const runSemanticAnalysis = (
     privateTypeLeaks,
     unusedParameters,
     duplicateTypeDefinitions,
+    misclassifiedDependencies,
   };
 };

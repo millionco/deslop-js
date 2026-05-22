@@ -1,0 +1,7 @@
+{
+  "name": "misclassified-deps-checker-only",
+  "main": "src/index.ts",
+  "dependencies": {
+    "checker-only-pkg": "^1.0.0"
+  }
+}

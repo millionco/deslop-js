@@ -4488,3 +4488,26 @@ describe("duplicate-types-aliases (semantic enabled)", () => {
     assert.ok(finding.name.includes("StringId") && finding.name.includes("UserId"));
   });
 });
+
+describe("misclassified-deps-checker-only (semantic enabled)", () => {
+  it("uses TS checker to upgrade syntactic value imports that resolve to type-only symbols", async () => {
+    const result = await scanFixture("misclassified-deps-checker-only", {
+      semantic: { enabled: true, reportMisclassifiedDependencies: true },
+    });
+    const names = result.misclassifiedDependencies.map((entry) => entry.name).sort();
+    assert.ok(
+      names.includes("checker-only-pkg"),
+      `checker-only-pkg should be flagged via checker upgrade, got: ${names.join(", ")}`,
+    );
+    const finding = result.misclassifiedDependencies.find((d) => d.name === "checker-only-pkg");
+    assert.equal(
+      finding?.confidence,
+      "high",
+      "checker-confirmed type-only imports should be high-confidence",
+    );
+    assert.ok(
+      finding?.reason.includes("checker confirms"),
+      "reason should cite the checker as evidence",
+    );
+  });
+});
