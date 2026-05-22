@@ -34,15 +34,13 @@ const CONFIG_STRING_ENTRY_GLOBS = [
   "**/scripts/utils/createJestConfig.js",
 ];
 
-const CONFIG_RELATIVE_PATH_PATTERN =
-  /['"`]((\.{1,2}\/|\.\.\/)[^'"`\n]+?|\.\/[^'"`\n]+?)['"`]/g;
+const CONFIG_RELATIVE_PATH_PATTERN = /['"`]((\.{1,2}\/|\.\.\/)[^'"`\n]+?|\.\/[^'"`\n]+?)['"`]/g;
 
 const JEST_ROOT_DIR_PATH_PATTERN = /<rootDir>\/([^'"`\n]+?)(?:['"`]|$)/g;
 
 const RESOLVE_CALL_PATH_PATTERN = /resolve\s*\(\s*['"`]([^'"`\n]+?)['"`]\s*\)/g;
 
-const PATH_JOIN_STRING_PATTERN =
-  /path\.(?:join|resolve)\(\s*[^,]+,\s*['"`]([^'"`\n]+?)['"`]/g;
+const PATH_JOIN_STRING_PATTERN = /path\.(?:join|resolve)\(\s*[^,]+,\s*['"`]([^'"`\n]+?)['"`]/g;
 
 const ENTRY_POINTS_STRING_PATTERN = /entryPoints:\s*\[\s*['"`]([^'"`\n]+?)['"`]/g;
 
@@ -54,8 +52,7 @@ const VITEST_ENVIRONMENT_PATTERN = /environment\s*:\s*['"`](\.\/[^'"`\n]+?)['"`]
 
 const ASTRO_ENTRYPOINT_PATTERN = /entrypoint\s*:\s*['"`](\.\/[^'"`\n]+?)['"`]/g;
 
-const WEBPACK_PATH_JOIN_ENTRY_PATTERN =
-  /path\.join\(\s*[^,]+,\s*['"`]([^'"`\n]+?)['"`]\s*\)/g;
+const WEBPACK_PATH_JOIN_ENTRY_PATTERN = /path\.join\(\s*[^,]+,\s*['"`]([^'"`\n]+?)['"`]\s*\)/g;
 
 const WEBPACK_RENDERER_PATH_JOIN_PATTERN =
   /path\.join\(\s*webpackPaths\.srcRendererPath\s*,\s*['"`]([^'"`\n]+?)['"`]\s*\)/g;
@@ -134,7 +131,9 @@ const collectResolvedPathsFromStrings = (
 
   let rendererEntryMatch: RegExpExecArray | null;
   WEBPACK_RENDERER_PATH_JOIN_PATTERN.lastIndex = 0;
-  while ((rendererEntryMatch = WEBPACK_RENDERER_PATH_JOIN_PATTERN.exec(contentWithoutImports)) !== null) {
+  while (
+    (rendererEntryMatch = WEBPACK_RENDERER_PATH_JOIN_PATTERN.exec(contentWithoutImports)) !== null
+  ) {
     addResolvedConfigPath(
       `src/renderer/${rendererEntryMatch[1]}`,
       configDirectory,

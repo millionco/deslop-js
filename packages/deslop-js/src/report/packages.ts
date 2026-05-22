@@ -632,9 +632,7 @@ const PACKAGE_JSON_CONFIG_SECTIONS = [
   "overrides",
 ] as const;
 
-const collectOverrideMappingsFromPackageJson = (
-  packageJsonPath: string,
-): OverrideMapping[] => {
+const collectOverrideMappingsFromPackageJson = (packageJsonPath: string): OverrideMapping[] => {
   const mappings: OverrideMapping[] = [];
 
   try {

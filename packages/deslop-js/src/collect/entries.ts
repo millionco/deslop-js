@@ -225,9 +225,7 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
 
   const tsConfigIncludeEntries = extractTsConfigIncludeFilesEntries(absoluteRoot);
   for (const workspacePackage of entryEligiblePackages) {
-    tsConfigIncludeEntries.push(
-      ...extractTsConfigIncludeFilesEntries(workspacePackage.directory),
-    );
+    tsConfigIncludeEntries.push(...extractTsConfigIncludeFilesEntries(workspacePackage.directory));
   }
 
   const configStringEntries = extractConfigStringReferencedEntries(absoluteRoot);
@@ -1144,10 +1142,7 @@ const extractScriptTagsFromHtmlFile = (htmlFilePath: string): string[] => {
   return entries;
 };
 
-const TSCONFIG_FILENAME_GLOBS = [
-  "tsconfig.json",
-  "tsconfig.*.json",
-];
+const TSCONFIG_FILENAME_GLOBS = ["tsconfig.json", "tsconfig.*.json"];
 
 const stripJsoncCommentsLocal = (sourceText: string): string => {
   let result = "";
@@ -1331,7 +1326,8 @@ const collectBrowserExtensionManifestPaths = (manifest: unknown): string[] => {
     }
   }
 
-  const action = manifestRecord.action ?? manifestRecord.browser_action ?? manifestRecord.page_action;
+  const action =
+    manifestRecord.action ?? manifestRecord.browser_action ?? manifestRecord.page_action;
   if (typeof action === "object" && action !== null) {
     const actionRecord = action as Record<string, unknown>;
     if (typeof actionRecord.default_popup === "string") {

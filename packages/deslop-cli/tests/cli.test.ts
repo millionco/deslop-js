@@ -18,14 +18,8 @@ import { validateRootDirectory } from "../src/utils/validate-root-directory.js";
 
 const testDirectory = resolve(fileURLToPath(import.meta.url), "..");
 const packageDirectory = resolve(testDirectory, "..");
-const simpleAppFixture = resolve(
-  packageDirectory,
-  "../deslop-js/tests/fixtures/simple-app",
-);
-const cycleSimpleFixture = resolve(
-  packageDirectory,
-  "../deslop-js/tests/fixtures/cycle-simple",
-);
+const simpleAppFixture = resolve(packageDirectory, "../deslop-js/tests/fixtures/simple-app");
+const cycleSimpleFixture = resolve(packageDirectory, "../deslop-js/tests/fixtures/cycle-simple");
 const cliEntryPath = resolve(packageDirectory, "src/cli.ts");
 
 const emptyScanResult: ScanResult = {
@@ -33,6 +27,21 @@ const emptyScanResult: ScanResult = {
   unusedExports: [],
   unusedDependencies: [],
   circularDependencies: [],
+  unusedTypes: [],
+  misclassifiedDependencies: [],
+  unusedEnumMembers: [],
+  unusedClassMembers: [],
+  redundantAliases: [],
+  duplicateExports: [],
+  duplicateImports: [],
+  redundantTypePatterns: [],
+  identityWrappers: [],
+  duplicateTypeDefinitions: [],
+  duplicateInlineTypes: [],
+  simplifiableFunctions: [],
+  simplifiableExpressions: [],
+  duplicateConstants: [],
+  analysisErrors: [],
   totalFiles: 0,
   totalExports: 0,
   analysisTimeMs: 0,
@@ -65,14 +74,10 @@ const runCli = (
   workingDirectory: string,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> =>
   new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(
-      process.execPath,
-      ["--import", "tsx", cliEntryPath, ...argumentsList],
-      {
-        cwd: workingDirectory,
-        env: process.env,
-      },
-    );
+    const child = spawn(process.execPath, ["--import", "tsx", cliEntryPath, ...argumentsList], {
+      cwd: workingDirectory,
+      env: process.env,
+    });
 
     let stdout = "";
     let stderr = "";

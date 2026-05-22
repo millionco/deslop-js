@@ -37,10 +37,7 @@ export const detectDeadExports = (graph: DependencyGraph, config: DeslopConfig):
 
       if (module.localIdentifierReferences.includes(exportInfo.name)) continue;
 
-      if (
-        !exportInfo.isDefault &&
-        defaultExportLinkedNames.has(exportInfo.name)
-      ) {
+      if (!exportInfo.isDefault && defaultExportLinkedNames.has(exportInfo.name)) {
         continue;
       }
 

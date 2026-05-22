@@ -96,7 +96,9 @@ export interface MetricsBreakdown {
   likelyTrue: number;
   likelyFalse: number;
   skipped: number;
-  fpRate: number;
+  confirmedFpRate: number;
+  verifiedFpRate: number;
+  verificationCoverage: number;
 }
 
 export interface RunMetrics {

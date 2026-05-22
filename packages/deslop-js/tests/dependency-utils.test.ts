@@ -45,8 +45,8 @@ describe("matchesPackageImportReference", () => {
   it("should match import and require usage", () => {
     const source = [
       "import foo from 'used-package/subpath'",
-      "const bar = require(\"used-package\")",
-      "const names = [\"unused-string-only-package\"]",
+      'const bar = require("used-package")',
+      'const names = ["unused-string-only-package"]',
     ].join("\n");
 
     assert.equal(matchesPackageImportReference(source, "used-package"), true);

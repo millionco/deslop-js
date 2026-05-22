@@ -264,3 +264,99 @@ export const MAX_CYCLES_PER_SCC = 20;
 export const MAX_TOTAL_CYCLES = 200;
 
 export const MAX_SCC_SIZE_FOR_ENUMERATION = 50;
+
+export const SEMANTIC_MAX_PROGRAM_FILES = 5000;
+
+export const MAX_PARSE_FILE_SIZE_BYTES = 2_000_000;
+
+export const MAX_AST_WALK_DEPTH = 200;
+
+export const MAX_TYPE_REFERENCE_WALK_DEPTH = 6;
+
+export const MAX_EXPRESSION_DETECTOR_WALK_DEPTH = 100;
+
+export const MAX_FUNCTION_BODY_INSPECT_DEPTH = 30;
+
+export const MAX_TYPE_CONTEXT_PARENT_WALK = 12;
+
+export const MAX_ANALYSIS_ERRORS = 5000;
+
+export const MAX_ERROR_DETAIL_LENGTH = 1000;
+
+export const BINARY_DETECTION_SAMPLE_BYTES = 2048;
+
+export const BINARY_DETECTION_NULL_BYTE_THRESHOLD = 4;
+
+export const MINIFIED_DETECTION_MIN_BYTES = 5000;
+
+export const MINIFIED_DETECTION_AVG_LINE_LENGTH_THRESHOLD = 500;
+
+export const MIN_FILES_FOR_DUPLICATE_CONSTANT = 3;
+
+export const MIN_PROPERTIES_FOR_INLINE_TYPE_LITERAL = 3;
+
+/**
+ * Strings shorter than this are mostly noise (`""`, `"id"`, `"name"`,
+ * single-word config keys) and trigger many cross-file coincidental matches
+ * that aren't real DRY violations. 8 chars roughly excludes single common
+ * words but still catches URLs, error codes, and identifiers worth extracting.
+ * Tuned for low FP rate, not corpus-tuned to a specific metric target.
+ */
+export const MIN_STRING_LITERAL_LENGTH_FOR_DUPLICATE = 8;
+
+/**
+ * Numeric literals below 1000 are dominated by indices, counters, small
+ * ranges, ports, percentages, and array sizes that coincide by accident
+ * (every `MAX_RETRIES = 3` is not a duplicate of every `LIMIT = 3`).
+ * 1000 admits real shared constants (timeouts in ms, byte sizes, polling
+ * intervals) without producing the noise floor that smaller magnitudes do.
+ * NOTE: even at 1000, the rule still produces medium-confidence false
+ * positives when constants share a value coincidentally with different
+ * names (e.g. `STEP_DELAY_MS` vs `MINIMUM_TOKENS`); the report explicitly
+ * downgrades those to `confidence: "medium"`.
+ */
+export const MIN_NUMERIC_LITERAL_MAGNITUDE_FOR_DUPLICATE = 1000;
+
+export const INLINE_TYPE_PREVIEW_KEYS = 4;
+
+export const SIMPLIFIABLE_EXPRESSION_MEMBER_ACCESS_DEPTH = 6;
+
+export const ANALYSIS_ERROR_PRINT_LIMIT = 20;
+
+export const DUPLICATE_INLINE_TYPE_HIGH_MEMBER_COUNT = 5;
+
+export const SEMANTIC_PROGRAM_BUDGET_MS = 30_000;
+
+export const SEMANTIC_TRACE_MAX_ENTRIES = 5;
+
+export const DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST = [
+  "Component",
+  "Injectable",
+  "NgModule",
+  "Pipe",
+  "Directive",
+  "Controller",
+  "Module",
+  "Resolver",
+  "Query",
+  "Mutation",
+  "Get",
+  "Post",
+  "Put",
+  "Patch",
+  "Delete",
+  "Head",
+  "Options",
+  "All",
+  "Sse",
+  "WebSocketGateway",
+  "SubscribeMessage",
+];
+
+export const DEFAULT_SEMANTIC_TSCONFIG_NAMES = [
+  "tsconfig.json",
+  "tsconfig.app.json",
+  "tsconfig.build.json",
+  "tsconfig.src.json",
+  "jsconfig.json",
+];

@@ -62,10 +62,7 @@ const main = async (): Promise<void> => {
 
   if (command === "baseline") {
     const corpusFlag = parseFlag(argv, "--corpus", "fast") as "fast" | "mid" | "full";
-    const analysisConcurrency = Number.parseInt(
-      parseFlag(argv, "--analysis-concurrency", "4"),
-      10,
-    );
+    const analysisConcurrency = Number.parseInt(parseFlag(argv, "--analysis-concurrency", "4"), 10);
     const verifyConcurrency = Number.parseInt(parseFlag(argv, "--verify-concurrency", "3"), 10);
     await runOneCorpusPass({
       corpus: corpusFlag,
@@ -81,10 +78,7 @@ const main = async (): Promise<void> => {
     const corpusFlag = parseFlag(argv, "--corpus", "fast") as "fast" | "mid" | "full";
     const maxIterations = Number.parseInt(parseFlag(argv, "--max-iter", "200"), 10);
     const totalBudgetMs = Number.parseInt(parseFlag(argv, "--budget-ms", "36000000"), 10);
-    const analysisConcurrency = Number.parseInt(
-      parseFlag(argv, "--analysis-concurrency", "4"),
-      10,
-    );
+    const analysisConcurrency = Number.parseInt(parseFlag(argv, "--analysis-concurrency", "4"), 10);
     const verifyConcurrency = Number.parseInt(parseFlag(argv, "--verify-concurrency", "3"), 10);
     const branchTag = parseFlag(argv, "--tag", "");
     await runExperimentLoop({

@@ -1,5 +1,13 @@
 import { parseSync } from "oxc-parser";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
+import {
+  BINARY_DETECTION_NULL_BYTE_THRESHOLD,
+  BINARY_DETECTION_SAMPLE_BYTES,
+  MAX_PARSE_FILE_SIZE_BYTES,
+  MINIFIED_DETECTION_AVG_LINE_LENGTH_THRESHOLD,
+  MINIFIED_DETECTION_MIN_BYTES,
+} from "../constants.js";
+import { type DeslopError, FileReadError, ParseError, describeUnknownError } from "../errors.js";
 import type {
   Statement,
   ImportDeclaration,
@@ -17,9 +25,87 @@ import type {
   Expression,
   ModuleDeclaration,
 } from "@oxc-project/types";
-import type { ImportReference, ExportReference, ImportBinding, MemberAccess } from "../types.js";
+import type {
+  ImportReference,
+  ExportReference,
+  ImportBinding,
+  MemberAccess,
+  InlineTypeContext,
+  RedundantTypePatternKind,
+  SimplifiableExpressionKind,
+  SimplifiableFunctionKind,
+} from "../types.js";
 import { getLineFromOffset, getColumnFromOffset } from "../utils/line-column.js";
 import { extractDefaultExportLocalName } from "../utils/extract-default-export-local-name.js";
+import {
+  detectRedundantTypePatternForTypeAnnotation,
+  detectRedundantInterfaceDeclaration,
+} from "../utils/detect-redundant-type-pattern.js";
+import { detectIdentityWrapperFromInitializer } from "../utils/detect-identity-wrapper.js";
+import { normalizeTypeAstHash } from "../utils/normalize-type-hash.js";
+import { collectInlineTypeLiterals } from "../utils/collect-inline-type-literals.js";
+import { collectSimplifiableFunctions } from "../utils/collect-simplifiable-functions.js";
+import { collectSimplifiableExpressions } from "../utils/collect-simplifiable-expressions.js";
+import { collectDuplicateConstantCandidates } from "../utils/collect-duplicate-constants.js";
+
+export interface ParsedRedundantTypePattern {
+  typeName: string;
+  kind: RedundantTypePatternKind;
+  line: number;
+  column: number;
+  reason: string;
+  suggestion: string;
+}
+
+export interface ParsedIdentityWrapper {
+  wrapperName: string;
+  wrappedExpression: string;
+  line: number;
+  column: number;
+}
+
+export interface ParsedTypeDefinitionHash {
+  typeName: string;
+  structuralHash: string;
+  line: number;
+  column: number;
+}
+
+export interface ParsedInlineTypeLiteral {
+  structuralHash: string;
+  memberCount: number;
+  preview: string;
+  context: InlineTypeContext;
+  nearestName?: string;
+  line: number;
+  column: number;
+}
+
+export interface ParsedSimplifiableFunction {
+  kind: SimplifiableFunctionKind;
+  functionName?: string;
+  line: number;
+  column: number;
+  reason: string;
+  suggestion: string;
+}
+
+export interface ParsedSimplifiableExpression {
+  kind: SimplifiableExpressionKind;
+  snippet: string;
+  line: number;
+  column: number;
+  reason: string;
+  suggestion: string;
+}
+
+export interface ParsedDuplicateConstantCandidate {
+  constantName: string;
+  literalHash: string;
+  literalPreview: string;
+  line: number;
+  column: number;
+}
 
 export interface ParsedSource {
   imports: ImportReference[];
@@ -27,6 +113,14 @@ export interface ParsedSource {
   memberAccesses: MemberAccess[];
   wholeObjectUses: string[];
   localIdentifierReferences: string[];
+  redundantTypePatterns: ParsedRedundantTypePattern[];
+  identityWrappers: ParsedIdentityWrapper[];
+  typeDefinitionHashes: ParsedTypeDefinitionHash[];
+  inlineTypeLiterals: ParsedInlineTypeLiteral[];
+  simplifiableFunctions: ParsedSimplifiableFunction[];
+  simplifiableExpressions: ParsedSimplifiableExpression[];
+  duplicateConstantCandidates: ParsedDuplicateConstantCandidate[];
+  errors: DeslopError[];
 }
 
 const extractMdxImportsExports = (sourceText: string): string => {
@@ -141,7 +235,21 @@ const parseCssImports = (filePath: string): ParsedSource => {
     }
   }
 
-  return { imports, exports: [], memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
+  return {
+    imports,
+    exports: [],
+    memberAccesses: [],
+    wholeObjectUses: [],
+    localIdentifierReferences: [],
+    redundantTypePatterns: [],
+    identityWrappers: [],
+    typeDefinitionHashes: [],
+    inlineTypeLiterals: [],
+    simplifiableFunctions: [],
+    simplifiableExpressions: [],
+    duplicateConstantCandidates: [],
+    errors: [],
+  };
 };
 
 const NON_JS_EXTENSIONS = [".graphql", ".gql"];
@@ -186,18 +294,151 @@ const collectLocalIdentifierReferences = (statements: Statement[]): string[] => 
   return references;
 };
 
+const createEmptyParsedSource = (): ParsedSource => ({
+  imports: [],
+  exports: [],
+  memberAccesses: [],
+  wholeObjectUses: [],
+  localIdentifierReferences: [],
+  redundantTypePatterns: [],
+  identityWrappers: [],
+  typeDefinitionHashes: [],
+  inlineTypeLiterals: [],
+  simplifiableFunctions: [],
+  simplifiableExpressions: [],
+  duplicateConstantCandidates: [],
+  errors: [],
+});
+
+const stripByteOrderMark = (sourceText: string): string => {
+  if (sourceText.charCodeAt(0) === 0xfeff) return sourceText.slice(1);
+  return sourceText;
+};
+
+const looksLikeBinaryContent = (sourceText: string): boolean => {
+  const sampleLength = Math.min(sourceText.length, BINARY_DETECTION_SAMPLE_BYTES);
+  let nullByteCount = 0;
+  for (let scanIndex = 0; scanIndex < sampleLength; scanIndex++) {
+    if (sourceText.charCodeAt(scanIndex) === 0) nullByteCount++;
+    if (nullByteCount > BINARY_DETECTION_NULL_BYTE_THRESHOLD) return true;
+  }
+  return false;
+};
+
+const looksLikeMinifiedSource = (sourceText: string): boolean => {
+  if (sourceText.length < MINIFIED_DETECTION_MIN_BYTES) return false;
+  let newlineCount = 0;
+  for (let scanIndex = 0; scanIndex < sourceText.length; scanIndex++) {
+    if (sourceText.charCodeAt(scanIndex) === 10) newlineCount++;
+  }
+  const averageLineLength = sourceText.length / (newlineCount + 1);
+  return averageLineLength > MINIFIED_DETECTION_AVG_LINE_LENGTH_THRESHOLD;
+};
+
+const safeReadSourceFile = (filePath: string, errors: DeslopError[]): string | undefined => {
+  try {
+    const stats = statSync(filePath);
+    if (stats.size === 0) {
+      errors.push(
+        new FileReadError({
+          code: "file-empty",
+          severity: "info",
+          message: "file is empty — nothing to analyze",
+          path: filePath,
+        }),
+      );
+      return undefined;
+    }
+    if (stats.size > MAX_PARSE_FILE_SIZE_BYTES) {
+      errors.push(
+        new FileReadError({
+          code: "file-too-large",
+          message: `file size ${stats.size}B exceeds MAX_PARSE_FILE_SIZE_BYTES (${MAX_PARSE_FILE_SIZE_BYTES})`,
+          path: filePath,
+        }),
+      );
+      return undefined;
+    }
+  } catch (statError) {
+    errors.push(
+      new FileReadError({
+        code: "file-read-failed",
+        message: "could not stat source file",
+        path: filePath,
+        detail: describeUnknownError(statError),
+      }),
+    );
+    return undefined;
+  }
+  try {
+    const rawSourceText = readFileSync(filePath, "utf-8");
+    const sourceText = stripByteOrderMark(rawSourceText);
+    if (looksLikeBinaryContent(sourceText)) {
+      errors.push(
+        new FileReadError({
+          code: "file-binary",
+          severity: "info",
+          message: "file appears to be binary — skipping",
+          path: filePath,
+        }),
+      );
+      return undefined;
+    }
+    if (looksLikeMinifiedSource(sourceText)) {
+      errors.push(
+        new FileReadError({
+          code: "file-minified",
+          severity: "info",
+          message: "file appears to be a minified/bundled artifact — skipping redundancy analysis",
+          path: filePath,
+        }),
+      );
+      return undefined;
+    }
+    return sourceText;
+  } catch (readError) {
+    errors.push(
+      new FileReadError({
+        code: "file-read-failed",
+        message: "could not read source file",
+        path: filePath,
+        detail: describeUnknownError(readError),
+      }),
+    );
+    return undefined;
+  }
+};
+
 export const parseSourceFile = (filePath: string): ParsedSource => {
   const isCss = CSS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   if (isCss) {
-    return parseCssImports(filePath);
+    try {
+      return parseCssImports(filePath);
+    } catch (cssError) {
+      return {
+        ...createEmptyParsedSource(),
+        errors: [
+          new ParseError({
+            code: "parse-failed",
+            message: "CSS import parsing crashed",
+            path: filePath,
+            detail: describeUnknownError(cssError),
+          }),
+        ],
+      };
+    }
   }
 
   const isNonJsFile = NON_JS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   if (isNonJsFile) {
-    return { imports: [], exports: [], memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
+    return createEmptyParsedSource();
   }
 
-  const sourceText = readFileSync(filePath, "utf-8");
+  const earlyErrors: DeslopError[] = [];
+  const sourceText = safeReadSourceFile(filePath, earlyErrors);
+  if (sourceText === undefined) {
+    return { ...createEmptyParsedSource(), errors: earlyErrors };
+  }
   const imports: ImportReference[] = [];
   const exports: ExportReference[] = [];
 
@@ -219,7 +460,23 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       ? filePath.replace(/\.(mdx|astro|vue|svelte)$/, ".tsx")
       : filePath;
 
-  let result = parseSync(parseFileName, textToParse);
+  let result: ReturnType<typeof parseSync>;
+  try {
+    result = parseSync(parseFileName, textToParse);
+  } catch (parseError) {
+    return {
+      ...createEmptyParsedSource(),
+      errors: [
+        ...earlyErrors,
+        new ParseError({
+          code: "parse-failed",
+          message: "oxc-parser threw during initial parse",
+          path: filePath,
+          detail: describeUnknownError(parseError),
+        }),
+      ],
+    };
+  }
 
   const isPlainJsFile =
     parseFileName.endsWith(".js") ||
@@ -227,57 +484,335 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     parseFileName.endsWith(".cjs");
 
   if (isPlainJsFile && result.errors.length > 0) {
-    const jsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".jsx");
-    const jsxResult = parseSync(jsxFileName, textToParse);
-    if (jsxResult.errors.length === 0) {
-      result = jsxResult;
-    } else {
-      const tsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".tsx");
-      const tsxResult = parseSync(tsxFileName, textToParse);
-      if (tsxResult.errors.length === 0) {
-        result = tsxResult;
+    try {
+      const jsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".jsx");
+      const jsxResult = parseSync(jsxFileName, textToParse);
+      if (jsxResult.errors.length === 0) {
+        result = jsxResult;
+      } else {
+        const tsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".tsx");
+        const tsxResult = parseSync(tsxFileName, textToParse);
+        if (tsxResult.errors.length === 0) {
+          result = tsxResult;
+        }
       }
+    } catch {
+      // fall through with the existing (error-laden) result
     }
   }
 
   if (result.errors.length > 0) {
-    return { imports, exports, memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
+    return {
+      ...createEmptyParsedSource(),
+      imports,
+      exports,
+      errors: [
+        ...earlyErrors,
+        new ParseError({
+          code: "parse-recovered",
+          severity: "info",
+          message: `oxc-parser reported ${result.errors.length} syntax issue(s); skipping deep analysis for this file`,
+          path: filePath,
+        }),
+      ],
+    };
   }
 
   const program = result.program;
   if (!program?.body) {
-    return { imports, exports, memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
+    return {
+      ...createEmptyParsedSource(),
+      imports,
+      exports,
+      errors: [
+        ...earlyErrors,
+        new ParseError({
+          code: "parse-failed",
+          message: "oxc-parser returned no program body",
+          path: filePath,
+        }),
+      ],
+    };
   }
 
-  for (const node of program.body) {
-    switch (node.type) {
-      case "ImportDeclaration":
-        extractImportDeclaration(node, sourceText, imports);
-        break;
-      case "ExportNamedDeclaration":
-        extractNamedExportDeclaration(node, sourceText, exports);
-        break;
-      case "ExportDefaultDeclaration":
-        extractDefaultExportDeclaration(node, sourceText, exports);
-        break;
-      case "ExportAllDeclaration":
-        extractExportAllDeclaration(node, sourceText, exports);
-        break;
+  const detectorErrors: DeslopError[] = [];
+
+  const safeWalk = <ResultType>(
+    walkerName: string,
+    walker: () => ResultType,
+    fallback: ResultType,
+  ): ResultType => {
+    try {
+      return walker();
+    } catch (walkError) {
+      detectorErrors.push(
+        new ParseError({
+          code: "ast-walk-failed",
+          message: `${walkerName} threw during AST traversal`,
+          path: filePath,
+          detail: describeUnknownError(walkError),
+        }),
+      );
+      return fallback;
     }
-  }
+  };
 
-  collectDynamicImports(program.body, sourceText, imports);
+  safeWalk(
+    "extractImportsAndExports",
+    () => {
+      for (const node of program.body) {
+        switch (node.type) {
+          case "ImportDeclaration":
+            extractImportDeclaration(node, sourceText, imports);
+            break;
+          case "ExportNamedDeclaration":
+            extractNamedExportDeclaration(node, sourceText, exports);
+            break;
+          case "ExportDefaultDeclaration":
+            extractDefaultExportDeclaration(node, sourceText, exports);
+            break;
+          case "ExportAllDeclaration":
+            extractExportAllDeclaration(node, sourceText, exports);
+            break;
+        }
+      }
+      return undefined;
+    },
+    undefined,
+  );
+
+  safeWalk(
+    "collectDynamicImports",
+    () => {
+      collectDynamicImports(program.body, sourceText, imports);
+      return undefined;
+    },
+    undefined,
+  );
 
   const namespaceLocalNames = collectNamespaceLocalNames(imports);
   const memberAccesses: MemberAccess[] = [];
   const wholeObjectUses: string[] = [];
   if (namespaceLocalNames.size > 0) {
-    collectMemberAccesses(program.body, namespaceLocalNames, memberAccesses, wholeObjectUses);
+    safeWalk(
+      "collectMemberAccesses",
+      () => {
+        collectMemberAccesses(program.body, namespaceLocalNames, memberAccesses, wholeObjectUses);
+        return undefined;
+      },
+      undefined,
+    );
   }
 
-  const localIdentifierReferences = collectLocalIdentifierReferences(program.body);
+  const localIdentifierReferences = safeWalk(
+    "collectLocalIdentifierReferences",
+    () => collectLocalIdentifierReferences(program.body),
+    [],
+  );
 
-  return { imports, exports, memberAccesses, wholeObjectUses, localIdentifierReferences };
+  const redundantTypePatterns: ParsedRedundantTypePattern[] = [];
+  const identityWrappers: ParsedIdentityWrapper[] = [];
+  const typeDefinitionHashes: ParsedTypeDefinitionHash[] = [];
+  safeWalk(
+    "collectDryPatterns",
+    () => {
+      collectDryPatterns(
+        program.body,
+        sourceText,
+        redundantTypePatterns,
+        identityWrappers,
+        typeDefinitionHashes,
+      );
+      return undefined;
+    },
+    undefined,
+  );
+
+  const inlineTypeCaptures = safeWalk(
+    "collectInlineTypeLiterals",
+    () => collectInlineTypeLiterals(program.body),
+    [],
+  );
+  const inlineTypeLiterals: ParsedInlineTypeLiteral[] = inlineTypeCaptures.map((capture) => ({
+    structuralHash: capture.structuralHash,
+    memberCount: capture.memberCount,
+    preview: capture.preview,
+    context: capture.context,
+    nearestName: capture.nearestName,
+    line: getLineFromOffset(sourceText, capture.startOffset),
+    column: getColumnFromOffset(sourceText, capture.startOffset),
+  }));
+
+  const simplifiableCaptures = safeWalk(
+    "collectSimplifiableFunctions",
+    () => collectSimplifiableFunctions(program.body),
+    [],
+  );
+  const simplifiableFunctions: ParsedSimplifiableFunction[] = simplifiableCaptures.map(
+    (capture) => ({
+      kind: capture.kind,
+      functionName: capture.functionName,
+      line: getLineFromOffset(sourceText, capture.startOffset),
+      column: getColumnFromOffset(sourceText, capture.startOffset),
+      reason: capture.reason,
+      suggestion: capture.suggestion,
+    }),
+  );
+
+  const expressionCaptures = safeWalk(
+    "collectSimplifiableExpressions",
+    () => collectSimplifiableExpressions(program.body),
+    [],
+  );
+  const simplifiableExpressions: ParsedSimplifiableExpression[] = expressionCaptures.map(
+    (capture) => ({
+      kind: capture.kind,
+      snippet: capture.snippet,
+      line: getLineFromOffset(sourceText, capture.startOffset),
+      column: getColumnFromOffset(sourceText, capture.startOffset),
+      reason: capture.reason,
+      suggestion: capture.suggestion,
+    }),
+  );
+
+  const constantCaptures = safeWalk(
+    "collectDuplicateConstantCandidates",
+    () => collectDuplicateConstantCandidates(program.body),
+    [],
+  );
+  const duplicateConstantCandidates: ParsedDuplicateConstantCandidate[] = constantCaptures.map(
+    (capture) => ({
+      constantName: capture.constantName,
+      literalHash: capture.literalHash,
+      literalPreview: capture.literalPreview,
+      line: getLineFromOffset(sourceText, capture.startOffset),
+      column: getColumnFromOffset(sourceText, capture.startOffset),
+    }),
+  );
+
+  return {
+    imports,
+    exports,
+    memberAccesses,
+    wholeObjectUses,
+    localIdentifierReferences,
+    redundantTypePatterns,
+    identityWrappers,
+    typeDefinitionHashes,
+    inlineTypeLiterals,
+    simplifiableFunctions,
+    simplifiableExpressions,
+    duplicateConstantCandidates,
+    errors: [...earlyErrors, ...detectorErrors],
+  };
+};
+
+const collectDryPatterns = (
+  bodyNodes: Array<Statement | ModuleDeclaration>,
+  sourceText: string,
+  redundantTypePatterns: ParsedRedundantTypePattern[],
+  identityWrappers: ParsedIdentityWrapper[],
+  typeDefinitionHashes: ParsedTypeDefinitionHash[],
+): void => {
+  for (const statement of bodyNodes) {
+    inspectStatement(
+      statement,
+      sourceText,
+      redundantTypePatterns,
+      identityWrappers,
+      typeDefinitionHashes,
+    );
+  }
+};
+
+const inspectStatement = (
+  statementNode: Statement | ModuleDeclaration,
+  sourceText: string,
+  redundantTypePatterns: ParsedRedundantTypePattern[],
+  identityWrappers: ParsedIdentityWrapper[],
+  typeDefinitionHashes: ParsedTypeDefinitionHash[],
+): void => {
+  let declarationOfInterest: unknown = statementNode;
+  if (
+    statementNode.type === "ExportNamedDeclaration" &&
+    (statementNode as { declaration?: unknown }).declaration
+  ) {
+    declarationOfInterest = (statementNode as { declaration?: unknown }).declaration;
+  }
+
+  if (declarationOfInterest && typeof declarationOfInterest === "object") {
+    const declarationNode = declarationOfInterest as {
+      type?: string;
+      id?: { name?: string };
+      typeAnnotation?: unknown;
+      declarations?: Array<{ id?: { name?: string }; init?: unknown; start?: number }>;
+      start?: number;
+    };
+
+    if (declarationNode.type === "TSTypeAliasDeclaration") {
+      const typeAliasName = declarationNode.id?.name;
+      const typeAnnotation = declarationNode.typeAnnotation;
+      const startOffset = declarationNode.start ?? 0;
+      if (typeAliasName && typeAnnotation) {
+        const redundantPattern = detectRedundantTypePatternForTypeAnnotation(typeAnnotation);
+        if (redundantPattern) {
+          redundantTypePatterns.push({
+            typeName: typeAliasName,
+            kind: redundantPattern.kind,
+            line: getLineFromOffset(sourceText, startOffset),
+            column: getColumnFromOffset(sourceText, startOffset),
+            reason: redundantPattern.reason,
+            suggestion: redundantPattern.suggestion,
+          });
+        }
+        typeDefinitionHashes.push({
+          typeName: typeAliasName,
+          structuralHash: `alias:${normalizeTypeAstHash(typeAnnotation)}`,
+          line: getLineFromOffset(sourceText, startOffset),
+          column: getColumnFromOffset(sourceText, startOffset),
+        });
+      }
+    } else if (declarationNode.type === "TSInterfaceDeclaration") {
+      const interfaceName = declarationNode.id?.name;
+      const startOffset = declarationNode.start ?? 0;
+      if (interfaceName) {
+        const redundantPattern = detectRedundantInterfaceDeclaration(declarationNode);
+        if (redundantPattern) {
+          redundantTypePatterns.push({
+            typeName: interfaceName,
+            kind: redundantPattern.kind,
+            line: getLineFromOffset(sourceText, startOffset),
+            column: getColumnFromOffset(sourceText, startOffset),
+            reason: redundantPattern.reason,
+            suggestion: redundantPattern.suggestion,
+          });
+        }
+        const declarationCopy = { ...declarationNode, id: undefined };
+        typeDefinitionHashes.push({
+          typeName: interfaceName,
+          structuralHash: `interface:${normalizeTypeAstHash(declarationCopy)}`,
+          line: getLineFromOffset(sourceText, startOffset),
+          column: getColumnFromOffset(sourceText, startOffset),
+        });
+      }
+    } else if (declarationNode.type === "VariableDeclaration") {
+      for (const declarator of declarationNode.declarations ?? []) {
+        const wrapperName = declarator.id?.name;
+        const initializerNode = declarator.init;
+        const startOffset = declarator.start ?? declarationNode.start ?? 0;
+        if (!wrapperName || !initializerNode) continue;
+        const wrapperDetection = detectIdentityWrapperFromInitializer(initializerNode, wrapperName);
+        if (wrapperDetection) {
+          identityWrappers.push({
+            wrapperName,
+            wrappedExpression: wrapperDetection.wrappedExpression,
+            line: getLineFromOffset(sourceText, startOffset),
+            column: getColumnFromOffset(sourceText, startOffset),
+          });
+        }
+      }
+    }
+  }
 };
 
 const WHOLE_OBJECT_FUNCTION_NAMES = new Set([
@@ -441,6 +976,10 @@ const extractImportDeclaration = (
       case "ImportSpecifier": {
         const importedName = getModuleExportNameValue(specifierNode.imported);
         const localName = specifierNode.local.name;
+        const isSelfAlias =
+          localName === importedName &&
+          specifierNode.imported.type === "Identifier" &&
+          specifierNode.imported.start !== specifierNode.local.start;
 
         importedNames.push({
           name: importedName,
@@ -448,6 +987,7 @@ const extractImportDeclaration = (
           isNamespace: false,
           isDefault: importedName === "default",
           isTypeOnly: isTypeOnly || specifierNode.importKind === "type",
+          isRedundantAlias: isSelfAlias || undefined,
         });
         break;
       }
@@ -483,7 +1023,7 @@ const extractNamedExportDeclaration = (
   exports: ExportReference[],
 ): void => {
   const isTypeOnly = node.exportKind === "type";
-  const reExportSource = node.source?.value ?? undefined;
+  const reExportSource = node.source?.value;
 
   if (node.declaration) {
     extractDeclarationNames(node.declaration, isTypeOnly, sourceText, exports, node.start);
@@ -492,6 +1032,11 @@ const extractNamedExportDeclaration = (
   for (const specifierNode of node.specifiers) {
     const exportedName = getModuleExportNameValue(specifierNode.exported);
     const localName = getModuleExportNameValue(specifierNode.local);
+    const isSelfAlias =
+      exportedName === localName &&
+      specifierNode.exported.type === "Identifier" &&
+      specifierNode.local.type === "Identifier" &&
+      specifierNode.exported.start !== specifierNode.local.start;
 
     exports.push({
       name: exportedName,
@@ -504,6 +1049,7 @@ const extractNamedExportDeclaration = (
       isNamespaceReExport: false,
       line: getLineFromOffset(sourceText, specifierNode.start ?? node.start),
       column: getColumnFromOffset(sourceText, specifierNode.start ?? node.start),
+      isRedundantAlias: isSelfAlias || undefined,
     });
   }
 };

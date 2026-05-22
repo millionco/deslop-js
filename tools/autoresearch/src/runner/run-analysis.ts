@@ -1,12 +1,6 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import {
-  writeFileSync,
-  mkdtempSync,
-  rmSync,
-  readFileSync,
-  existsSync,
-} from "node:fs";
+import { writeFileSync, mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import type { AnalyzeResult, CorpusEntry, EntryRunOutcome } from "../types.js";
 import { DESLOP_DIST_INDEX, PER_ENTRY_ANALYSIS_TIMEOUT_MS } from "../constants.js";
@@ -145,7 +139,9 @@ export const runAnalysisForEntry = (entry: CorpusEntry): Promise<EntryRunOutcome
 export const runAnalysisForCorpus = async (
   entries: CorpusEntry[],
   concurrency: number,
-  options: { onProgress?: (outcome: EntryRunOutcome, completed: number, total: number) => void } = {},
+  options: {
+    onProgress?: (outcome: EntryRunOutcome, completed: number, total: number) => void;
+  } = {},
 ): Promise<EntryRunOutcome[]> => {
   const outcomes: EntryRunOutcome[] = [];
   let nextIndex = 0;

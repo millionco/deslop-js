@@ -4,21 +4,19 @@ export interface MetricsDelta {
   scoreDelta: number;
   likelyTpDelta: number;
   likelyFpDelta: number;
-  combinedFpRateDelta: number;
+  confirmedFpRateDelta: number;
   crashesDelta: number;
   timeoutsDelta: number;
   decision: "keep" | "discard";
   rationale: string;
 }
 
-export const decideKeepOrDiscard = (
-  baseline: RunMetrics,
-  candidate: RunMetrics,
-): MetricsDelta => {
+export const decideKeepOrDiscard = (baseline: RunMetrics, candidate: RunMetrics): MetricsDelta => {
   const scoreDelta = candidate.score - baseline.score;
   const likelyTpDelta = candidate.combined.likelyTrue - baseline.combined.likelyTrue;
   const likelyFpDelta = candidate.combined.likelyFalse - baseline.combined.likelyFalse;
-  const combinedFpRateDelta = candidate.combined.fpRate - baseline.combined.fpRate;
+  const confirmedFpRateDelta =
+    candidate.combined.confirmedFpRate - baseline.combined.confirmedFpRate;
   const crashesDelta = candidate.crashes - baseline.crashes;
   const timeoutsDelta = candidate.timeouts - baseline.timeouts;
 
@@ -27,7 +25,7 @@ export const decideKeepOrDiscard = (
       scoreDelta,
       likelyTpDelta,
       likelyFpDelta,
-      combinedFpRateDelta,
+      confirmedFpRateDelta,
       crashesDelta,
       timeoutsDelta,
       decision: "discard",
@@ -40,7 +38,7 @@ export const decideKeepOrDiscard = (
       scoreDelta,
       likelyTpDelta,
       likelyFpDelta,
-      combinedFpRateDelta,
+      confirmedFpRateDelta,
       crashesDelta,
       timeoutsDelta,
       decision: "keep",
@@ -53,7 +51,7 @@ export const decideKeepOrDiscard = (
       scoreDelta,
       likelyTpDelta,
       likelyFpDelta,
-      combinedFpRateDelta,
+      confirmedFpRateDelta,
       crashesDelta,
       timeoutsDelta,
       decision: "keep",
@@ -65,7 +63,7 @@ export const decideKeepOrDiscard = (
     scoreDelta,
     likelyTpDelta,
     likelyFpDelta,
-    combinedFpRateDelta,
+    confirmedFpRateDelta,
     crashesDelta,
     timeoutsDelta,
     decision: "discard",

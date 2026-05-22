@@ -69,11 +69,10 @@ const fetchRefShallow = async (
     return { ok: false, stderr: addRemoteOutcome.stderr };
   }
 
-  await runShell(
-    "git",
-    ["config", "--local", "extensions.partialClone", "origin"],
-    { cwd: repoDir, timeoutMs: 5_000 },
-  );
+  await runShell("git", ["config", "--local", "extensions.partialClone", "origin"], {
+    cwd: repoDir,
+    timeoutMs: 5_000,
+  });
 
   const fetchOutcome = await runShell(
     "git",
@@ -81,11 +80,10 @@ const fetchRefShallow = async (
     { cwd: repoDir, timeoutMs: GIT_CLONE_TIMEOUT_MS },
   );
   if (fetchOutcome.exitCode !== 0) {
-    const fallback = await runShell(
-      "git",
-      ["fetch", "--depth", "1", "origin", ref],
-      { cwd: repoDir, timeoutMs: GIT_CLONE_TIMEOUT_MS },
-    );
+    const fallback = await runShell("git", ["fetch", "--depth", "1", "origin", ref], {
+      cwd: repoDir,
+      timeoutMs: GIT_CLONE_TIMEOUT_MS,
+    });
     if (fallback.exitCode !== 0) {
       return { ok: false, stderr: fetchOutcome.stderr + "\n" + fallback.stderr };
     }

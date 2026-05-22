@@ -4,7 +4,10 @@ import type { AnalyzeOptions } from "./types.js";
 import { runAnalyze } from "./run-analyze.js";
 import { readPackageVersion } from "./utils/read-package-version.js";
 
-const toAnalyzeOptions = (root: string | undefined, optionValues: OptionValues): AnalyzeOptions => ({
+const toAnalyzeOptions = (
+  root: string | undefined,
+  optionValues: OptionValues,
+): AnalyzeOptions => ({
   root: root ?? DEFAULT_ROOT_DIRECTORY,
   entry: optionValues.entry,
   ignore: optionValues.ignore,
@@ -17,7 +20,10 @@ const toAnalyzeOptions = (root: string | undefined, optionValues: OptionValues):
   failOnCycles: Boolean(optionValues.failOnCycles),
 });
 
-const runAnalyzeAction = async (root: string | undefined, optionValues: OptionValues): Promise<void> => {
+const runAnalyzeAction = async (
+  root: string | undefined,
+  optionValues: OptionValues,
+): Promise<void> => {
   const exitCode = await runAnalyze(toAnalyzeOptions(root, optionValues));
   process.exitCode = exitCode;
 };
@@ -56,7 +62,7 @@ addAnalyzeOptions(
 ).action(runAnalyzeAction);
 
 program.parseAsync(process.argv).catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
+  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
   process.stderr.write(`deslop: ${message}\n`);
   process.exitCode = EXIT_CODE_RUNTIME_ERROR;
 });

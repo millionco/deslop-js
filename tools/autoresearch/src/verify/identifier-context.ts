@@ -48,10 +48,7 @@ const buildOccurrenceRanges = (text: string): Array<[number, number]> => {
   return [...stringRanges, ...commentRanges];
 };
 
-const isOffsetInsideRanges = (
-  offset: number,
-  ranges: Array<[number, number]>,
-): boolean => {
+const isOffsetInsideRanges = (offset: number, ranges: Array<[number, number]>): boolean => {
   for (const [start, end] of ranges) {
     if (offset >= start && offset < end) return true;
   }
@@ -69,8 +66,7 @@ const findAllIdentifierOffsets = (text: string, identifier: string): number[] =>
   return offsets;
 };
 
-const NAMED_IMPORT_LINE_PATTERN =
-  /(?:import|export)\s*(?:type\s+)?\{[^}]*\}\s*from\s*['"`]/;
+const NAMED_IMPORT_LINE_PATTERN = /(?:import|export)\s*(?:type\s+)?\{[^}]*\}\s*from\s*['"`]/;
 
 const matchesNamedImportContext = (lineText: string, identifier: string): boolean => {
   if (!NAMED_IMPORT_LINE_PATTERN.test(lineText)) return false;
@@ -89,9 +85,7 @@ const matchesDefaultOrNamespaceImport = (lineText: string, identifier: string): 
     `import\\s+${escaped}(?:\\s*,\\s*\\{[^}]*\\})?\\s+from\\s+['"\`]`,
   );
   if (defaultImportPattern.test(lineText)) return true;
-  const namespaceImportPattern = new RegExp(
-    `import\\s+\\*\\s+as\\s+${escaped}\\s+from\\s+['"\`]`,
-  );
+  const namespaceImportPattern = new RegExp(`import\\s+\\*\\s+as\\s+${escaped}\\s+from\\s+['"\`]`);
   return namespaceImportPattern.test(lineText);
 };
 
@@ -126,9 +120,6 @@ export const filterImportOnlyMatches = (
   return matches.filter((lineMatch) => isCredibleImportLine(lineMatch.lineText, identifier));
 };
 
-export const filterCredibleMatches = (
-  matches: LineMatch[],
-  identifier: string,
-): LineMatch[] => {
+export const filterCredibleMatches = (matches: LineMatch[], identifier: string): LineMatch[] => {
   return matches.filter((lineMatch) => isCredibleUsageLine(lineMatch.lineText, identifier));
 };

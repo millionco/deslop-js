@@ -1,9 +1,7 @@
 import type { ExportDefaultDeclaration } from "@oxc-project/types";
 import type { Expression } from "@oxc-project/types";
 
-const extractIdentifierFromCallArguments = (
-  expression: Expression,
-): string | undefined => {
+const extractIdentifierFromCallArguments = (expression: Expression): string | undefined => {
   if (expression.type !== "CallExpression") return undefined;
 
   for (const argument of expression.arguments) {
@@ -32,10 +30,7 @@ export const extractDefaultExportLocalName = (
     return declaration.name;
   }
 
-  if (
-    declaration.type === "FunctionDeclaration" ||
-    declaration.type === "ClassDeclaration"
-  ) {
+  if (declaration.type === "FunctionDeclaration" || declaration.type === "ClassDeclaration") {
     return declaration.id?.name;
   }
 

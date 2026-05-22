@@ -5,10 +5,7 @@ export const verifyUnusedDependency = async (
   flaggedDependency: AnalyzeFlaggedDependency,
   searchDir: string,
 ): Promise<VerifiedDependency> => {
-  const lookup = await queryDependencyUsage(
-    { packageName: flaggedDependency.name },
-    searchDir,
-  );
+  const lookup = await queryDependencyUsage({ packageName: flaggedDependency.name }, searchDir);
   if (lookup.isImported) {
     return {
       ...flaggedDependency,

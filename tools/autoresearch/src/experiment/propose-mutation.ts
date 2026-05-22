@@ -23,10 +23,7 @@ const insertIntoSet = (sourceText: string, setExportName: string, items: string[
   const newlyAdded = items.filter((item) => !existingItems.has(item));
   if (newlyAdded.length === 0) return sourceText;
   const replacementBlock =
-    existingBlock.trimEnd() +
-    "\n  " +
-    newlyAdded.map((item) => `"${item}",`).join("\n  ") +
-    "\n";
+    existingBlock.trimEnd() + "\n  " + newlyAdded.map((item) => `"${item}",`).join("\n  ") + "\n";
   return sourceText.replace(
     exportLineRegex,
     `export const ${setExportName} = new Set([${replacementBlock}]);`,
@@ -46,10 +43,7 @@ const insertIntoArray = (sourceText: string, arrayExportName: string, items: str
   const newlyAdded = items.filter((item) => !existingItems.has(item));
   if (newlyAdded.length === 0) return sourceText;
   const replacementBlock =
-    existingBlock.trimEnd() +
-    "\n  " +
-    newlyAdded.map((item) => `"${item}",`).join("\n  ") +
-    "\n";
+    existingBlock.trimEnd() + "\n  " + newlyAdded.map((item) => `"${item}",`).join("\n  ") + "\n";
   return sourceText.replace(exportLineRegex, (fullMatch) =>
     fullMatch.replace(/=\s*\[[\s\S]*?\];/, `= [${replacementBlock}];`),
   );
@@ -190,10 +184,7 @@ const HYPOTHESIS_CATALOG: ConstantsExtension[] = [
     description: "add .server/.client platform suffixes (remix/react router)",
     pathRelative: "constants.ts",
     applyTransform: (sourceText) =>
-      insertIntoArray(sourceText, "PLATFORM_SUFFIXES", [
-        ".server",
-        ".client",
-      ]),
+      insertIntoArray(sourceText, "PLATFORM_SUFFIXES", [".server", ".client"]),
   },
   {
     id: "implicit-deps-prettier-eslint-plugins",
@@ -240,7 +231,10 @@ const HYPOTHESIS_CATALOG: ConstantsExtension[] = [
 ];
 
 const fingerprintForTimestamp = (): string => {
-  return new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+  return new Date()
+    .toISOString()
+    .replace(/[^0-9]/g, "")
+    .slice(0, 14);
 };
 
 export const buildScriptedProposals = (): MutationProposal[] => {
