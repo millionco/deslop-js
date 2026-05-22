@@ -19,12 +19,14 @@ import type {
 } from "@oxc-project/types";
 import type { ImportReference, ExportReference, ImportBinding, MemberAccess } from "../types.js";
 import { getLineFromOffset, getColumnFromOffset } from "../utils/line-column.js";
+import { extractDefaultExportLocalName } from "../utils/extract-default-export-local-name.js";
 
 export interface ParsedSource {
   imports: ImportReference[];
   exports: ExportReference[];
   memberAccesses: MemberAccess[];
   wholeObjectUses: string[];
+  localIdentifierReferences: string[];
 }
 
 const extractMdxImportsExports = (sourceText: string): string => {
@@ -139,10 +141,50 @@ const parseCssImports = (filePath: string): ParsedSource => {
     }
   }
 
-  return { imports, exports: [], memberAccesses: [], wholeObjectUses: [] };
+  return { imports, exports: [], memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
 };
 
 const NON_JS_EXTENSIONS = [".graphql", ".gql"];
+
+const collectLocalIdentifierReferences = (statements: Statement[]): string[] => {
+  const references: string[] = [];
+  const seenNames = new Set<string>();
+
+  const visitNode = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+
+    const record = node as Record<string, unknown>;
+    if (record.type === "Identifier" && typeof record.name === "string") {
+      if (!seenNames.has(record.name)) {
+        seenNames.add(record.name);
+        references.push(record.name);
+      }
+      return;
+    }
+
+    for (const value of Object.values(record)) {
+      if (Array.isArray(value)) {
+        for (const innerValue of value) visitNode(innerValue);
+      } else if (value && typeof value === "object") {
+        visitNode(value);
+      }
+    }
+  };
+
+  for (const statement of statements) {
+    if (
+      statement.type === "ImportDeclaration" ||
+      statement.type === "ExportNamedDeclaration" ||
+      statement.type === "ExportDefaultDeclaration" ||
+      statement.type === "ExportAllDeclaration"
+    ) {
+      continue;
+    }
+    visitNode(statement);
+  }
+
+  return references;
+};
 
 export const parseSourceFile = (filePath: string): ParsedSource => {
   const isCss = CSS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
@@ -152,7 +194,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
 
   const isNonJsFile = NON_JS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   if (isNonJsFile) {
-    return { imports: [], exports: [], memberAccesses: [], wholeObjectUses: [] };
+    return { imports: [], exports: [], memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
   }
 
   const sourceText = readFileSync(filePath, "utf-8");
@@ -183,26 +225,28 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     parseFileName.endsWith(".js") ||
     parseFileName.endsWith(".mjs") ||
     parseFileName.endsWith(".cjs");
-  const hasJsxError =
-    result.errors.length > 0 &&
-    isPlainJsFile &&
-    result.errors.some((parseError) => {
-      const errorMessage = String(parseError.message ?? "");
-      return errorMessage.includes("JSX") || errorMessage.includes("Unexpected token");
-    });
 
-  if (hasJsxError) {
+  if (isPlainJsFile && result.errors.length > 0) {
     const jsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".jsx");
-    result = parseSync(jsxFileName, textToParse);
+    const jsxResult = parseSync(jsxFileName, textToParse);
+    if (jsxResult.errors.length === 0) {
+      result = jsxResult;
+    } else {
+      const tsxFileName = parseFileName.replace(/\.(m?js|cjs)$/, ".tsx");
+      const tsxResult = parseSync(tsxFileName, textToParse);
+      if (tsxResult.errors.length === 0) {
+        result = tsxResult;
+      }
+    }
   }
 
   if (result.errors.length > 0) {
-    return { imports, exports, memberAccesses: [], wholeObjectUses: [] };
+    return { imports, exports, memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
   }
 
   const program = result.program;
   if (!program?.body) {
-    return { imports, exports, memberAccesses: [], wholeObjectUses: [] };
+    return { imports, exports, memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
   }
 
   for (const node of program.body) {
@@ -231,7 +275,9 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     collectMemberAccesses(program.body, namespaceLocalNames, memberAccesses, wholeObjectUses);
   }
 
-  return { imports, exports, memberAccesses, wholeObjectUses };
+  const localIdentifierReferences = collectLocalIdentifierReferences(program.body);
+
+  return { imports, exports, memberAccesses, wholeObjectUses, localIdentifierReferences };
 };
 
 const WHOLE_OBJECT_FUNCTION_NAMES = new Set([
@@ -467,17 +513,7 @@ const extractDefaultExportDeclaration = (
   sourceText: string,
   exports: ExportReference[],
 ): void => {
-  const defaultExpression = (node as unknown as { declaration: { type: string; name?: string; id?: { name?: string } } }).declaration;
-  let defaultExportLocalName: string | undefined;
-  if (defaultExpression?.type === "Identifier" && typeof defaultExpression.name === "string") {
-    defaultExportLocalName = defaultExpression.name;
-  } else if (
-    (defaultExpression?.type === "FunctionDeclaration" ||
-      defaultExpression?.type === "ClassDeclaration") &&
-    defaultExpression.id?.name
-  ) {
-    defaultExportLocalName = defaultExpression.id.name;
-  }
+  const defaultExportLocalName = extractDefaultExportLocalName(node.declaration);
 
   exports.push({
     name: "default",

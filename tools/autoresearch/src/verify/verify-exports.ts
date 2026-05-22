@@ -10,6 +10,8 @@ import {
 } from "./grep-corpus.js";
 import { filterImportOnlyMatches } from "./identifier-context.js";
 import { SKIP_EXPORT_NAMES, VERIFIABLE_EXPORT_MIN_NAME_LENGTH } from "../constants.js";
+import { dirname, resolve } from "node:path";
+import { existsSync } from "node:fs";
 
 const isVerifiableExportName = (name: string): boolean => {
   if (!name) return false;
@@ -22,6 +24,54 @@ const isVerifiableExportName = (name: string): boolean => {
 const SKIPPED_VERDICT: VerificationVerdict = {
   kind: "skipped",
   reason: "common-name",
+};
+
+const RESOLVABLE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts", ".cjs", ".cts"];
+
+const resolveRelativeImportCandidate = (
+  importPath: string,
+  fromFilePath: string,
+): string | undefined => {
+  if (!importPath.startsWith(".")) return undefined;
+  const absoluteBase = resolve(dirname(fromFilePath), importPath);
+  if (existsSync(absoluteBase)) return absoluteBase;
+  for (const extension of RESOLVABLE_EXTENSIONS) {
+    const withExtension = absoluteBase + extension;
+    if (existsSync(withExtension)) return withExtension;
+  }
+  for (const extension of RESOLVABLE_EXTENSIONS) {
+    const indexCandidate = resolve(absoluteBase, `index${extension}`);
+    if (existsSync(indexCandidate)) return indexCandidate;
+  }
+  return undefined;
+};
+
+const extractImportSource = (lineText: string): string | undefined => {
+  const fromMatch = lineText.match(/from\s+['"]([^'"]+)['"]/);
+  return fromMatch?.[1];
+};
+
+const importLineTargetsFlaggedFile = (
+  lineText: string,
+  flaggedPath: string,
+  evidenceFilePath: string,
+  exportName: string,
+): boolean => {
+  const importSource = extractImportSource(lineText);
+  if (!importSource) return false;
+
+  const isDefaultExportCheck = exportName === "default";
+  const isNamedImportLine = /\{[^}]+\}\s*from/.test(lineText);
+  const isDefaultImportLine =
+    /import\s+(?!type\s*\{)(?!\*\s+as)(?!\{)[A-Za-z_$][\w$]*/.test(lineText) &&
+    !isNamedImportLine;
+
+  if (isDefaultExportCheck && !isDefaultImportLine) return false;
+  if (!isDefaultExportCheck && !isNamedImportLine) return false;
+
+  const resolvedImportPath = resolveRelativeImportCandidate(importSource, evidenceFilePath);
+  if (resolvedImportPath) return resolvedImportPath === flaggedPath;
+  return false;
 };
 
 const isNoisyMatchPath = (filePath: string): boolean => {
@@ -83,7 +133,15 @@ export const verifyUnusedExport = async (
   const nonNoisyLineMatches = lineMatches.filter(
     (lineMatch) => !isNoisyMatchPath(lineMatch.filePath),
   );
-  const importContextMatches = filterImportOnlyMatches(nonNoisyLineMatches, flaggedExport.name);
+  const importContextMatches = filterImportOnlyMatches(nonNoisyLineMatches, flaggedExport.name).filter(
+    (lineMatch) =>
+      importLineTargetsFlaggedFile(
+        lineMatch.lineText,
+        flaggedExport.path,
+        lineMatch.filePath,
+        flaggedExport.name,
+      ),
+  );
 
   if (importContextMatches.length > 0) {
     const evidencePaths = [

@@ -47,6 +47,7 @@ export interface SourceModule {
   exports: ExportReference[];
   memberAccesses: MemberAccess[];
   wholeObjectUses: string[];
+  localIdentifierReferences: string[];
   isEntryPoint: boolean;
   isTestEntry: boolean;
   isReachable: boolean;

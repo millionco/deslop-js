@@ -7,6 +7,7 @@ export const matchesPackageImportReference = (content: string, packageName: stri
     new RegExp(`\\bfrom\\s+['"]${escapedPackageName}${subpathPattern}['"]`),
     new RegExp(`\\bimport\\s+(?:[^'";\\n]*?\\sfrom\\s+)?['"]${escapedPackageName}${subpathPattern}['"]`),
     new RegExp(`\\brequire\\s*\\(\\s*['"]${escapedPackageName}${subpathPattern}['"]\\s*\\)`),
+    new RegExp(`\\brequire\\s*\\(\\s*\`${escapedPackageName}${subpathPattern}`),
     new RegExp(`\\bimport\\s*\\(\\s*['"]${escapedPackageName}${subpathPattern}['"]`),
   ];
 

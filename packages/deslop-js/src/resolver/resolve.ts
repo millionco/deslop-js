@@ -1030,6 +1030,19 @@ export const createResolver = (
       return resolvedResult;
     }
 
+    if (cleanedSpecifier.startsWith(".")) {
+      const relativeResolved = tryResolveFromDirectory(fromDir, cleanedSpecifier);
+      if (relativeResolved && existsAsFile(relativeResolved)) {
+        const resolvedResult: ResolvedImport = {
+          resolvedPath: relativeResolved,
+          isExternal: false,
+          packageName: undefined,
+        };
+        resolveResultCache.set(cacheKey, resolvedResult);
+        return resolvedResult;
+      }
+    }
+
     const unresolvedResult: ResolvedImport = {
       resolvedPath: undefined,
       isExternal: false,

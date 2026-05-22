@@ -51,5 +51,12 @@ describe("matchesPackageImportReference", () => {
 
     assert.equal(matchesPackageImportReference(source, "used-package"), true);
     assert.equal(matchesPackageImportReference(source, "unused-string-only-package"), false);
+    assert.equal(
+      matchesPackageImportReference(
+        "const icon = require(`flag-icons/flags/4x3/${code}.svg`);",
+        "flag-icons",
+      ),
+      true,
+    );
   });
 });

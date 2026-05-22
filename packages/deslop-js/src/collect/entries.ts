@@ -18,6 +18,12 @@ import { resolveWorkspaces, detectFrameworkEntries } from "./workspaces.js";
 import type { WorkspacePackage } from "./workspaces.js";
 import { resolveSourcePath } from "../resolver/source-path.js";
 import { findMonorepoRoot } from "../utils/find-monorepo-root.js";
+import { extractConfigStringReferencedEntries } from "./config-string-entries.js";
+import { extractSectionsModuleEntries } from "./sections-module-entries.js";
+import {
+  resolveEntryPathWithExtensions,
+  resolveEntryWithExtensions,
+} from "../utils/resolve-entry-with-extensions.js";
 import { join } from "node:path";
 
 export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFile[]> => {
@@ -224,6 +230,13 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
     );
   }
 
+  const configStringEntries = extractConfigStringReferencedEntries(absoluteRoot);
+  for (const workspacePackage of entryEligiblePackages) {
+    configStringEntries.push(...extractConfigStringReferencedEntries(workspacePackage.directory));
+  }
+
+  const sectionsModuleEntries = extractSectionsModuleEntries(absoluteRoot);
+
   const wranglerEntries = extractWranglerEntries(absoluteRoot);
   for (const workspacePackage of entryEligiblePackages) {
     wranglerEntries.push(...extractWranglerEntries(workspacePackage.directory));
@@ -260,6 +273,8 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
       ...browserExtensionEntries,
       ...webWorkerEntries,
       ...tsConfigIncludeEntries,
+      ...configStringEntries,
+      ...sectionsModuleEntries,
       ...wranglerEntries,
       ...pluginFileEntries,
       ...toolingDiscovery.entryFiles,
@@ -419,22 +434,28 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
       const exportEntries: string[] = [];
       collectExportPaths(packageJson.exports, rootDir, exportEntries);
       for (const exportEntry of exportEntries) {
+        const resolvedExportEntry =
+          resolveEntryWithExtensions(exportEntry) ??
+          resolveEntryPathWithExtensions(exportEntry, rootDir) ??
+          resolveSourcePath(exportEntry, rootDir);
+
+        if (resolvedExportEntry && existsSync(resolvedExportEntry)) {
+          entries.push(resolvedExportEntry);
+          continue;
+        }
+
+        if (exportEntry.endsWith(".ts")) {
+          const tsxFallback = exportEntry.replace(/\.ts$/, ".tsx");
+          if (existsSync(tsxFallback)) {
+            entries.push(tsxFallback);
+            continue;
+          }
+        }
+
         if (existsSync(exportEntry)) {
           entries.push(exportEntry);
         } else {
-          const sourcePath = resolveSourcePath(exportEntry, rootDir);
-          if (sourcePath) {
-            entries.push(sourcePath);
-          } else if (exportEntry.endsWith(".ts")) {
-            const tsxFallback = exportEntry.replace(/\.ts$/, ".tsx");
-            if (existsSync(tsxFallback)) {
-              entries.push(tsxFallback);
-            } else {
-              entries.push(exportEntry);
-            }
-          } else {
-            entries.push(resolveEntryPath(exportEntry, rootDir));
-          }
+          entries.push(resolveEntryPath(exportEntry, rootDir));
         }
       }
     }
@@ -450,9 +471,71 @@ const extractPackageJsonEntries = async (packageJsonPath: string): Promise<strin
         }
       }
     }
+
+    if (Array.isArray(packageJson.sideEffects)) {
+      for (const sideEffectPattern of packageJson.sideEffects) {
+        if (typeof sideEffectPattern !== "string") continue;
+        const sourcePatterns = expandSideEffectGlobToSourcePatterns(sideEffectPattern);
+        for (const sourcePattern of sourcePatterns) {
+          const matchedSideEffectFiles = fg.sync(sourcePattern, {
+            cwd: rootDir,
+            absolute: true,
+            onlyFiles: true,
+            ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
+          });
+          for (const matchedSideEffectFile of matchedSideEffectFiles) {
+            if (isImportableSourceFile(matchedSideEffectFile)) {
+              entries.push(matchedSideEffectFile);
+            }
+          }
+        }
+      }
+    }
+
+    if (packageJson.build && typeof packageJson.build === "object") {
+      const buildConfig = packageJson.build as Record<string, unknown>;
+      if (Array.isArray(buildConfig.files)) {
+        for (const buildFileEntry of buildConfig.files) {
+          if (typeof buildFileEntry !== "string") continue;
+          if (buildFileEntry.includes("*")) continue;
+          const resolvedBuildFile =
+            resolveEntryWithExtensions(resolve(rootDir, buildFileEntry)) ??
+            resolveEntryPathWithExtensions(buildFileEntry, rootDir);
+          if (resolvedBuildFile && existsSync(resolvedBuildFile)) {
+            entries.push(resolvedBuildFile);
+          }
+        }
+      }
+    }
+
+    if (packageJson.jest && typeof packageJson.jest === "object") {
+      const jestConfigContent = JSON.stringify(packageJson.jest);
+      const jestRootDirMatches = jestConfigContent.matchAll(/<rootDir>\/([^"\\]+)/g);
+      for (const jestRootDirMatch of jestRootDirMatches) {
+        const resolvedJestFile = resolveEntryPathWithExtensions(jestRootDirMatch[1], rootDir);
+        if (resolvedJestFile && existsSync(resolvedJestFile)) {
+          entries.push(resolvedJestFile);
+        }
+      }
+    }
   } catch {}
 
   return entries;
+};
+
+const expandSideEffectGlobToSourcePatterns = (pattern: string): string[] => {
+  const patterns = new Set<string>([pattern]);
+  if (pattern.endsWith(".js")) {
+    patterns.add(pattern.replace(/\.js$/, ".ts"));
+    patterns.add(pattern.replace(/\.js$/, ".tsx"));
+  }
+  if (pattern.includes("/lib/") || pattern.startsWith("lib/")) {
+    patterns.add(pattern.replace(/\blib\b/g, "src"));
+  }
+  if (pattern.includes("/esm/") || pattern.startsWith("esm/")) {
+    patterns.add(pattern.replace(/\besm\b/g, "src"));
+  }
+  return [...patterns];
 };
 
 const SHELL_OPERATORS_PATTERN = /\s*(?:&&|\|\||[;&|])\s*/;
@@ -932,22 +1015,6 @@ const WEBPACK_ENTRY_FILE_PATTERN = /['"]([^'"]+)['"]/g;
 const WEBPACK_PATH_JOIN_PATTERN =
   /path\.(?:join|resolve)\(\s*__dirname\s*,\s*((?:['"][^'"]*['"]\s*,?\s*)+)\)/g;
 const REQUIRE_RESOLVE_PATTERN = /require\.resolve\(\s*['"]([^'"]+)['"]\s*\)/g;
-const RESOLVABLE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts"];
-
-const resolveEntryWithExtensions = (basePath: string): string | undefined => {
-  if (existsSync(basePath)) return basePath;
-  for (const extension of RESOLVABLE_EXTENSIONS) {
-    const withExtension = basePath + extension;
-    if (existsSync(withExtension)) return withExtension;
-  }
-  const indexCandidates = RESOLVABLE_EXTENSIONS.map((extension) =>
-    resolve(basePath, `index${extension}`),
-  );
-  for (const candidate of indexCandidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-  return undefined;
-};
 
 const extractWebpackEntryPoints = (directory: string): string[] => {
   const entries: string[] = [];
@@ -1013,7 +1080,7 @@ const extractWebpackEntryPoints = (directory: string): string[] => {
             entryPath.startsWith("../") ||
             !entryPath.startsWith("/")
           ) {
-            const absoluteEntryPath = resolve(directory, entryPath);
+            const absoluteEntryPath = resolve(configDirectory, entryPath);
             const resolvedEntry = resolveEntryWithExtensions(absoluteEntryPath);
             if (resolvedEntry) {
               entries.push(resolvedEntry);
@@ -1644,9 +1711,8 @@ const extractTestSetupFiles = (directory: string): string[] => {
 
         if (singleValue) {
           const absolutePath = resolve(configDirectory, singleValue);
-          if (existsSync(absolutePath)) {
-            entries.push(absolutePath);
-          }
+          const resolvedPath = resolveEntryWithExtensions(absolutePath);
+          if (resolvedPath) entries.push(resolvedPath);
         }
 
         if (arrayContent) {
@@ -1654,9 +1720,8 @@ const extractTestSetupFiles = (directory: string): string[] => {
           SETUP_FILE_PATH_PATTERN.lastIndex = 0;
           while ((pathMatch = SETUP_FILE_PATH_PATTERN.exec(arrayContent)) !== null) {
             const absolutePath = resolve(configDirectory, pathMatch[1]);
-            if (existsSync(absolutePath)) {
-              entries.push(absolutePath);
-            }
+            const resolvedPath = resolveEntryWithExtensions(absolutePath);
+            if (resolvedPath) entries.push(resolvedPath);
           }
         }
       }
@@ -2359,12 +2424,15 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
       "@electron-forge/cli",
       "electron-vite",
       "electron-webpack",
+      "electron-next",
     ],
     enablerPrefixes: ["@electron-forge/", "@electron/"],
     entryPatterns: [
       "src/main/**/*.{ts,tsx,js,jsx}",
       "src/preload/**/*.{ts,tsx,js,jsx}",
       "electron/main.{ts,js}",
+      "main/index.{ts,tsx,js,jsx}",
+      "renderer/pages/**/*.{ts,tsx,js,jsx}",
     ],
     alwaysUsed: [
       "electron-builder.{yml,yaml,json,json5,toml}",

@@ -2851,6 +2851,193 @@ describe("remark-glob-skip", () => {
   });
 });
 
+describe("extensionless-relative-import", () => {
+  it("should resolve extensionless relative imports to sibling source files", async () => {
+    const result = await scanFixture("extensionless-relative-import");
+    const fixtureDir = resolve(FIXTURES_DIR, "extensionless-relative-import");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/Radio.tsx"),
+      `Radio.tsx should be reachable via extensionless import, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/App.tsx"),
+      `App.tsx should be reachable via index entry, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("jest-setup-config", () => {
+  it("should treat jest setupFilesAfterEnv and moduleNameMapper paths as entry points", async () => {
+    const result = await scanFixture("jest-setup-config");
+    const fixtureDir = resolve(FIXTURES_DIR, "jest-setup-config");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("jest.setup.ts"),
+      `jest.setup.ts should be reachable via setupFilesAfterEnv, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/setup-helper.ts"),
+      `setup-helper.ts should be reachable via jest.setup.ts, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("__mocks__/styleMock.js"),
+      `styleMock.js should be reachable via moduleNameMapper, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("remark-config-deps", () => {
+  it("should keep remark plugins declared in .remarkrc used", async () => {
+    const result = await scanFixture("remark-config-deps");
+    const unusedDependencyNames = staleDependencyNames(result);
+    assert.ok(
+      !unusedDependencyNames.includes("remark-gfm"),
+      `remark-gfm should be used via .remarkrc, got unused deps: ${unusedDependencyNames}`,
+    );
+    assert.ok(
+      !unusedDependencyNames.includes("remark-cli"),
+      `remark-cli should be used via npm script, got unused deps: ${unusedDependencyNames}`,
+    );
+  });
+});
+
+describe("flow-js-app", () => {
+  it("should parse Flow and JSX in .js files and follow import chains", async () => {
+    const result = await scanFixture("flow-js-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "flow-js-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/Widget.js"),
+      `Widget.js should be reachable from main.dev.js, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/actions/helper.js"),
+      `helper.js should be reachable from Widget.js, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.js"),
+      `orphan.js should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("side-effects-glob", () => {
+  it("should treat package.json sideEffects globs as production entries", async () => {
+    const result = await scanFixture("side-effects-glob");
+    const fixtureDir = resolve(FIXTURES_DIR, "side-effects-glob");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/foo/widget/style.ts"),
+      `style.ts should be reachable via sideEffects glob, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("cra-jest-transforms", () => {
+  it("should treat jest transform paths in createJestConfig as entry points", async () => {
+    const result = await scanFixture("cra-jest-transforms");
+    const fixtureDir = resolve(FIXTURES_DIR, "cra-jest-transforms");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("config/jest/babelTransform.js"),
+      `babelTransform.js should be reachable via createJestConfig, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("config/jest/cssTransform.js"),
+      `cssTransform.js should be reachable via createJestConfig, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("config/jest/fileTransform.js"),
+      `fileTransform.js should be reachable via createJestConfig, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("config/jest/orphanTransform.js"),
+      `orphanTransform.js should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("default-import-named-export", () => {
+  it("should treat default imports as using same-named named exports", async () => {
+    const result = await scanFixture("default-import-named-export");
+    const fixtureDir = resolve(FIXTURES_DIR, "default-import-named-export");
+    const exportsByFile = deadExportsByFile(result, fixtureDir);
+    assert.ok(
+      !exportsByFile["src/settings-panel.tsx"]?.includes("SettingsPanel"),
+      `SettingsPanel should not be flagged when default-imported from test, got: ${JSON.stringify(exportsByFile["src/settings-panel.tsx"])}`,
+    );
+  });
+});
+
+describe("hoc-wrapped-default-export", () => {
+  it("should treat HOC-wrapped default exports as using the wrapped named export", async () => {
+    const result = await scanFixture("hoc-wrapped-default-export");
+    const fixtureDir = resolve(FIXTURES_DIR, "hoc-wrapped-default-export");
+    const exportsByFile = deadExportsByFile(result, fixtureDir);
+    assert.ok(
+      !exportsByFile["src/apps-badge.tsx"]?.includes("AppsBadge"),
+      `AppsBadge should not be flagged when used by default export wrapper, got: ${JSON.stringify(exportsByFile["src/apps-badge.tsx"])}`,
+    );
+  });
+});
+
+describe("jest-config-cts", () => {
+  it("should treat jest.config.cts setup file references as production entries", async () => {
+    const result = await scanFixture("jest-config-cts");
+    const fixtureDir = resolve(FIXTURES_DIR, "jest-config-cts");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("test-setup.ts"),
+      `test-setup.ts should be reachable via jest.config.cts, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("electron-builder-files", () => {
+  it("should treat electron-builder build.files entries as production entries", async () => {
+    const result = await scanFixture("electron-builder-files");
+    const fixtureDir = resolve(FIXTURES_DIR, "electron-builder-files");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/preload.ts"),
+      `preload.ts should be reachable via electron-builder files, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/worker.ts"),
+      `worker.ts should be reachable via electron-builder files, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("internal-export-usage", () => {
+  it("should not flag exports referenced within the same module", async () => {
+    const result = await scanFixture("internal-export-usage");
+    const fixtureDir = resolve(FIXTURES_DIR, "internal-export-usage");
+    const exportsByFile = deadExportsByFile(result, fixtureDir);
+    assert.ok(
+      !exportsByFile["src/service.module.ts"]?.includes("serviceModule"),
+      `serviceModule should not be flagged when used in same file, got: ${JSON.stringify(exportsByFile["src/service.module.ts"])}`,
+    );
+  });
+});
+
 describe("vitest-custom", () => {
   it("should use custom include patterns from vitest.config.ts", async () => {
     const result = await scanFixture("vitest-custom");
