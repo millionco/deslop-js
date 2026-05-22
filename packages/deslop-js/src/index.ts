@@ -64,6 +64,10 @@ export type {
   MisclassifiedDependency,
   DependencyDeclaredAs,
   UnusedEnumMember,
+  RedundantAlias,
+  RedundantAliasKind,
+  DuplicateExport,
+  DuplicateExportOccurrence,
 } from "./types.js";
 
 const fillSemanticConfig = (
@@ -76,6 +80,7 @@ const fillSemanticConfig = (
     reportUnusedEnumMembers: semanticOverrides.reportUnusedEnumMembers ?? true,
     reportUnusedClassMembers: semanticOverrides.reportUnusedClassMembers ?? false,
     reportRedundantExports: semanticOverrides.reportRedundantExports ?? false,
+    reportRedundantVariableAliases: semanticOverrides.reportRedundantVariableAliases ?? true,
     reportPrivateTypeLeaks: semanticOverrides.reportPrivateTypeLeaks ?? false,
     reportMisclassifiedDependencies: semanticOverrides.reportMisclassifiedDependencies ?? true,
     decoratorAllowlist: semanticOverrides.decoratorAllowlist ?? DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
@@ -92,6 +97,7 @@ export const defineConfig = (
   tsConfigPath: options.tsConfigPath ?? undefined,
   reportTypes: options.reportTypes ?? false,
   includeEntryExports: options.includeEntryExports ?? false,
+  reportRedundancy: options.reportRedundancy ?? true,
   semantic: fillSemanticConfig(options.semantic),
 });
 

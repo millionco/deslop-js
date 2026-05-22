@@ -20,6 +20,7 @@ export interface ImportBinding {
   isNamespace: boolean;
   isDefault: boolean;
   isTypeOnly: boolean;
+  isRedundantAlias?: boolean;
 }
 
 export interface ExportReference {
@@ -34,6 +35,7 @@ export interface ExportReference {
   line: number;
   column: number;
   defaultExportLocalName?: string;
+  isRedundantAlias?: boolean;
 }
 
 export interface MemberAccess {
@@ -143,6 +145,38 @@ export interface UnusedEnumMember {
   trace: string[];
 }
 
+export type RedundantAliasKind =
+  | "import-self-alias"
+  | "export-self-alias"
+  | "reexport-self-alias"
+  | "variable-alias";
+
+export interface RedundantAlias {
+  path: string;
+  kind: RedundantAliasKind;
+  name: string;
+  aliasedFrom: string;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export interface DuplicateExportOccurrence {
+  line: number;
+  column: number;
+  reExportSource?: string;
+  isReExport: boolean;
+}
+
+export interface DuplicateExport {
+  path: string;
+  name: string;
+  occurrences: DuplicateExportOccurrence[];
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -151,6 +185,8 @@ export interface ScanResult {
   unusedTypes: UnusedType[];
   misclassifiedDependencies: MisclassifiedDependency[];
   unusedEnumMembers: UnusedEnumMember[];
+  redundantAliases: RedundantAlias[];
+  duplicateExports: DuplicateExport[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
@@ -168,6 +204,7 @@ export interface SemanticConfig {
   reportUnusedEnumMembers: boolean;
   reportUnusedClassMembers: boolean;
   reportRedundantExports: boolean;
+  reportRedundantVariableAliases: boolean;
   reportPrivateTypeLeaks: boolean;
   reportMisclassifiedDependencies: boolean;
   decoratorAllowlist: string[];
@@ -181,5 +218,6 @@ export interface DeslopConfig {
   tsConfigPath: string | undefined;
   reportTypes: boolean;
   includeEntryExports: boolean;
+  reportRedundancy: boolean;
   semantic: SemanticConfig | undefined;
 }

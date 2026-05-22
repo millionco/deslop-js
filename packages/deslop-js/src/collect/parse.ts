@@ -441,6 +441,10 @@ const extractImportDeclaration = (
       case "ImportSpecifier": {
         const importedName = getModuleExportNameValue(specifierNode.imported);
         const localName = specifierNode.local.name;
+        const isSelfAlias =
+          localName === importedName &&
+          specifierNode.imported.type === "Identifier" &&
+          specifierNode.imported.start !== specifierNode.local.start;
 
         importedNames.push({
           name: importedName,
@@ -448,6 +452,7 @@ const extractImportDeclaration = (
           isNamespace: false,
           isDefault: importedName === "default",
           isTypeOnly: isTypeOnly || specifierNode.importKind === "type",
+          isRedundantAlias: isSelfAlias || undefined,
         });
         break;
       }
@@ -492,6 +497,11 @@ const extractNamedExportDeclaration = (
   for (const specifierNode of node.specifiers) {
     const exportedName = getModuleExportNameValue(specifierNode.exported);
     const localName = getModuleExportNameValue(specifierNode.local);
+    const isSelfAlias =
+      exportedName === localName &&
+      specifierNode.exported.type === "Identifier" &&
+      specifierNode.local.type === "Identifier" &&
+      specifierNode.exported.start !== specifierNode.local.start;
 
     exports.push({
       name: exportedName,
@@ -504,6 +514,7 @@ const extractNamedExportDeclaration = (
       isNamespaceReExport: false,
       line: getLineFromOffset(sourceText, specifierNode.start ?? node.start),
       column: getColumnFromOffset(sourceText, specifierNode.start ?? node.start),
+      isRedundantAlias: isSelfAlias || undefined,
     });
   }
 };

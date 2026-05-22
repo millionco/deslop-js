@@ -2,6 +2,7 @@ import type {
   DependencyGraph,
   DeslopConfig,
   MisclassifiedDependency,
+  RedundantAlias,
   UnusedEnumMember,
   UnusedType,
 } from "../types.js";
@@ -10,11 +11,13 @@ import { buildReferenceIndex } from "./references.js";
 import { detectUnusedTypes } from "./unused-types.js";
 import { detectUnusedEnumMembers } from "./unused-enum-members.js";
 import { detectMisclassifiedDependencies } from "./misclassified-dependencies.js";
+import { detectRedundantVariableAliases } from "./variable-aliases.js";
 
 export interface SemanticAnalysisResult {
   unusedTypes: UnusedType[];
   unusedEnumMembers: UnusedEnumMember[];
   misclassifiedDependencies: MisclassifiedDependency[];
+  redundantAliases: RedundantAlias[];
   contextStatus:
     | "disabled"
     | "ready"
@@ -31,6 +34,7 @@ const EMPTY_RESULT: SemanticAnalysisResult = {
   unusedTypes: [],
   unusedEnumMembers: [],
   misclassifiedDependencies: [],
+  redundantAliases: [],
   contextStatus: "disabled",
 };
 
@@ -46,12 +50,15 @@ export const runSemanticAnalysis = (
     : [];
 
   const needsTsContext =
-    semanticConfig.reportUnusedTypes || semanticConfig.reportUnusedEnumMembers;
+    semanticConfig.reportUnusedTypes ||
+    semanticConfig.reportUnusedEnumMembers ||
+    semanticConfig.reportRedundantVariableAliases;
   if (!needsTsContext) {
     return {
       unusedTypes: [],
       unusedEnumMembers: [],
       misclassifiedDependencies,
+      redundantAliases: [],
       contextStatus: "no-context-required",
     };
   }
@@ -62,6 +69,7 @@ export const runSemanticAnalysis = (
       unusedTypes: [],
       unusedEnumMembers: [],
       misclassifiedDependencies,
+      redundantAliases: [],
       contextStatus: contextResult.failure.reason,
       contextMessage: contextResult.failure.message,
     };
@@ -82,11 +90,15 @@ export const runSemanticAnalysis = (
   const unusedEnumMembers = semanticConfig.reportUnusedEnumMembers
     ? detectUnusedEnumMembers(graph, config, context, getReferenceIndex())
     : [];
+  const redundantAliases = semanticConfig.reportRedundantVariableAliases
+    ? detectRedundantVariableAliases(graph, context, getReferenceIndex())
+    : [];
 
   return {
     unusedTypes,
     unusedEnumMembers,
     misclassifiedDependencies,
+    redundantAliases,
     contextStatus: "ready",
   };
 };

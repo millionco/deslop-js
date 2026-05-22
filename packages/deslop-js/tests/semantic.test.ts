@@ -71,6 +71,7 @@ describe("semantic (Phase 0)", () => {
     assert.equal(config.semantic.reportUnusedTypes, true);
     assert.equal(config.semantic.reportUnusedEnumMembers, true);
     assert.equal(config.semantic.reportMisclassifiedDependencies, true);
+    assert.equal(config.semantic.reportRedundantVariableAliases, true);
     assert.equal(config.semantic.reportUnusedClassMembers, false);
     assert.ok(Array.isArray(config.semantic.decoratorAllowlist));
     assert.ok(config.semantic.decoratorAllowlist.length > 0);
@@ -427,5 +428,141 @@ describe("semantic / unused-enum-members: feature flag", () => {
       }),
     );
     assert.deepEqual(result.unusedEnumMembers, []);
+  });
+});
+
+const scanFixtureSyntactic = async (fixtureName: string): Promise<ScanResult> =>
+  analyze(defineConfig({ rootDir: resolve(FIXTURES_DIR, fixtureName) }));
+
+const redundantAliasKinds = (result: ScanResult): Array<{ kind: string; name: string }> =>
+  result.redundantAliases
+    .map((finding) => ({ kind: finding.kind, name: finding.name }))
+    .sort((leftEntry, rightEntry) =>
+      `${leftEntry.kind}/${leftEntry.name}`.localeCompare(`${rightEntry.kind}/${rightEntry.name}`),
+    );
+
+describe("redundancy / self-aliases (syntactic, default-on)", () => {
+  it("flags import { x as x }", async () => {
+    const result = await scanFixtureSyntactic("redundant-aliases-self");
+    const found = redundantAliasKinds(result);
+    assert.ok(
+      found.some((entry) => entry.kind === "import-self-alias" && entry.name === "usedThing"),
+      `expected import-self-alias for usedThing, got: ${JSON.stringify(found)}`,
+    );
+  });
+
+  it("flags export { x as x }", async () => {
+    const result = await scanFixtureSyntactic("redundant-aliases-self");
+    const found = redundantAliasKinds(result);
+    assert.ok(
+      found.some((entry) => entry.kind === "export-self-alias" && entry.name === "reusedLocal"),
+    );
+  });
+
+  it("flags export { x as x } from ...", async () => {
+    const result = await scanFixtureSyntactic("redundant-aliases-self");
+    const found = redundantAliasKinds(result);
+    assert.ok(
+      found.some(
+        (entry) => entry.kind === "reexport-self-alias" && entry.name === "reExportedThrough",
+      ),
+    );
+  });
+
+  it("does NOT flag legitimate renaming aliases", async () => {
+    const result = await scanFixtureSyntactic("redundant-aliases-self");
+    const found = redundantAliasKinds(result);
+    assert.ok(
+      !found.some((entry) => entry.name === "betterName"),
+      `betterName is a real rename, must not flag, got: ${JSON.stringify(found)}`,
+    );
+    assert.ok(
+      !found.some((entry) => entry.name === "renamedUsedThing"),
+      `renamedUsedThing is a real rename, must not flag, got: ${JSON.stringify(found)}`,
+    );
+  });
+
+  it("respects reportRedundancy=false", async () => {
+    const result = await analyze(
+      defineConfig({
+        rootDir: resolve(FIXTURES_DIR, "redundant-aliases-self"),
+        reportRedundancy: false,
+      }),
+    );
+    assert.deepEqual(result.redundantAliases, []);
+    assert.deepEqual(result.duplicateExports, []);
+  });
+});
+
+describe("redundancy / variable aliases (semantic)", () => {
+  it("flags const x = y when y has no other consumer", async () => {
+    const result = await scanFixtureWithSemantic("redundant-aliases-variable", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+    });
+    const variableAliases = result.redundantAliases.filter(
+      (entry) => entry.kind === "variable-alias",
+    );
+    const names = variableAliases.map((entry) => entry.name).sort();
+    assert.ok(
+      names.includes("renamedOnce"),
+      `renamedOnce should be flagged (only consumer of ARRIVED_AT_VALUE), got: ${names}`,
+    );
+  });
+
+  it("does NOT flag a variable alias when the source has other consumers", async () => {
+    const result = await scanFixtureWithSemantic("redundant-aliases-variable", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+    });
+    const variableAliases = result.redundantAliases.filter(
+      (entry) => entry.kind === "variable-alias",
+    );
+    const names = variableAliases.map((entry) => entry.name).sort();
+    assert.ok(
+      !names.includes("sharedAlias"),
+      `sharedAlias' source SHARED_VALUE is also consumed directly — must not flag, got: ${names}`,
+    );
+  });
+
+  it("respects reportRedundantVariableAliases=false", async () => {
+    const result = await scanFixtureWithSemantic("redundant-aliases-variable", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+    });
+    const variableAliases = result.redundantAliases.filter(
+      (entry) => entry.kind === "variable-alias",
+    );
+    assert.deepEqual(variableAliases, []);
+  });
+});
+
+describe("redundancy / duplicate exports", () => {
+  it("flags barrels that export the same name from multiple sources", async () => {
+    const result = await scanFixtureSyntactic("duplicate-exports-barrel");
+    const names = result.duplicateExports.map((entry) => entry.name).sort();
+    assert.ok(names.includes("shared"), `shared exported twice from barrel.ts, got: ${names}`);
+  });
+
+  it("does NOT flag uniquely-named re-exports", async () => {
+    const result = await scanFixtureSyntactic("duplicate-exports-barrel");
+    const names = result.duplicateExports.map((entry) => entry.name).sort();
+    assert.ok(!names.includes("aOnly"));
+    assert.ok(!names.includes("bOnly"));
+  });
+
+  it("records each occurrence with line + reExportSource", async () => {
+    const result = await scanFixtureSyntactic("duplicate-exports-barrel");
+    const sharedFinding = result.duplicateExports.find((entry) => entry.name === "shared");
+    assert.ok(sharedFinding);
+    assert.equal(sharedFinding.occurrences.length, 2);
+    for (const occurrence of sharedFinding.occurrences) {
+      assert.ok(occurrence.isReExport);
+      assert.ok(occurrence.reExportSource);
+    }
   });
 });
