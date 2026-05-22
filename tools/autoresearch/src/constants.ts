@@ -29,6 +29,17 @@ export const FAST_TIER_MAX_ENTRIES = 25;
 export const MID_TIER_MAX_ENTRIES = 80;
 export const FULL_TIER_MAX_ENTRIES = 200;
 
+/**
+ * Score = likelyTrue - FP_PENALTY_WEIGHT * likelyFalse.
+ *
+ * Chosen as 4 to bias the autonomous loop toward keeping mutations only when
+ * they add 4+ real findings per new false-positive — an arbitrary "FPs are
+ * 4× more costly than TPs are valuable" stance. It is NOT empirically
+ * derived. If the loop optimizes for `score`, it can still drift upward by
+ * adding many `likely_tp` findings that the ripgrep verifier merely failed
+ * to refute (see verificationCoverage in MetricsBreakdown). Always read score
+ * alongside coverage; raw score deltas are insufficient evidence on their own.
+ */
 export const FP_PENALTY_WEIGHT = 4;
 
 export const VERIFIABLE_EXPORT_MIN_NAME_LENGTH = 4;

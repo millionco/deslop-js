@@ -98,6 +98,30 @@ export type {
   DeslopErrorSeverity,
 } from "./types.js";
 
+/**
+ * Default flags below mark rules off-by-default. Rationale for each:
+ *
+ * - `reportUnusedClassMembers: false` — class-member dead-code detection
+ *   requires whole-program semantic analysis to be sound (subclass overrides,
+ *   structural typing, framework method-by-name invocation like `@HttpGet`).
+ *   When enabled on real React/Effect/NestJS codebases it produces a high
+ *   rate of stylistic-FP findings (lifecycle methods, framework hooks). Off
+ *   by default until the heuristics are tightened. Opt in via
+ *   `semantic.reportUnusedClassMembers = true` when you accept the noise.
+ *
+ * - `reportTypes: false` — type-only exports are over-represented in
+ *   barrel re-exports (the canonical `export type * from "./types"` pattern)
+ *   and are rarely actionable signal. Off by default; opt in when auditing
+ *   a type-heavy package.
+ *
+ * - `includeEntryExports: false` — exports from entry-point files are
+ *   "API surface" and intentionally exported for external consumers; flagging
+ *   them as "unused" is noise within a single repo scan. Opt in when auditing
+ *   a package boundary (e.g. before deleting public APIs).
+ *
+ * - `reportRedundancy: true` — on because redundancy findings are mostly
+ *   high-signal and the detectors carry their own confidence tiers.
+ */
 const fillSemanticConfig = (
   semanticOverrides: Partial<DeslopConfig["semantic"]> | undefined,
 ): DeslopConfig["semantic"] => {
