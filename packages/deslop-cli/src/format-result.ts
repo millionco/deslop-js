@@ -110,6 +110,53 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
     lines.push("");
   }
 
+  if (result.duplicateImports.length > 0) {
+    const importLabel = result.duplicateImports.length === 1 ? "import" : "imports";
+    lines.push(`${result.duplicateImports.length} duplicate ${importLabel}`);
+    for (const finding of result.duplicateImports) {
+      lines.push(`  ${finding.path}  ${finding.specifier} (${finding.occurrences.length}x)`);
+    }
+    lines.push("");
+  }
+
+  if (result.redundantTypePatterns.length > 0) {
+    const patternLabel =
+      result.redundantTypePatterns.length === 1 ? "type pattern" : "type patterns";
+    lines.push(`${result.redundantTypePatterns.length} redundant ${patternLabel}`);
+    for (const finding of result.redundantTypePatterns) {
+      lines.push(
+        `  ${finding.path}:${finding.line}  ${finding.typeName} [${finding.kind}] → ${finding.suggestion}`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (result.identityWrappers.length > 0) {
+    const wrapperLabel = result.identityWrappers.length === 1 ? "wrapper" : "wrappers";
+    lines.push(`${result.identityWrappers.length} identity ${wrapperLabel}`);
+    for (const finding of result.identityWrappers) {
+      lines.push(
+        `  ${finding.path}:${finding.line}  ${finding.wrapperName} → ${finding.wrappedExpression}`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (result.duplicateTypeDefinitions.length > 0) {
+    const defLabel =
+      result.duplicateTypeDefinitions.length === 1
+        ? "type definition group"
+        : "type definition groups";
+    lines.push(`${result.duplicateTypeDefinitions.length} duplicate ${defLabel}`);
+    for (const finding of result.duplicateTypeDefinitions) {
+      const instanceLabels = finding.instances
+        .map((instance) => `${instance.typeName}@${instance.path}:${instance.line}`)
+        .join(", ");
+      lines.push(`  [${finding.confidence}] ${instanceLabels}`);
+    }
+    lines.push("");
+  }
+
   const totalIssues =
     result.unusedFiles.length +
     result.unusedExports.length +
@@ -120,7 +167,11 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
     result.unusedClassMembers.length +
     result.misclassifiedDependencies.length +
     result.redundantAliases.length +
-    result.duplicateExports.length;
+    result.duplicateExports.length +
+    result.duplicateImports.length +
+    result.redundantTypePatterns.length +
+    result.identityWrappers.length +
+    result.duplicateTypeDefinitions.length;
 
   if (totalIssues === 0) {
     lines.push("No unused files, exports, dependencies, or circular imports found.");
@@ -138,6 +189,10 @@ export const hasUnusedIssues = (result: ScanResult): boolean =>
   result.unusedClassMembers.length > 0 ||
   result.misclassifiedDependencies.length > 0 ||
   result.redundantAliases.length > 0 ||
-  result.duplicateExports.length > 0;
+  result.duplicateExports.length > 0 ||
+  result.duplicateImports.length > 0 ||
+  result.redundantTypePatterns.length > 0 ||
+  result.identityWrappers.length > 0 ||
+  result.duplicateTypeDefinitions.length > 0;
 
 export const hasCircularIssues = (result: ScanResult): boolean => result.circularDependencies.length > 0;

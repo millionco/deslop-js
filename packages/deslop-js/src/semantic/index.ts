@@ -14,6 +14,7 @@ import { detectUnusedEnumMembers } from "./unused-enum-members.js";
 import { detectUnusedClassMembers } from "./unused-class-members.js";
 import { detectMisclassifiedDependencies } from "./misclassified-dependencies.js";
 import { detectRedundantVariableAliases } from "./variable-aliases.js";
+import { detectRoundTripAliases } from "./redundant-reexports.js";
 
 export interface SemanticAnalysisResult {
   unusedTypes: UnusedType[];
@@ -57,7 +58,8 @@ export const runSemanticAnalysis = (
     semanticConfig.reportUnusedTypes ||
     semanticConfig.reportUnusedEnumMembers ||
     semanticConfig.reportUnusedClassMembers ||
-    semanticConfig.reportRedundantVariableAliases;
+    semanticConfig.reportRedundantVariableAliases ||
+    semanticConfig.reportRoundTripAliases;
   if (!needsTsContext) {
     return {
       unusedTypes: [],
@@ -106,8 +108,11 @@ export const runSemanticAnalysis = (
         semanticConfig.decoratorAllowlist,
       )
     : [];
-  const redundantAliases = semanticConfig.reportRedundantVariableAliases
+  const variableAliases = semanticConfig.reportRedundantVariableAliases
     ? detectRedundantVariableAliases(graph, context, getReferenceIndex())
+    : [];
+  const roundTripAliases = semanticConfig.reportRoundTripAliases
+    ? detectRoundTripAliases(graph, context)
     : [];
 
   return {
@@ -115,7 +120,7 @@ export const runSemanticAnalysis = (
     unusedEnumMembers,
     unusedClassMembers,
     misclassifiedDependencies,
-    redundantAliases,
+    redundantAliases: [...variableAliases, ...roundTripAliases],
     contextStatus: "ready",
   };
 };

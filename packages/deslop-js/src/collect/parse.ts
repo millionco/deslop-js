@@ -17,9 +17,44 @@ import type {
   Expression,
   ModuleDeclaration,
 } from "@oxc-project/types";
-import type { ImportReference, ExportReference, ImportBinding, MemberAccess } from "../types.js";
+import type {
+  ImportReference,
+  ExportReference,
+  ImportBinding,
+  MemberAccess,
+  RedundantTypePatternKind,
+} from "../types.js";
 import { getLineFromOffset, getColumnFromOffset } from "../utils/line-column.js";
 import { extractDefaultExportLocalName } from "../utils/extract-default-export-local-name.js";
+import {
+  detectRedundantTypePatternForTypeAnnotation,
+  detectRedundantInterfaceDeclaration,
+} from "../utils/detect-redundant-type-pattern.js";
+import { detectIdentityWrapperFromInitializer } from "../utils/detect-identity-wrapper.js";
+import { normalizeTypeAstHash } from "../utils/normalize-type-hash.js";
+
+export interface ParsedRedundantTypePattern {
+  typeName: string;
+  kind: RedundantTypePatternKind;
+  line: number;
+  column: number;
+  reason: string;
+  suggestion: string;
+}
+
+export interface ParsedIdentityWrapper {
+  wrapperName: string;
+  wrappedExpression: string;
+  line: number;
+  column: number;
+}
+
+export interface ParsedTypeDefinitionHash {
+  typeName: string;
+  structuralHash: string;
+  line: number;
+  column: number;
+}
 
 export interface ParsedSource {
   imports: ImportReference[];
@@ -27,6 +62,9 @@ export interface ParsedSource {
   memberAccesses: MemberAccess[];
   wholeObjectUses: string[];
   localIdentifierReferences: string[];
+  redundantTypePatterns: ParsedRedundantTypePattern[];
+  identityWrappers: ParsedIdentityWrapper[];
+  typeDefinitionHashes: ParsedTypeDefinitionHash[];
 }
 
 const extractMdxImportsExports = (sourceText: string): string => {
@@ -141,7 +179,16 @@ const parseCssImports = (filePath: string): ParsedSource => {
     }
   }
 
-  return { imports, exports: [], memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
+  return {
+    imports,
+    exports: [],
+    memberAccesses: [],
+    wholeObjectUses: [],
+    localIdentifierReferences: [],
+    redundantTypePatterns: [],
+    identityWrappers: [],
+    typeDefinitionHashes: [],
+  };
 };
 
 const NON_JS_EXTENSIONS = [".graphql", ".gql"];
@@ -194,7 +241,16 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
 
   const isNonJsFile = NON_JS_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   if (isNonJsFile) {
-    return { imports: [], exports: [], memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
+    return {
+      imports: [],
+      exports: [],
+      memberAccesses: [],
+      wholeObjectUses: [],
+      localIdentifierReferences: [],
+      redundantTypePatterns: [],
+      identityWrappers: [],
+      typeDefinitionHashes: [],
+    };
   }
 
   const sourceText = readFileSync(filePath, "utf-8");
@@ -241,12 +297,30 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
   }
 
   if (result.errors.length > 0) {
-    return { imports, exports, memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
+    return {
+      imports,
+      exports,
+      memberAccesses: [],
+      wholeObjectUses: [],
+      localIdentifierReferences: [],
+      redundantTypePatterns: [],
+      identityWrappers: [],
+      typeDefinitionHashes: [],
+    };
   }
 
   const program = result.program;
   if (!program?.body) {
-    return { imports, exports, memberAccesses: [], wholeObjectUses: [], localIdentifierReferences: [] };
+    return {
+      imports,
+      exports,
+      memberAccesses: [],
+      wholeObjectUses: [],
+      localIdentifierReferences: [],
+      redundantTypePatterns: [],
+      identityWrappers: [],
+      typeDefinitionHashes: [],
+    };
   }
 
   for (const node of program.body) {
@@ -277,7 +351,126 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
 
   const localIdentifierReferences = collectLocalIdentifierReferences(program.body);
 
-  return { imports, exports, memberAccesses, wholeObjectUses, localIdentifierReferences };
+  const redundantTypePatterns: ParsedRedundantTypePattern[] = [];
+  const identityWrappers: ParsedIdentityWrapper[] = [];
+  const typeDefinitionHashes: ParsedTypeDefinitionHash[] = [];
+  collectDryPatterns(
+    program.body,
+    sourceText,
+    redundantTypePatterns,
+    identityWrappers,
+    typeDefinitionHashes,
+  );
+
+  return {
+    imports,
+    exports,
+    memberAccesses,
+    wholeObjectUses,
+    localIdentifierReferences,
+    redundantTypePatterns,
+    identityWrappers,
+    typeDefinitionHashes,
+  };
+};
+
+const collectDryPatterns = (
+  bodyNodes: Array<Statement | ModuleDeclaration>,
+  sourceText: string,
+  redundantTypePatterns: ParsedRedundantTypePattern[],
+  identityWrappers: ParsedIdentityWrapper[],
+  typeDefinitionHashes: ParsedTypeDefinitionHash[],
+): void => {
+  for (const statement of bodyNodes) {
+    inspectStatement(statement, sourceText, redundantTypePatterns, identityWrappers, typeDefinitionHashes);
+  }
+};
+
+const inspectStatement = (
+  statementNode: Statement | ModuleDeclaration,
+  sourceText: string,
+  redundantTypePatterns: ParsedRedundantTypePattern[],
+  identityWrappers: ParsedIdentityWrapper[],
+  typeDefinitionHashes: ParsedTypeDefinitionHash[],
+): void => {
+  let declarationOfInterest: unknown = statementNode;
+  if (statementNode.type === "ExportNamedDeclaration" && (statementNode as { declaration?: unknown }).declaration) {
+    declarationOfInterest = (statementNode as { declaration?: unknown }).declaration;
+  }
+
+  if (declarationOfInterest && typeof declarationOfInterest === "object") {
+    const declarationNode = declarationOfInterest as {
+      type?: string;
+      id?: { name?: string };
+      typeAnnotation?: unknown;
+      declarations?: Array<{ id?: { name?: string }; init?: unknown; start?: number }>;
+      start?: number;
+    };
+
+    if (declarationNode.type === "TSTypeAliasDeclaration") {
+      const typeAliasName = declarationNode.id?.name;
+      const typeAnnotation = declarationNode.typeAnnotation;
+      const startOffset = declarationNode.start ?? 0;
+      if (typeAliasName && typeAnnotation) {
+        const redundantPattern = detectRedundantTypePatternForTypeAnnotation(typeAnnotation);
+        if (redundantPattern) {
+          redundantTypePatterns.push({
+            typeName: typeAliasName,
+            kind: redundantPattern.kind,
+            line: getLineFromOffset(sourceText, startOffset),
+            column: getColumnFromOffset(sourceText, startOffset),
+            reason: redundantPattern.reason,
+            suggestion: redundantPattern.suggestion,
+          });
+        }
+        typeDefinitionHashes.push({
+          typeName: typeAliasName,
+          structuralHash: `alias:${normalizeTypeAstHash(typeAnnotation)}`,
+          line: getLineFromOffset(sourceText, startOffset),
+          column: getColumnFromOffset(sourceText, startOffset),
+        });
+      }
+    } else if (declarationNode.type === "TSInterfaceDeclaration") {
+      const interfaceName = declarationNode.id?.name;
+      const startOffset = declarationNode.start ?? 0;
+      if (interfaceName) {
+        const redundantPattern = detectRedundantInterfaceDeclaration(declarationNode);
+        if (redundantPattern) {
+          redundantTypePatterns.push({
+            typeName: interfaceName,
+            kind: redundantPattern.kind,
+            line: getLineFromOffset(sourceText, startOffset),
+            column: getColumnFromOffset(sourceText, startOffset),
+            reason: redundantPattern.reason,
+            suggestion: redundantPattern.suggestion,
+          });
+        }
+        const declarationCopy = { ...declarationNode, id: undefined };
+        typeDefinitionHashes.push({
+          typeName: interfaceName,
+          structuralHash: `interface:${normalizeTypeAstHash(declarationCopy)}`,
+          line: getLineFromOffset(sourceText, startOffset),
+          column: getColumnFromOffset(sourceText, startOffset),
+        });
+      }
+    } else if (declarationNode.type === "VariableDeclaration") {
+      for (const declarator of declarationNode.declarations ?? []) {
+        const wrapperName = declarator.id?.name;
+        const initializerNode = declarator.init;
+        const startOffset = declarator.start ?? declarationNode.start ?? 0;
+        if (!wrapperName || !initializerNode) continue;
+        const wrapperDetection = detectIdentityWrapperFromInitializer(initializerNode, wrapperName);
+        if (wrapperDetection) {
+          identityWrappers.push({
+            wrapperName,
+            wrappedExpression: wrapperDetection.wrappedExpression,
+            line: getLineFromOffset(sourceText, startOffset),
+            column: getColumnFromOffset(sourceText, startOffset),
+          });
+        }
+      }
+    }
+  }
 };
 
 const WHOLE_OBJECT_FUNCTION_NAMES = new Set([

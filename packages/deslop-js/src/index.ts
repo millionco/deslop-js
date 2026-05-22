@@ -70,6 +70,13 @@ export type {
   RedundantAliasKind,
   DuplicateExport,
   DuplicateExportOccurrence,
+  DuplicateImport,
+  DuplicateImportOccurrence,
+  RedundantTypePattern,
+  RedundantTypePatternKind,
+  IdentityWrapper,
+  DuplicateTypeDefinition,
+  DuplicateTypeDefinitionInstance,
 } from "./types.js";
 
 const fillSemanticConfig = (
@@ -85,6 +92,7 @@ const fillSemanticConfig = (
     reportRedundantVariableAliases: semanticOverrides.reportRedundantVariableAliases ?? true,
     reportPrivateTypeLeaks: semanticOverrides.reportPrivateTypeLeaks ?? false,
     reportMisclassifiedDependencies: semanticOverrides.reportMisclassifiedDependencies ?? true,
+    reportRoundTripAliases: semanticOverrides.reportRoundTripAliases ?? true,
     decoratorAllowlist: semanticOverrides.decoratorAllowlist ?? DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
   };
 };

@@ -43,6 +43,29 @@ export interface MemberAccess {
   memberName: string;
 }
 
+export interface SourceModuleRedundantTypePattern {
+  typeName: string;
+  kind: RedundantTypePatternKind;
+  line: number;
+  column: number;
+  reason: string;
+  suggestion: string;
+}
+
+export interface SourceModuleIdentityWrapper {
+  wrapperName: string;
+  wrappedExpression: string;
+  line: number;
+  column: number;
+}
+
+export interface SourceModuleTypeDefinitionHash {
+  typeName: string;
+  structuralHash: string;
+  line: number;
+  column: number;
+}
+
 export interface SourceModule {
   fileId: SourceFile;
   imports: ImportReference[];
@@ -50,6 +73,9 @@ export interface SourceModule {
   memberAccesses: MemberAccess[];
   wholeObjectUses: string[];
   localIdentifierReferences: string[];
+  redundantTypePatterns: SourceModuleRedundantTypePattern[];
+  identityWrappers: SourceModuleIdentityWrapper[];
+  typeDefinitionHashes: SourceModuleTypeDefinitionHash[];
   isEntryPoint: boolean;
   isTestEntry: boolean;
   isReachable: boolean;
@@ -164,7 +190,9 @@ export type RedundantAliasKind =
   | "import-self-alias"
   | "export-self-alias"
   | "reexport-self-alias"
-  | "variable-alias";
+  | "variable-alias"
+  | "reexport-aliased-not-used"
+  | "roundtrip-alias";
 
 export interface RedundantAlias {
   path: string;
@@ -192,6 +220,67 @@ export interface DuplicateExport {
   reason: string;
 }
 
+export interface DuplicateImportOccurrence {
+  line: number;
+  column: number;
+  importedNames: string[];
+  isTypeOnly: boolean;
+}
+
+export interface DuplicateImport {
+  path: string;
+  specifier: string;
+  occurrences: DuplicateImportOccurrence[];
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export type RedundantTypePatternKind =
+  | "intersection-with-empty-object"
+  | "self-union"
+  | "self-intersection"
+  | "nested-partial"
+  | "nested-readonly"
+  | "nested-required"
+  | "pick-all-keys"
+  | "omit-no-keys"
+  | "empty-interface-extends-one";
+
+export interface RedundantTypePattern {
+  path: string;
+  typeName: string;
+  kind: RedundantTypePatternKind;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+  suggestion: string;
+}
+
+export interface IdentityWrapper {
+  path: string;
+  wrapperName: string;
+  wrappedExpression: string;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export interface DuplicateTypeDefinitionInstance {
+  path: string;
+  typeName: string;
+  line: number;
+  column: number;
+}
+
+export interface DuplicateTypeDefinition {
+  structuralHash: string;
+  instances: DuplicateTypeDefinitionInstance[];
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -203,6 +292,10 @@ export interface ScanResult {
   unusedClassMembers: UnusedClassMember[];
   redundantAliases: RedundantAlias[];
   duplicateExports: DuplicateExport[];
+  duplicateImports: DuplicateImport[];
+  redundantTypePatterns: RedundantTypePattern[];
+  identityWrappers: IdentityWrapper[];
+  duplicateTypeDefinitions: DuplicateTypeDefinition[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
@@ -223,6 +316,7 @@ export interface SemanticConfig {
   reportRedundantVariableAliases: boolean;
   reportPrivateTypeLeaks: boolean;
   reportMisclassifiedDependencies: boolean;
+  reportRoundTripAliases: boolean;
   decoratorAllowlist: string[];
 }
 

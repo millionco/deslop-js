@@ -5,6 +5,65 @@ import type {
   RedundantAlias,
 } from "../types.js";
 
+export const detectUselessAliasedReExports = (graph: DependencyGraph): RedundantAlias[] => {
+  const findings: RedundantAlias[] = [];
+
+  const moduleConsumerImportedNames = new Map<number, Set<string>>();
+  for (const edge of graph.edges) {
+    if (edge.isReExportEdge) {
+      const reExportedSet = moduleConsumerImportedNames.get(edge.target);
+      if (reExportedSet) {
+        for (const reExportedName of edge.reExportedNames) reExportedSet.add(reExportedName);
+      } else {
+        moduleConsumerImportedNames.set(edge.target, new Set(edge.reExportedNames));
+      }
+      continue;
+    }
+    const importedSet = moduleConsumerImportedNames.get(edge.target);
+    const importedNames = edge.importedSymbols.map((symbol) =>
+      symbol.isDefault ? "default" : symbol.importedName,
+    );
+    if (importedSet) {
+      for (const importedName of importedNames) importedSet.add(importedName);
+    } else {
+      moduleConsumerImportedNames.set(edge.target, new Set(importedNames));
+    }
+  }
+
+  for (const module of graph.modules) {
+    if (!module.isReachable) continue;
+    if (module.isDeclarationFile) continue;
+
+    const consumerImportedNames =
+      moduleConsumerImportedNames.get(module.fileId.index) ?? new Set();
+
+    for (const exportInfo of module.exports) {
+      if (exportInfo.isSynthetic) continue;
+      if (!exportInfo.isReExport) continue;
+      if (!exportInfo.reExportOriginalName) continue;
+      const exportedName = exportInfo.name;
+      const originalName = exportInfo.reExportOriginalName;
+      if (exportedName === originalName) continue;
+      if (exportedName === "*") continue;
+      if (exportInfo.isNamespaceReExport) continue;
+      if (consumerImportedNames.has(exportedName)) continue;
+
+      findings.push({
+        path: module.fileId.path,
+        kind: "reexport-aliased-not-used",
+        name: exportedName,
+        aliasedFrom: originalName,
+        line: exportInfo.line,
+        column: exportInfo.column,
+        confidence: "medium",
+        reason: `\`export { ${originalName} as ${exportedName} } from ...\` renames the symbol but no consumer imports it as \`${exportedName}\` — either drop the alias or have consumers use the new name`,
+      });
+    }
+  }
+
+  return findings;
+};
+
 export const detectRedundantAliases = (graph: DependencyGraph): RedundantAlias[] => {
   const findings: RedundantAlias[] = [];
 

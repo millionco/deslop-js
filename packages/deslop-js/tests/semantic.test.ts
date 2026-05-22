@@ -72,6 +72,7 @@ describe("semantic (Phase 0)", () => {
     assert.equal(config.semantic.reportUnusedEnumMembers, true);
     assert.equal(config.semantic.reportMisclassifiedDependencies, true);
     assert.equal(config.semantic.reportRedundantVariableAliases, true);
+    assert.equal(config.semantic.reportRoundTripAliases, true);
     assert.equal(config.semantic.reportUnusedClassMembers, false);
     assert.ok(Array.isArray(config.semantic.decoratorAllowlist));
     assert.ok(config.semantic.decoratorAllowlist.length > 0);
@@ -707,5 +708,137 @@ describe("semantic / unused-class-members: feature flag default", () => {
       reportRedundantVariableAliases: false,
     });
     assert.deepEqual(result.unusedClassMembers, []);
+  });
+});
+
+describe("redundancy / DRY patterns (syntactic)", () => {
+  it("flags duplicate imports from the same module", async () => {
+    const result = await scanFixtureSyntactic("dry-patterns-syntactic");
+    const finding = result.duplicateImports.find((entry) => entry.specifier === "./helpers.js");
+    assert.ok(finding, `expected ./helpers.js duplicate import, got: ${JSON.stringify(result.duplicateImports)}`);
+    assert.equal(finding.occurrences.length, 3);
+  });
+
+  it("does NOT flag a module imported only once", async () => {
+    const result = await scanFixtureSyntactic("dry-patterns-syntactic");
+    assert.ok(!result.duplicateImports.some((entry) => entry.specifier === "./other.js"));
+  });
+
+  it("flags every redundant type utility pattern", async () => {
+    const result = await scanFixtureSyntactic("dry-patterns-syntactic");
+    const patternsByKind = new Map<string, string[]>();
+    for (const finding of result.redundantTypePatterns) {
+      const list = patternsByKind.get(finding.kind);
+      if (list) list.push(finding.typeName);
+      else patternsByKind.set(finding.kind, [finding.typeName]);
+    }
+    assert.deepEqual(patternsByKind.get("intersection-with-empty-object"), ["IntersectWithEmpty"]);
+    assert.deepEqual(patternsByKind.get("self-union"), ["SelfUnion"]);
+    assert.deepEqual(patternsByKind.get("nested-partial"), ["NestedPartial"]);
+    assert.deepEqual(patternsByKind.get("nested-readonly"), ["NestedReadonly"]);
+    assert.deepEqual(patternsByKind.get("pick-all-keys"), ["PickAll"]);
+    assert.deepEqual(patternsByKind.get("omit-no-keys"), ["OmitNever"]);
+    assert.deepEqual(patternsByKind.get("empty-interface-extends-one"), ["EmptyExtends"]);
+  });
+
+  it("does NOT flag legitimate interface/type definitions", async () => {
+    const result = await scanFixtureSyntactic("dry-patterns-syntactic");
+    const flaggedTypeNames = new Set(result.redundantTypePatterns.map((finding) => finding.typeName));
+    assert.ok(!flaggedTypeNames.has("User"));
+    assert.ok(!flaggedTypeNames.has("LegitChild"));
+    assert.ok(!flaggedTypeNames.has("LegitUnion"));
+  });
+
+  it("flags identity wrappers and ignores wrappers that add real work", async () => {
+    const result = await scanFixtureSyntactic("dry-patterns-syntactic");
+    const wrapperNames = result.identityWrappers.map((finding) => finding.wrapperName).sort();
+    assert.deepEqual(wrapperNames, ["callOnly", "debugLog", "triggerWith", "variadicWrap"]);
+  });
+
+  it("does NOT flag wrappers that transform arguments or reorder them", async () => {
+    const result = await scanFixtureSyntactic("dry-patterns-syntactic");
+    const wrapperNames = new Set(result.identityWrappers.map((finding) => finding.wrapperName));
+    assert.ok(!wrapperNames.has("legitWrap"), "legitWrap calls .toUpperCase() — not an identity");
+    assert.ok(!wrapperNames.has("legitExtra"), "legitExtra adds an extra arg");
+    assert.ok(!wrapperNames.has("legitDifferentOrder"), "legitDifferentOrder swaps args");
+  });
+
+  it("flags structurally-identical type definitions across modules", async () => {
+    const result = await scanFixtureSyntactic("dry-patterns-syntactic");
+    const userDuplicates = result.duplicateTypeDefinitions.filter((entry) =>
+      entry.instances.some((instance) => instance.typeName === "User"),
+    );
+    assert.equal(userDuplicates.length, 1);
+    assert.ok(userDuplicates[0].instances.length >= 2);
+  });
+
+  it("respects reportRedundancy=false for all DRY patterns", async () => {
+    const result = await analyze(
+      defineConfig({
+        rootDir: resolve(FIXTURES_DIR, "dry-patterns-syntactic"),
+        reportRedundancy: false,
+      }),
+    );
+    assert.deepEqual(result.duplicateImports, []);
+    assert.deepEqual(result.redundantTypePatterns, []);
+    assert.deepEqual(result.identityWrappers, []);
+    assert.deepEqual(result.duplicateTypeDefinitions, []);
+  });
+});
+
+describe("redundancy / aliased re-export not consumed (syntactic graph)", () => {
+  it("flags re-exports whose new name no consumer imports", async () => {
+    const result = await scanFixtureSyntactic("redundant-reexports-semantic");
+    const reexportFindings = result.redundantAliases.filter(
+      (finding) => finding.kind === "reexport-aliased-not-used",
+    );
+    const flaggedNames = reexportFindings.map((finding) => finding.name).sort();
+    assert.ok(
+      flaggedNames.includes("wronglyAliased"),
+      `wronglyAliased should flag — consumer imports usedOnlyByOriginalName directly, got: ${flaggedNames}`,
+    );
+  });
+
+  it("does NOT flag aliased re-exports that are actually consumed under the new name", async () => {
+    const result = await scanFixtureSyntactic("redundant-reexports-semantic");
+    const reexportFindings = result.redundantAliases.filter(
+      (finding) => finding.kind === "reexport-aliased-not-used",
+    );
+    const flaggedNames = new Set(reexportFindings.map((finding) => finding.name));
+    assert.ok(!flaggedNames.has("goodAlias"), `goodAlias is consumed under its alias`);
+  });
+});
+
+describe("redundancy / round-trip aliases (semantic)", () => {
+  it("flags `import { x as y }` where y matches the underlying declaration name", async () => {
+    const result = await scanFixtureWithSemantic("redundant-reexports-semantic", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+    });
+    const roundTrips = result.redundantAliases.filter(
+      (finding) => finding.kind === "roundtrip-alias",
+    );
+    assert.ok(
+      roundTrips.some(
+        (finding) => finding.name === "realThing" && finding.aliasedFrom === "renamedThing",
+      ),
+      `expected round-trip alias for realThing ← renamedThing, got: ${JSON.stringify(roundTrips)}`,
+    );
+  });
+
+  it("respects reportRoundTripAliases=false", async () => {
+    const result = await scanFixtureWithSemantic("redundant-reexports-semantic", {
+      reportUnusedTypes: false,
+      reportUnusedEnumMembers: false,
+      reportMisclassifiedDependencies: false,
+      reportRedundantVariableAliases: false,
+      reportRoundTripAliases: false,
+    });
+    const roundTrips = result.redundantAliases.filter(
+      (finding) => finding.kind === "roundtrip-alias",
+    );
+    assert.deepEqual(roundTrips, []);
   });
 });

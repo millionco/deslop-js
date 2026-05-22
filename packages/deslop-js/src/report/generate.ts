@@ -3,7 +3,17 @@ import { detectOrphanFiles } from "./files.js";
 import { detectDeadExports } from "./exports.js";
 import { detectStalePackages } from "./packages.js";
 import { detectCycles } from "./cycles.js";
-import { detectRedundantAliases, detectDuplicateExports } from "./redundancy.js";
+import {
+  detectRedundantAliases,
+  detectDuplicateExports,
+  detectUselessAliasedReExports,
+} from "./redundancy.js";
+import {
+  detectDuplicateImports,
+  detectRedundantTypePatterns,
+  detectIdentityWrappers,
+  detectDuplicateTypeDefinitions,
+} from "./dry-patterns.js";
 import { runSemanticAnalysis } from "../semantic/index.js";
 
 export const generateReport = (graph: DependencyGraph, config: DeslopConfig): ScanResult => {
@@ -14,9 +24,15 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
   const unusedDependencies = detectStalePackages(graph, config);
   const circularDependencies = detectCycles(graph);
   const syntacticRedundantAliases = config.reportRedundancy
-    ? detectRedundantAliases(graph)
+    ? [...detectRedundantAliases(graph), ...detectUselessAliasedReExports(graph)]
     : [];
   const duplicateExports = config.reportRedundancy ? detectDuplicateExports(graph) : [];
+  const duplicateImports = config.reportRedundancy ? detectDuplicateImports(graph) : [];
+  const redundantTypePatterns = config.reportRedundancy ? detectRedundantTypePatterns(graph) : [];
+  const identityWrappers = config.reportRedundancy ? detectIdentityWrappers(graph) : [];
+  const duplicateTypeDefinitions = config.reportRedundancy
+    ? detectDuplicateTypeDefinitions(graph)
+    : [];
 
   const semanticResult = runSemanticAnalysis(graph, config);
 
@@ -44,6 +60,10 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     unusedClassMembers: semanticResult.unusedClassMembers,
     redundantAliases,
     duplicateExports,
+    duplicateImports,
+    redundantTypePatterns,
+    identityWrappers,
+    duplicateTypeDefinitions,
     totalFiles: graph.modules.length,
     totalExports,
     analysisTimeMs: performance.now() - analysisStartTime,
