@@ -1,5 +1,7 @@
 import type { DependencyGraph, DeslopConfig, UnusedType } from "../types.js";
 import { createSemanticContext } from "./program.js";
+import { buildReferenceIndex } from "./references.js";
+import { detectUnusedTypes } from "./unused-types.js";
 
 export interface SemanticAnalysisResult {
   unusedTypes: UnusedType[];
@@ -35,10 +37,21 @@ export const runSemanticAnalysis = (
     };
   }
 
-  void graph;
+  const { context } = contextResult;
+  let referenceIndex: ReturnType<typeof buildReferenceIndex> | undefined;
+  const getReferenceIndex = (): ReturnType<typeof buildReferenceIndex> => {
+    if (!referenceIndex) {
+      referenceIndex = buildReferenceIndex(context.program, context.checker);
+    }
+    return referenceIndex;
+  };
+
+  const unusedTypes = semanticConfig.reportUnusedTypes
+    ? detectUnusedTypes(graph, config, context, getReferenceIndex())
+    : [];
 
   return {
-    unusedTypes: [],
+    unusedTypes,
     contextStatus: "ready",
   };
 };

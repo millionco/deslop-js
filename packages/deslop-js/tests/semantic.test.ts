@@ -2,8 +2,26 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { analyze, defineConfig } from "../src/index.js";
+import type { ScanResult, SemanticConfig } from "../src/types.js";
 
 const FIXTURES_DIR = resolve(import.meta.dirname, "fixtures");
+
+const scanFixtureWithSemantic = async (
+  fixtureName: string,
+  semanticOverrides: Partial<SemanticConfig> = {},
+  extraConfigOverrides: Record<string, unknown> = {},
+): Promise<ScanResult> => {
+  return analyze(
+    defineConfig({
+      rootDir: resolve(FIXTURES_DIR, fixtureName),
+      semantic: { enabled: true, ...semanticOverrides },
+      ...extraConfigOverrides,
+    }),
+  );
+};
+
+const unusedTypeNames = (result: ScanResult): string[] =>
+  result.unusedTypes.map((unusedType) => unusedType.name).sort();
 
 describe("semantic (Phase 0)", () => {
   it("populates unusedTypes as [] by default (semantic disabled)", async () => {
@@ -54,5 +72,172 @@ describe("semantic (Phase 0)", () => {
     assert.equal(config.semantic.reportUnusedEnumMembers, false);
     assert.ok(Array.isArray(config.semantic.decoratorAllowlist));
     assert.ok(config.semantic.decoratorAllowlist.length > 0);
+  });
+});
+
+describe("semantic / unused-types: P0 basic", () => {
+  it("flags interface and type-alias with no references", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-basic");
+    const found = unusedTypeNames(result);
+    assert.deepEqual(found, ["UnusedAlias", "UnusedType"]);
+  });
+
+  it("does NOT flag types that have at least one referencing import", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-basic");
+    const found = unusedTypeNames(result);
+    assert.ok(!found.includes("UsedType"));
+    assert.ok(!found.includes("UsedAlias"));
+  });
+
+  it("classifies kinds correctly (interface vs type-alias)", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-basic");
+    const byName = new Map(result.unusedTypes.map((unusedType) => [unusedType.name, unusedType]));
+    assert.equal(byName.get("UnusedType")?.kind, "interface");
+    assert.equal(byName.get("UnusedAlias")?.kind, "type-alias");
+  });
+
+  it("populates trace with declaration site + reference counts", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-basic");
+    const target = result.unusedTypes.find((unusedType) => unusedType.name === "UnusedType");
+    assert.ok(target);
+    assert.ok(target.trace.length > 0, "trace should be populated");
+    assert.ok(
+      target.trace[0].includes("UnusedType"),
+      `first trace entry should mention the type, got: ${target.trace[0]}`,
+    );
+  });
+});
+
+describe("semantic / unused-types: nested references should NOT flag inner types", () => {
+  it("does NOT flag Inner referenced only inside Outer's body", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-nested");
+    const found = unusedTypeNames(result);
+    assert.ok(!found.includes("Inner"), `Inner is used inside Outer, got: ${found}`);
+    assert.ok(!found.includes("Outer"), `Outer is imported by entry, got: ${found}`);
+  });
+
+  it("still flags truly-unused types in the same module", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-nested");
+    assert.ok(unusedTypeNames(result).includes("DeadDeep"));
+  });
+});
+
+describe("semantic / unused-types: heritage clauses", () => {
+  it("does NOT flag Parent when only Child is referenced (extends keeps Parent alive)", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-extends");
+    const found = unusedTypeNames(result);
+    assert.ok(!found.includes("Parent"), `Parent is extended by Child, got: ${found}`);
+    assert.ok(!found.includes("Child"));
+  });
+
+  it("flags OrphanInterface with no references", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-extends");
+    assert.ok(unusedTypeNames(result).includes("OrphanInterface"));
+  });
+});
+
+describe("semantic / unused-types: re-export chains", () => {
+  it("does NOT flag types reachable through 3-hop re-export chain", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-reexport-chain");
+    const found = unusedTypeNames(result);
+    assert.ok(!found.includes("TripleHopUsed"), `TripleHopUsed reaches entry, got: ${found}`);
+  });
+
+  it("flags TripleHopDead which has zero non-re-export references", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-reexport-chain");
+    assert.ok(unusedTypeNames(result).includes("TripleHopDead"));
+  });
+
+  it("marks confidence as medium when only re-export references exist", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-reexport-chain");
+    const target = result.unusedTypes.find((unusedType) => unusedType.name === "TripleHopDead");
+    assert.equal(target?.confidence, "medium");
+  });
+});
+
+describe("semantic / unused-types: declaration merging", () => {
+  it("does NOT flag any branch of a merged interface when the merged symbol is referenced", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-decl-merge");
+    const found = unusedTypeNames(result);
+    assert.ok(!found.includes("MergedConfig"), `MergedConfig branches must not flag, got: ${found}`);
+  });
+
+  it("flags non-merged dead types alongside merged-and-used types", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-decl-merge");
+    assert.ok(unusedTypeNames(result).includes("SoloDead"));
+  });
+});
+
+describe("semantic / unused-types: generics", () => {
+  it("does NOT flag a type used only as a generic constraint", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-generics");
+    const found = unusedTypeNames(result);
+    assert.ok(!found.includes("Identifiable"), `Identifiable is a constraint, got: ${found}`);
+    assert.ok(!found.includes("Box"));
+  });
+
+  it("flags DeadBox with no references at all", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-generics");
+    assert.ok(unusedTypeNames(result).includes("DeadBox"));
+  });
+});
+
+describe("semantic / unused-types: import type", () => {
+  it("does NOT flag type referenced via import type", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-import-type");
+    const found = unusedTypeNames(result);
+    assert.ok(!found.includes("ReturnedShape"));
+  });
+
+  it("flags NeverImported truly dead type-alias", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-import-type");
+    assert.ok(unusedTypeNames(result).includes("NeverImported"));
+  });
+});
+
+describe("semantic / unused-types: JSDoc references", () => {
+  it("does NOT flag a type referenced only from JSDoc @param annotations", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-jsdoc");
+    const found = unusedTypeNames(result);
+    assert.ok(
+      !found.includes("JsDocConsumed"),
+      `JsDocConsumed is used via JSDoc import("./types.js"), got: ${found}`,
+    );
+  });
+
+  it("does NOT flag a type imported via regular TS import alongside JSDoc usage", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-jsdoc");
+    assert.ok(!unusedTypeNames(result).includes("RegularImported"));
+  });
+
+  it("flags NeverReferenced as unused inside a JSDoc-aware project", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-jsdoc");
+    assert.ok(unusedTypeNames(result).includes("NeverReferenced"));
+  });
+});
+
+describe("semantic / unused-types: entry export gating", () => {
+  it("respects includeEntryExports=false: never flags top-level entry exports", async () => {
+    const result = await scanFixtureWithSemantic("unused-types-entry-export");
+    assert.deepEqual(unusedTypeNames(result), []);
+  });
+
+  it("includeEntryExports=true flags dead types declared in the entry file", async () => {
+    const result = await scanFixtureWithSemantic(
+      "unused-types-entry-export",
+      {},
+      { includeEntryExports: true },
+    );
+    const found = unusedTypeNames(result);
+    assert.ok(found.includes("DeadEntryType"));
+    assert.ok(!found.includes("PublicApiShape"), "PublicApiShape used by callApi");
+  });
+
+  it("respects reportUnusedTypes=false: skips type detection entirely", async () => {
+    const result = await scanFixtureWithSemantic(
+      "unused-types-basic",
+      { reportUnusedTypes: false },
+    );
+    assert.deepEqual(result.unusedTypes, []);
   });
 });
