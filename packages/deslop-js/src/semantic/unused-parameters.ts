@@ -56,7 +56,7 @@ export const detectUnusedParameters = (
     return [];
   }
 
-  const diagnostics = runtimeProgram.getSemanticDiagnostics();
+  const diagnostics = ts.getPreEmitDiagnostics(runtimeProgram);
   for (const diagnostic of diagnostics) {
     if (!NOUNUSED_DIAGNOSTIC_CODES.has(diagnostic.code)) continue;
     const file = diagnostic.file;
