@@ -4,6 +4,7 @@ import { detectDeadExports } from "./exports.js";
 import { detectStalePackages } from "./packages.js";
 import { detectCycles } from "./cycles.js";
 import { detectRedundantExports } from "./redundant.js";
+import { detectMisclassifiedDependencies } from "./misclassified-dependencies.js";
 import { runSemanticAnalysis } from "../semantic/index.js";
 
 export const generateReport = (graph: DependencyGraph, config: DeslopConfig): ScanResult => {
@@ -14,6 +15,7 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
   const unusedDependencies = detectStalePackages(graph, config);
   const circularDependencies = detectCycles(graph);
   const redundantExports = detectRedundantExports(graph, config);
+  const misclassifiedDependencies = detectMisclassifiedDependencies(graph, config);
   const semanticResult = runSemanticAnalysis(graph, config);
 
   const totalExports = graph.modules.reduce(
@@ -35,6 +37,7 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     unusedClassMembers: semanticResult.unusedClassMembers,
     privateTypeLeaks: semanticResult.privateTypeLeaks,
     redundantExports,
+    misclassifiedDependencies,
     totalFiles: graph.modules.length,
     totalExports,
     analysisTimeMs: performance.now() - analysisStartTime,

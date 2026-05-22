@@ -4290,3 +4290,54 @@ describe("private-type-leak-class (semantic enabled)", () => {
     );
   });
 });
+
+const misclassifiedNames = (result: ScanResult): string[] =>
+  result.misclassifiedDependencies.map((entry) => entry.name).sort();
+
+describe("misclassified-deps: default (semantic disabled)", () => {
+  it("should not surface misclassifiedDependencies by default", async () => {
+    const result = await scanFixture("misclassified-deps-type-only");
+    assert.deepEqual(result.misclassifiedDependencies, []);
+  });
+});
+
+describe("misclassified-deps-type-only (semantic enabled)", () => {
+  it("flags type-only dependency declared as prod dependency", async () => {
+    const result = await scanFixture("misclassified-deps-type-only", {
+      semantic: { enabled: true, reportMisclassifiedDependencies: true },
+    });
+    const names = misclassifiedNames(result);
+    assert.ok(
+      names.includes("type-only-pkg"),
+      `type-only-pkg should be flagged, got: ${names.join(", ")}`,
+    );
+    const entry = result.misclassifiedDependencies.find((d) => d.name === "type-only-pkg");
+    assert.equal(entry?.recommended, "devDependency");
+  });
+});
+
+describe("misclassified-deps-value (semantic enabled)", () => {
+  it("should NOT flag dependency imported for values", async () => {
+    const result = await scanFixture("misclassified-deps-value", {
+      semantic: { enabled: true, reportMisclassifiedDependencies: true },
+    });
+    assert.deepEqual(
+      result.misclassifiedDependencies,
+      [],
+      "value-imported deps must not be flagged",
+    );
+  });
+});
+
+describe("misclassified-deps-mixed (semantic enabled)", () => {
+  it("should NOT flag dependency with at least one value import", async () => {
+    const result = await scanFixture("misclassified-deps-mixed", {
+      semantic: { enabled: true, reportMisclassifiedDependencies: true },
+    });
+    const names = misclassifiedNames(result);
+    assert.ok(
+      !names.includes("mixed-pkg"),
+      `mixed-pkg must not be flagged when any usage is value, got: ${names.join(", ")}`,
+    );
+  });
+});

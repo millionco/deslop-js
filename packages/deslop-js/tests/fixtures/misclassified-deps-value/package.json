@@ -1,0 +1,7 @@
+{
+  "name": "misclassified-deps-value",
+  "main": "src/index.ts",
+  "dependencies": {
+    "value-pkg": "^1.0.0"
+  }
+}

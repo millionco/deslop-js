@@ -127,6 +127,15 @@ export interface UnusedEnumMember {
   trace: string[];
 }
 
+export interface MisclassifiedDependency {
+  name: string;
+  declaredAs: "dependency" | "devDependency";
+  recommended: "devDependency" | "peerDependency";
+  confidence: "high" | "medium" | "low";
+  reason: string;
+  trace: string[];
+}
+
 export interface PrivateTypeLeak {
   path: string;
   exportName: string;
@@ -169,6 +178,7 @@ export interface ScanResult {
   unusedClassMembers: UnusedClassMember[];
   redundantExports: RedundantExport[];
   privateTypeLeaks: PrivateTypeLeak[];
+  misclassifiedDependencies: MisclassifiedDependency[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;
@@ -188,6 +198,7 @@ export interface SemanticConfig {
   reportRedundantExports: boolean;
   reportPrivateTypeLeaks: boolean;
   decoratorAllowlist: string[];
+  reportMisclassifiedDependencies: boolean;
 }
 
 export interface DeslopConfig {

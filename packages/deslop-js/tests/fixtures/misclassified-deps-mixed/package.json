@@ -1,0 +1,7 @@
+{
+  "name": "misclassified-deps-mixed",
+  "main": "src/index.ts",
+  "dependencies": {
+    "mixed-pkg": "^1.0.0"
+  }
+}

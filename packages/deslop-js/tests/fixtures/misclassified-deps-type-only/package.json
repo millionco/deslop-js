@@ -1,0 +1,7 @@
+{
+  "name": "misclassified-deps-type-only",
+  "main": "src/index.ts",
+  "dependencies": {
+    "type-only-pkg": "^1.0.0"
+  }
+}
