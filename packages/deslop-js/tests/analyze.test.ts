@@ -3860,3 +3860,161 @@ describe("reexport-star-named", () => {
     );
   });
 });
+
+const unusedTypeNames = (result: ScanResult): string[] =>
+  result.unusedTypes.map((unusedType) => unusedType.name).sort();
+
+describe("unused-types: default (semantic disabled)", () => {
+  it("should not surface unusedTypes when semantic disabled", async () => {
+    const result = await scanFixture("unused-types-basic");
+    assert.deepEqual(result.unusedTypes, [], "unusedTypes should be empty by default");
+  });
+});
+
+describe("unused-types-basic (semantic enabled)", () => {
+  it("should flag exported interface with zero references", async () => {
+    const result = await scanFixture("unused-types-basic", { semantic: { enabled: true } });
+    const names = unusedTypeNames(result);
+    assert.ok(
+      names.includes("UnusedInterface"),
+      `UnusedInterface should be flagged, got: ${names.join(", ")}`,
+    );
+  });
+
+  it("should flag exported type alias with zero references", async () => {
+    const result = await scanFixture("unused-types-basic", { semantic: { enabled: true } });
+    const names = unusedTypeNames(result);
+    assert.ok(
+      names.includes("UnusedAlias"),
+      `UnusedAlias should be flagged, got: ${names.join(", ")}`,
+    );
+  });
+
+  it("should NOT flag used interface", async () => {
+    const result = await scanFixture("unused-types-basic", { semantic: { enabled: true } });
+    const names = unusedTypeNames(result);
+    assert.ok(!names.includes("UsedInterface"), "UsedInterface must not be flagged");
+  });
+
+  it("should NOT flag used type alias", async () => {
+    const result = await scanFixture("unused-types-basic", { semantic: { enabled: true } });
+    const names = unusedTypeNames(result);
+    assert.ok(!names.includes("UsedAlias"), "UsedAlias must not be flagged");
+  });
+
+  it("emits confidence + reason + trace metadata", async () => {
+    const result = await scanFixture("unused-types-basic", { semantic: { enabled: true } });
+    const unusedInterface = result.unusedTypes.find(
+      (unusedType) => unusedType.name === "UnusedInterface",
+    );
+    assert.ok(unusedInterface, "UnusedInterface entry should exist");
+    assert.equal(unusedInterface!.confidence, "high");
+    assert.equal(unusedInterface!.kind, "interface");
+    assert.ok(unusedInterface!.reason.length > 0);
+    assert.ok(unusedInterface!.trace.length > 0);
+  });
+});
+
+describe("unused-types-nested (semantic enabled)", () => {
+  it("should NOT flag type referenced only inside another type body", async () => {
+    const result = await scanFixture("unused-types-nested", { semantic: { enabled: true } });
+    const names = unusedTypeNames(result);
+    assert.ok(!names.includes("Inner"), `Inner should not be flagged, got: ${names.join(", ")}`);
+    assert.ok(!names.includes("Outer"), `Outer should not be flagged, got: ${names.join(", ")}`);
+  });
+});
+
+describe("unused-types-extends (semantic enabled)", () => {
+  it("should NOT flag parent interface when only child is imported", async () => {
+    const result = await scanFixture("unused-types-extends", { semantic: { enabled: true } });
+    const names = unusedTypeNames(result);
+    assert.ok(!names.includes("Parent"), `Parent should not be flagged, got: ${names.join(", ")}`);
+  });
+});
+
+describe("unused-types-reexport-chain (semantic enabled)", () => {
+  it("should NOT flag re-exported type chain when leaf consumer exists", async () => {
+    const result = await scanFixture("unused-types-reexport-chain", {
+      semantic: { enabled: true },
+    });
+    const names = unusedTypeNames(result);
+    assert.ok(
+      !names.includes("Carried"),
+      `Carried should not be flagged, got: ${names.join(", ")}`,
+    );
+  });
+});
+
+describe("unused-types-decl-merge (semantic enabled)", () => {
+  it("should NOT flag declaration-merged interface when any merge branch is referenced", async () => {
+    const result = await scanFixture("unused-types-decl-merge", { semantic: { enabled: true } });
+    const names = unusedTypeNames(result);
+    assert.ok(
+      !names.includes("Settings"),
+      `Settings should not be flagged, got: ${names.join(", ")}`,
+    );
+  });
+});
+
+describe("unused-types-generics (semantic enabled)", () => {
+  it("should NOT flag generic constraint type referenced only as constraint", async () => {
+    const result = await scanFixture("unused-types-generics", { semantic: { enabled: true } });
+    const names = unusedTypeNames(result);
+    assert.ok(
+      !names.includes("Identifiable"),
+      `Identifiable should not be flagged, got: ${names.join(", ")}`,
+    );
+    assert.ok(!names.includes("Box"), `Box should not be flagged, got: ${names.join(", ")}`);
+  });
+});
+
+describe("unused-types-import-type (semantic enabled)", () => {
+  it("should NOT flag type imported via 'import type' and used as annotation", async () => {
+    const result = await scanFixture("unused-types-import-type", { semantic: { enabled: true } });
+    const names = unusedTypeNames(result);
+    assert.ok(
+      !names.includes("Payload"),
+      `Payload should not be flagged, got: ${names.join(", ")}`,
+    );
+  });
+});
+
+describe("unused-types-jsdoc (semantic enabled)", () => {
+  it("should NOT flag type referenced via type annotation (JSDoc fixture)", async () => {
+    const result = await scanFixture("unused-types-jsdoc", { semantic: { enabled: true } });
+    const names = unusedTypeNames(result);
+    assert.ok(!names.includes("Vector"), `Vector should not be flagged, got: ${names.join(", ")}`);
+  });
+});
+
+describe("unused-types-entry-export (semantic enabled)", () => {
+  it("should NOT flag entry-exported type by default", async () => {
+    const result = await scanFixture("unused-types-entry-export", {
+      semantic: { enabled: true },
+    });
+    const names = unusedTypeNames(result);
+    assert.ok(
+      !names.includes("PublicApiType"),
+      `PublicApiType must not be flagged when includeEntryExports is false, got: ${names.join(", ")}`,
+    );
+  });
+
+  it("should flag entry-exported type when includeEntryExports is true", async () => {
+    const result = await scanFixture("unused-types-entry-export", {
+      semantic: { enabled: true },
+      includeEntryExports: true,
+    });
+    const names = unusedTypeNames(result);
+    assert.ok(
+      names.includes("PublicApiType"),
+      `PublicApiType should be flagged with includeEntryExports, got: ${names.join(", ")}`,
+    );
+  });
+});
+
+describe("unused-types: graceful fallback without tsconfig", () => {
+  it("should not crash and should emit empty unusedTypes on tsconfig-less fixture", async () => {
+    const result = await scanFixture("simple-app", { semantic: { enabled: true } });
+    assert.ok(Array.isArray(result.unusedTypes), "unusedTypes should always be an array");
+  });
+});
