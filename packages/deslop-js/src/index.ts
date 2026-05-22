@@ -2,7 +2,12 @@ import { resolve, dirname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import fg from "fast-glob";
 import type { DeslopConfig, ScanResult } from "./types.js";
-import { DEFAULT_ENTRY_GLOBS, DEFAULT_EXTENSIONS, OUTPUT_DIRECTORIES } from "./constants.js";
+import {
+  DEFAULT_ENTRY_GLOBS,
+  DEFAULT_EXTENSIONS,
+  DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
+  OUTPUT_DIRECTORIES,
+} from "./constants.js";
 import { collectSourceFiles, resolveEntries, getFrameworkExclusions } from "./collect/entries.js";
 import { resolveWorkspaces } from "./collect/workspaces.js";
 import { parseSourceFile } from "./collect/parse.js";
@@ -52,7 +57,26 @@ export type {
   UnusedExport,
   UnusedDependency,
   CircularDependency,
+  UnusedType,
+  UnusedTypeKind,
+  SemanticConfig,
+  SemanticConfidence,
 } from "./types.js";
+
+const fillSemanticConfig = (
+  semanticOverrides: Partial<DeslopConfig["semantic"]> | undefined,
+): DeslopConfig["semantic"] => {
+  if (semanticOverrides === undefined) return undefined;
+  return {
+    enabled: semanticOverrides.enabled ?? false,
+    reportUnusedTypes: semanticOverrides.reportUnusedTypes ?? true,
+    reportUnusedEnumMembers: semanticOverrides.reportUnusedEnumMembers ?? false,
+    reportUnusedClassMembers: semanticOverrides.reportUnusedClassMembers ?? false,
+    reportRedundantExports: semanticOverrides.reportRedundantExports ?? false,
+    reportPrivateTypeLeaks: semanticOverrides.reportPrivateTypeLeaks ?? false,
+    decoratorAllowlist: semanticOverrides.decoratorAllowlist ?? DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
+  };
+};
 
 export const defineConfig = (
   options: Partial<DeslopConfig> & { rootDir: string },
@@ -64,6 +88,7 @@ export const defineConfig = (
   tsConfigPath: options.tsConfigPath ?? undefined,
   reportTypes: options.reportTypes ?? false,
   includeEntryExports: options.includeEntryExports ?? false,
+  semantic: fillSemanticConfig(options.semantic),
 });
 
 export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
