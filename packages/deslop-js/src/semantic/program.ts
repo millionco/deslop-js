@@ -56,9 +56,15 @@ export const createSemanticContext = (
         ...parsedCommandLine.options,
         noEmit: true,
         skipLibCheck: true,
-        allowJs: parsedCommandLine.options.allowJs ?? true,
+        noLib: false,
+        allowJs: true,
+        isolatedModules: false,
       },
     });
+
+    const sourceFileCount = program.getSourceFiles().length;
+    if (sourceFileCount > SEMANTIC_MAX_PROGRAM_FILES) return undefined;
+
     checker = program.getTypeChecker();
   } catch {
     return undefined;

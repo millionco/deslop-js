@@ -5,6 +5,7 @@ import { lookupSourceFile } from "./program.js";
 import type { SemanticContext } from "./program.js";
 import { buildReferenceIndex } from "./references.js";
 import type { ReferenceIndex } from "./references.js";
+import { buildEntryExposureIndex } from "./utils/entry-exposed-modules.js";
 
 type ClassMemberCandidate =
   | {
@@ -195,11 +196,15 @@ export const detectUnusedClassMembers = (
     context.program,
     context.checker,
   );
+  const exposure = config.includeEntryExports ? undefined : buildEntryExposureIndex(graph);
   const findings: UnusedClassMember[] = [];
 
   for (const module of graph.modules) {
     if (!module.isReachable) continue;
     if (module.isDeclarationFile) continue;
+    if (module.isEntryPoint && !config.includeEntryExports) continue;
+
+    const isPubliclyExposedModule = exposure?.isModuleWildcardExposed(module.fileId.index);
 
     const sourceFile = lookupSourceFile(context, module.fileId.path);
     if (!sourceFile) continue;
@@ -214,10 +219,18 @@ export const detectUnusedClassMembers = (
           ts.forEachChild(node, visit);
           return;
         }
+        const className = node.name ? node.name.text : undefined;
+        if (
+          isPubliclyExposedModule ||
+          (className && exposure?.isNamedReExportedFromEntry(module.fileId.path, className))
+        ) {
+          ts.forEachChild(node, visit);
+          return;
+        }
 
         const overrides = collectOverrideNames(node, context.checker);
         const candidates = collectClassMembers(node, decoratorAllowlist);
-        const className = node.name ? node.name.text : "<anonymous>";
+        const resolvedClassName = className ?? "<anonymous>";
 
         const classSymbol = node.name ? context.checker.getSymbolAtLocation(node.name) : undefined;
         const subclassOverrideNames = classSymbol
@@ -248,15 +261,15 @@ export const detectUnusedClassMembers = (
 
           findings.push({
             path: module.fileId.path,
-            className,
+            className: resolvedClassName,
             memberName,
             memberKind: candidate.kind,
             line: lineAndChar.line + 1,
             column: lineAndChar.character,
             confidence,
-            reason: `class \`${className}\` ${candidate.kind} \`${memberName}\` has no non-declaration references`,
+            reason: `class \`${resolvedClassName}\` ${candidate.kind} \`${memberName}\` has no non-declaration references`,
             trace: [
-              `${module.fileId.path}: declared class \`${className}\``,
+              `${module.fileId.path}: declared class \`${resolvedClassName}\``,
               `${candidate.kind} \`${memberName}\` has 0 external references`,
             ].slice(0, SEMANTIC_TRACE_MAX_ENTRIES),
           });

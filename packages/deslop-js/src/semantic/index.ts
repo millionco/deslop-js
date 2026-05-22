@@ -17,6 +17,7 @@ import { detectPrivateTypeLeaks } from "./private-type-leaks.js";
 import { detectUnusedParameters } from "./unused-parameters.js";
 import { detectDuplicateTypeDefinitions } from "./duplicate-types.js";
 import { detectMisclassifiedDependencies as detectMisclassifiedDependenciesSemantic } from "./misclassified-dependencies.js";
+import { SEMANTIC_PROGRAM_BUDGET_MS } from "../constants.js";
 
 export interface SemanticAnalysisResult {
   unusedTypes: UnusedType[];
@@ -44,6 +45,7 @@ export const runSemanticAnalysis = (
 
   if (!config.semantic.enabled) return emptyResult;
 
+  const semanticPassStartTime = performance.now();
   const semanticContext = createSemanticContext(graph, config);
   const misclassifiedDependencies = config.semantic.reportMisclassifiedDependencies
     ? detectMisclassifiedDependenciesSemantic(graph, config, semanticContext)
@@ -53,27 +55,30 @@ export const runSemanticAnalysis = (
     return { ...emptyResult, misclassifiedDependencies };
   }
 
-  const unusedTypes = config.semantic.reportUnusedTypes
+  const withinBudget = (): boolean =>
+    performance.now() - semanticPassStartTime < SEMANTIC_PROGRAM_BUDGET_MS;
+
+  const unusedTypes = config.semantic.reportUnusedTypes && withinBudget()
     ? detectUnusedTypes(graph, config, semanticContext)
     : [];
 
-  const unusedEnumMembers = config.semantic.reportUnusedEnumMembers
+  const unusedEnumMembers = config.semantic.reportUnusedEnumMembers && withinBudget()
     ? detectUnusedEnumMembers(graph, config, semanticContext)
     : [];
 
-  const unusedClassMembers = config.semantic.reportUnusedClassMembers
+  const unusedClassMembers = config.semantic.reportUnusedClassMembers && withinBudget()
     ? detectUnusedClassMembers(graph, config, semanticContext)
     : [];
 
-  const privateTypeLeaks = config.semantic.reportPrivateTypeLeaks
+  const privateTypeLeaks = config.semantic.reportPrivateTypeLeaks && withinBudget()
     ? detectPrivateTypeLeaks(graph, config, semanticContext)
     : [];
 
-  const unusedParameters = config.semantic.reportUnusedParameters
+  const unusedParameters = config.semantic.reportUnusedParameters && withinBudget()
     ? detectUnusedParameters(graph, config, semanticContext)
     : [];
 
-  const duplicateTypeDefinitions = config.semantic.reportDuplicateTypeDefinitions
+  const duplicateTypeDefinitions = config.semantic.reportDuplicateTypeDefinitions && withinBudget()
     ? detectDuplicateTypeDefinitions(graph, config, semanticContext)
     : [];
 

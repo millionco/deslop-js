@@ -5,6 +5,7 @@ import { lookupSourceFile } from "./program.js";
 import type { SemanticContext } from "./program.js";
 import { buildReferenceIndex } from "./references.js";
 import type { ReferenceIndex } from "./references.js";
+import { buildEntryExposureIndex } from "./utils/entry-exposed-modules.js";
 
 interface EnumCandidate {
   modulePath: string;
@@ -25,13 +26,17 @@ const isConstEnum = (declaration: ts.EnumDeclaration): boolean =>
 
 const collectEnumCandidates = (
   graph: DependencyGraph,
+  config: DeslopConfig,
   context: SemanticContext,
 ): EnumCandidate[] => {
   const candidates: EnumCandidate[] = [];
+  const exposure = config.includeEntryExports ? undefined : buildEntryExposureIndex(graph);
 
   for (const module of graph.modules) {
     if (!module.isReachable) continue;
     if (module.isDeclarationFile) continue;
+    if (module.isEntryPoint && !config.includeEntryExports) continue;
+    if (exposure?.isModuleWildcardExposed(module.fileId.index)) continue;
 
     const sourceFile = lookupSourceFile(context, module.fileId.path);
     if (!sourceFile) continue;
@@ -40,6 +45,8 @@ const collectEnumCandidates = (
       if (!ts.isEnumDeclaration(statement)) continue;
       const isExported = Boolean(ts.getCombinedModifierFlags(statement) & ts.ModifierFlags.Export);
       if (!isExported) continue;
+      const enumName = statement.name.text;
+      if (exposure?.isNamedReExportedFromEntry(module.fileId.path, enumName)) continue;
 
       const members = statement.members;
       const isStringEnum = members.length > 0 && members.every(isStringMember);
@@ -108,7 +115,7 @@ export const detectUnusedEnumMembers = (
   _config: DeslopConfig,
   context: SemanticContext,
 ): UnusedEnumMember[] => {
-  const candidates = collectEnumCandidates(graph, context);
+  const candidates = collectEnumCandidates(graph, _config, context);
   if (candidates.length === 0) return [];
 
   const referenceIndex = buildReferenceIndex(context.program, context.checker);

@@ -4511,3 +4511,30 @@ describe("misclassified-deps-checker-only (semantic enabled)", () => {
     );
   });
 });
+
+describe("unused-class-members-public-api (FP-class fix)", () => {
+  it("should NOT flag members of a class wildcard-re-exported from entry (public API)", async () => {
+    const result = await scanFixture("unused-class-members-public-api", {
+      semantic: { enabled: true, reportUnusedClassMembers: true },
+    });
+    assert.deepEqual(
+      result.unusedClassMembers,
+      [],
+      "members on classes flowing through entry's export * must be treated as public API",
+    );
+  });
+
+  it("does flag the same members when includeEntryExports is true", async () => {
+    const result = await scanFixture("unused-class-members-public-api", {
+      semantic: { enabled: true, reportUnusedClassMembers: true },
+      includeEntryExports: true,
+    });
+    const keys = result.unusedClassMembers
+      .map((member) => `${member.className}.${member.memberName}`)
+      .sort();
+    assert.ok(
+      keys.includes("PublicApiService.publicHelper"),
+      `publicHelper should be flagged with includeEntryExports, got: ${keys.join(", ")}`,
+    );
+  });
+});
