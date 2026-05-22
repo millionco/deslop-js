@@ -34,6 +34,19 @@ importers:
         specifier: ^0.1.20
         version: 0.1.21(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.1)(typescript@6.0.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.1))
 
+  packages/deslop-cli:
+    dependencies:
+      commander:
+        specifier: ^14.0.3
+        version: 14.0.3
+      deslop-js:
+        specifier: workspace:*
+        version: link:../deslop-js
+    devDependencies:
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.8.0
+
   packages/deslop-js:
     dependencies:
       '@oxc-project/types':
@@ -1149,6 +1162,10 @@ packages:
 
   chardet@2.1.1:
     resolution: {integrity: sha512-PsezH1rqdV9VvyNhxxOW32/d75r01NY7TQCmOqomRo15ZSOKbpTFVsfjghxo6JloQUCGnH4k1LGu0R4yCLlWQQ==}
+
+  commander@14.0.3:
+    resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
+    engines: {node: '>=20'}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -2421,6 +2438,8 @@ snapshots:
       fill-range: 7.1.1
 
   chardet@2.1.1: {}
+
+  commander@14.0.3: {}
 
   cross-spawn@7.0.6:
     dependencies:

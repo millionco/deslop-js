@@ -115,6 +115,58 @@ describe("dependency-tooling", () => {
     assert.ok(deps.includes("unused-tool"), `unused-tool should be unused, got: ${deps}`);
     assert.ok(deps.includes("redux-thunk"), `redux-thunk should be unused, got: ${deps}`);
   });
+
+  it("should keep pnpm-workspace override targets used", async () => {
+    const result = await scanFixture("pnpm-workspace-override");
+    const deps = staleDependencyNames(result);
+    assert.ok(
+      !deps.includes("@voidzero-dev/vite-plus-core"),
+      `@voidzero-dev/vite-plus-core should be treated as used via pnpm-workspace overrides, got: ${deps}`,
+    );
+    assert.ok(deps.includes("unused-dep"), `unused-dep should be unused, got: ${deps}`);
+  });
+
+  it("should keep script-invoked CLI packages used without node_modules bin metadata", async () => {
+    const result = await scanFixture("script-cli-deps");
+    const deps = staleDependencyNames(result);
+    for (const dependencyName of ["turbo", "vite-plus", "tsx", "@changesets/cli"]) {
+      assert.ok(
+        !deps.includes(dependencyName),
+        `${dependencyName} should be treated as used from scripts, got: ${deps}`,
+      );
+    }
+    assert.ok(deps.includes("unused-dep"), `unused-dep should be unused, got: ${deps}`);
+  });
+
+  it("should keep nested package.json override targets used", async () => {
+    const result = await scanFixture("nested-overrides");
+    const deps = staleDependencyNames(result);
+    assert.ok(
+      !deps.includes("@typescript/native-preview"),
+      `@typescript/native-preview should be treated as used via nested overrides, got: ${deps}`,
+    );
+    assert.ok(deps.includes("unused-dep"), `unused-dep should be unused, got: ${deps}`);
+  });
+
+  it("should keep nested pnpm-workspace override targets used", async () => {
+    const result = await scanFixture("pnpm-nested-overrides");
+    const deps = staleDependencyNames(result);
+    assert.ok(
+      !deps.includes("@typescript/native-preview"),
+      `@typescript/native-preview should be treated as used via nested pnpm-workspace overrides, got: ${deps}`,
+    );
+    assert.ok(deps.includes("unused-dep"), `unused-dep should be unused, got: ${deps}`);
+  });
+
+  it("should keep vitest override targets used", async () => {
+    const result = await scanFixture("vitest-override-target");
+    const deps = staleDependencyNames(result);
+    assert.ok(
+      !deps.includes("@voidzero-dev/vite-plus-test"),
+      `@voidzero-dev/vite-plus-test should be treated as used via pnpm-workspace overrides, got: ${deps}`,
+    );
+    assert.ok(deps.includes("unused-dep"), `unused-dep should be unused, got: ${deps}`);
+  });
 });
 
 describe("css-tilde-import", () => {

@@ -3,7 +3,7 @@
   "changelog": "@changesets/cli/changelog",
   "commit": false,
   "fixed": [],
-  "linked": [["deslop-js"]],
+  "linked": [["deslop-js", "deslop-cli"]],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
