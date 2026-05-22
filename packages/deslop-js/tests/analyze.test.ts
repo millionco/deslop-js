@@ -4583,3 +4583,17 @@ describe("private-type-leak-generics-skip (FP-class fix)", () => {
     );
   });
 });
+
+describe("unused-class-members-builtin-override (FP-class fix)", () => {
+  it("should NOT flag members overriding lib types (Error.message, Event.detail)", async () => {
+    const result = await scanFixture("unused-class-members-builtin-override", {
+      semantic: { enabled: true, reportUnusedClassMembers: true },
+      includeEntryExports: true,
+    });
+    assert.deepEqual(
+      result.unusedClassMembers,
+      [],
+      "members overriding lib base types (Error, Event, EventTarget, ...) must not be flagged — runtime reads them",
+    );
+  });
+});

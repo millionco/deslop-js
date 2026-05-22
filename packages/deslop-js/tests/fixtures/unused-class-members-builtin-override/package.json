@@ -1,0 +1,4 @@
+{
+  "name": "unused-class-members-builtin-override",
+  "main": "src/index.ts"
+}

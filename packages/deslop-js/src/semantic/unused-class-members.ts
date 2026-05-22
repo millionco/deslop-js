@@ -115,21 +115,15 @@ const collectOverrideNames = (
   checker: ts.TypeChecker,
 ): Set<string> => {
   const overrides = new Set<string>();
-  const heritageClauses = classDeclaration.heritageClauses;
-  if (!heritageClauses) return overrides;
-  for (const clause of heritageClauses) {
-    if (clause.token !== ts.SyntaxKind.ExtendsKeyword) continue;
-    for (const expression of clause.types) {
-      const symbol = checker.getSymbolAtLocation(expression.expression);
-      if (!symbol) continue;
-      const declaration = symbol.declarations?.[0];
-      if (!declaration || !ts.isClassDeclaration(declaration)) continue;
-      for (const baseMember of declaration.members) {
-        const baseName = getClassElementName(baseMember);
-        if (!baseName) continue;
-        if (ts.isIdentifier(baseName)) overrides.add(baseName.text);
-        else if (ts.isStringLiteral(baseName)) overrides.add(baseName.text);
-      }
+  if (!classDeclaration.name) return overrides;
+
+  const classType = checker.getDeclaredTypeOfSymbol(
+    checker.getSymbolAtLocation(classDeclaration.name)!,
+  );
+  const baseTypes = classType ? checker.getBaseTypes(classType as ts.InterfaceType) : [];
+  for (const baseType of baseTypes) {
+    for (const property of checker.getPropertiesOfType(baseType)) {
+      overrides.add(property.getName());
     }
   }
   return overrides;
