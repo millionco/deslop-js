@@ -747,6 +747,32 @@ describe("redundancy / DRY patterns (syntactic)", () => {
     assert.ok(!flaggedTypeNames.has("LegitUnion"));
   });
 
+  it("does NOT flag Zod-style declaration-merging (`interface X extends Schema.infer<typeof X>`)", async () => {
+    const result = await scanFixtureSyntactic("dry-patterns-syntactic");
+    const flaggedTypeNames = new Set(
+      result.redundantTypePatterns.map((finding) => finding.typeName),
+    );
+    assert.ok(
+      !flaggedTypeNames.has("ZodMergedSchemaShape"),
+      "extending `Namespace.infer<...>` is the canonical Zod/Effect schema-type merging idiom",
+    );
+  });
+
+  it("does NOT flag UI primitive prop re-aliasing (`interface X extends Lib.Component.Props`)", async () => {
+    const result = await scanFixtureSyntactic("dry-patterns-syntactic");
+    const flaggedTypeNames = new Set(
+      result.redundantTypePatterns.map((finding) => finding.typeName),
+    );
+    assert.ok(
+      !flaggedTypeNames.has("CheckboxRootProps"),
+      "extending `Namespace.Props` is the canonical Radix/Ark prop re-export idiom",
+    );
+    assert.ok(
+      !flaggedTypeNames.has("ButtonAliasProps"),
+      "extending `Namespace.props` is the same idiom with lowercase property name",
+    );
+  });
+
   it("flags identity wrappers and ignores wrappers that add real work", async () => {
     const result = await scanFixtureSyntactic("dry-patterns-syntactic");
     const wrapperNames = result.identityWrappers.map((finding) => finding.wrapperName).sort();

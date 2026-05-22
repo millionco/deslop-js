@@ -3,6 +3,7 @@ export type DeslopErrorCode =
   | "file-too-large"
   | "file-empty"
   | "file-binary"
+  | "file-minified"
   | "parse-failed"
   | "parse-recovered"
   | "ast-walk-failed"
@@ -136,7 +137,12 @@ export class ConfigError extends DeslopError {
 export class FileReadError extends DeslopError {
   constructor(
     input: Omit<DeslopErrorInput, "module" | "code"> & {
-      code: "file-read-failed" | "file-too-large" | "file-empty" | "file-binary";
+      code:
+        | "file-read-failed"
+        | "file-too-large"
+        | "file-empty"
+        | "file-binary"
+        | "file-minified";
     },
   ) {
     super({ ...input, module: "parse" });

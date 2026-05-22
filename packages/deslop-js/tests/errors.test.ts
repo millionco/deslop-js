@@ -131,6 +131,24 @@ describe("errors / analyze() returns DeslopErrors instead of throwing", () => {
     assert.equal(binaryErrors.length, 1);
   });
 
+  it("minified bundle emits an info-level file-minified error and skips redundancy findings", async () => {
+    const result = await analyze(
+      defineConfig({ rootDir: resolve(FIXTURES_DIR, "empty-and-binary-files") }),
+    );
+    const minifiedErrors = result.analysisErrors.filter(
+      (entry) => entry.code === "file-minified" && entry.path?.endsWith("minified-bundle.js"),
+    );
+    assert.equal(minifiedErrors.length, 1);
+    assert.equal(minifiedErrors[0].severity, "info");
+    const findingsInsideBundle = [
+      ...result.simplifiableExpressions,
+      ...result.simplifiableFunctions,
+      ...result.duplicateImports,
+      ...result.redundantTypePatterns,
+    ].filter((entry) => entry.path.endsWith("minified-bundle.js"));
+    assert.deepEqual(findingsInsideBundle, []);
+  });
+
   it("broken tsconfig with semantic enabled emits tsconfig-parse-failed instead of throwing", async () => {
     const result = await analyze(
       defineConfig({

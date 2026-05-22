@@ -4,6 +4,8 @@ import {
   BINARY_DETECTION_NULL_BYTE_THRESHOLD,
   BINARY_DETECTION_SAMPLE_BYTES,
   MAX_PARSE_FILE_SIZE_BYTES,
+  MINIFIED_DETECTION_AVG_LINE_LENGTH_THRESHOLD,
+  MINIFIED_DETECTION_MIN_BYTES,
 } from "../constants.js";
 import { type DeslopError, FileReadError, ParseError, describeUnknownError } from "../errors.js";
 import type {
@@ -323,6 +325,16 @@ const looksLikeBinaryContent = (sourceText: string): boolean => {
   return false;
 };
 
+const looksLikeMinifiedSource = (sourceText: string): boolean => {
+  if (sourceText.length < MINIFIED_DETECTION_MIN_BYTES) return false;
+  let newlineCount = 0;
+  for (let scanIndex = 0; scanIndex < sourceText.length; scanIndex++) {
+    if (sourceText.charCodeAt(scanIndex) === 10) newlineCount++;
+  }
+  const averageLineLength = sourceText.length / (newlineCount + 1);
+  return averageLineLength > MINIFIED_DETECTION_AVG_LINE_LENGTH_THRESHOLD;
+};
+
 const safeReadSourceFile = (filePath: string, errors: DeslopError[]): string | undefined => {
   try {
     const stats = statSync(filePath);
@@ -367,6 +379,17 @@ const safeReadSourceFile = (filePath: string, errors: DeslopError[]): string | u
           code: "file-binary",
           severity: "info",
           message: "file appears to be binary — skipping",
+          path: filePath,
+        }),
+      );
+      return undefined;
+    }
+    if (looksLikeMinifiedSource(sourceText)) {
+      errors.push(
+        new FileReadError({
+          code: "file-minified",
+          severity: "info",
+          message: "file appears to be a minified/bundled artifact — skipping redundancy analysis",
           path: filePath,
         }),
       );
