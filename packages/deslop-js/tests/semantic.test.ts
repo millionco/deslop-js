@@ -905,3 +905,86 @@ describe("redundancy / duplicate inline types (inside functions, returns, locals
     assert.deepEqual(result.duplicateInlineTypes, []);
   });
 });
+
+const simplifiableLabels = (result: ScanResult): Array<{ kind: string; functionName?: string }> =>
+  result.simplifiableFunctions.map((finding) => ({
+    kind: finding.kind,
+    functionName: finding.functionName,
+  }));
+
+describe("redundancy / simplifiable functions", () => {
+  it("flags `(x) => { return f(x); }` as block-arrow-single-return", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-functions");
+    const labels = simplifiableLabels(result);
+    assert.ok(
+      labels.some(
+        (entry) =>
+          entry.kind === "block-arrow-single-return" && entry.functionName === "blockArrowSimple",
+      ),
+      `expected block-arrow-single-return for blockArrowSimple, got: ${JSON.stringify(labels)}`,
+    );
+  });
+
+  it("does NOT flag block bodies with more than one statement", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-functions");
+    assert.ok(
+      !result.simplifiableFunctions.some(
+        (finding) =>
+          finding.kind === "block-arrow-single-return" && finding.functionName === "blockArrowComplex",
+      ),
+    );
+  });
+
+  it("does NOT flag arrows that are already expression-bodied", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-functions");
+    assert.ok(
+      !result.simplifiableFunctions.some(
+        (finding) => finding.functionName === "expressionArrow",
+      ),
+    );
+  });
+
+  it("flags `const x = await Y; return x;` as redundant-await-return", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-functions");
+    const labels = simplifiableLabels(result);
+    assert.ok(
+      labels.some(
+        (entry) =>
+          entry.kind === "redundant-await-return" && entry.functionName === "fetchDataRedundant",
+      ),
+    );
+  });
+
+  it("flags useless-async only when body has no calls/await/Promise surface (low confidence)", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-functions");
+    const uselessAsync = result.simplifiableFunctions.filter(
+      (finding) => finding.kind === "useless-async-no-await",
+    );
+    const names = new Set(uselessAsync.map((finding) => finding.functionName));
+    assert.ok(names.has("uselessAsync"), `uselessAsync must flag, got: ${[...names]}`);
+    assert.ok(!names.has("fetchDataDirect"), `fetchDataDirect calls Promise.resolve — must NOT flag, got: ${[...names]}`);
+    for (const finding of uselessAsync) {
+      assert.equal(finding.confidence, "low", "useless-async findings should be low-confidence");
+    }
+  });
+
+  it("does NOT flag genuinely async functions that await", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-functions");
+    assert.ok(
+      !result.simplifiableFunctions.some(
+        (finding) =>
+          finding.kind === "useless-async-no-await" && finding.functionName === "legitAsync",
+      ),
+    );
+  });
+
+  it("respects reportRedundancy=false", async () => {
+    const result = await analyze(
+      defineConfig({
+        rootDir: resolve(FIXTURES_DIR, "simplifiable-functions"),
+        reportRedundancy: false,
+      }),
+    );
+    assert.deepEqual(result.simplifiableFunctions, []);
+  });
+});

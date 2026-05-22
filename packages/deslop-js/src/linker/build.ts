@@ -37,6 +37,7 @@ export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph
     identityWrappers: input.parsed.identityWrappers,
     typeDefinitionHashes: input.parsed.typeDefinitionHashes,
     inlineTypeLiterals: input.parsed.inlineTypeLiterals,
+    simplifiableFunctions: input.parsed.simplifiableFunctions,
     isEntryPoint: input.isEntryPoint,
     isTestEntry: input.isTestEntry,
     isReachable: false,

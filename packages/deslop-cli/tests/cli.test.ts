@@ -44,6 +44,7 @@ const emptyScanResult: ScanResult = {
   identityWrappers: [],
   duplicateTypeDefinitions: [],
   duplicateInlineTypes: [],
+  simplifiableFunctions: [],
   totalFiles: 0,
   totalExports: 0,
   analysisTimeMs: 0,

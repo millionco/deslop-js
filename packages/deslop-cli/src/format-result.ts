@@ -174,6 +174,17 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
     lines.push("");
   }
 
+  if (result.simplifiableFunctions.length > 0) {
+    const fnLabel = result.simplifiableFunctions.length === 1 ? "function" : "functions";
+    lines.push(`${result.simplifiableFunctions.length} simplifiable ${fnLabel}`);
+    for (const finding of result.simplifiableFunctions) {
+      lines.push(
+        `  ${finding.path}:${finding.line}  [${finding.kind}, ${finding.confidence}] ${finding.functionName ?? "?"} → ${finding.suggestion}`,
+      );
+    }
+    lines.push("");
+  }
+
   const totalIssues =
     result.unusedFiles.length +
     result.unusedExports.length +
@@ -189,7 +200,8 @@ export const formatHumanReadableResult = (result: ScanResult): string => {
     result.redundantTypePatterns.length +
     result.identityWrappers.length +
     result.duplicateTypeDefinitions.length +
-    result.duplicateInlineTypes.length;
+    result.duplicateInlineTypes.length +
+    result.simplifiableFunctions.length;
 
   if (totalIssues === 0) {
     lines.push("No unused files, exports, dependencies, or circular imports found.");
@@ -212,6 +224,7 @@ export const hasUnusedIssues = (result: ScanResult): boolean =>
   result.redundantTypePatterns.length > 0 ||
   result.identityWrappers.length > 0 ||
   result.duplicateTypeDefinitions.length > 0 ||
-  result.duplicateInlineTypes.length > 0;
+  result.duplicateInlineTypes.length > 0 ||
+  result.simplifiableFunctions.length > 0;
 
 export const hasCircularIssues = (result: ScanResult): boolean => result.circularDependencies.length > 0;

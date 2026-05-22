@@ -75,23 +75,113 @@ const captureIfTypeLiteral = (
   });
 };
 
+const GENERIC_WRAPPERS_TO_RECURSE = new Set([
+  "Array",
+  "ReadonlyArray",
+  "Promise",
+  "Set",
+  "ReadonlySet",
+  "Map",
+  "ReadonlyMap",
+  "Record",
+  "Partial",
+  "Required",
+  "Readonly",
+  "NonNullable",
+  "Awaited",
+]);
+
+const inspectAnyTypeNode = (
+  candidateNode: unknown,
+  captures: InlineTypeLiteralCapture[],
+  context: InlineTypeContext,
+  nearestName: string | undefined,
+  recursionDepth: number,
+): void => {
+  if (!isNode(candidateNode)) return;
+  if (recursionDepth > 6) return;
+
+  if (isTypeLiteralNode(candidateNode)) {
+    captureIfTypeLiteral(candidateNode, captures, context, nearestName);
+    const members = (candidateNode.members as unknown[]) ?? [];
+    for (const memberCandidate of members) {
+      if (!isNode(memberCandidate)) continue;
+      if (memberCandidate.type !== "TSPropertySignature") continue;
+      const memberKey = (memberCandidate as { key?: { name?: string } }).key?.name;
+      const nested = (memberCandidate as { typeAnnotation?: unknown }).typeAnnotation;
+      inspectAnyTypeNode(
+        nested,
+        captures,
+        "interface-property",
+        memberKey ?? nearestName,
+        recursionDepth + 1,
+      );
+    }
+    return;
+  }
+
+  if (candidateNode.type === "TSTypeAnnotation") {
+    inspectAnyTypeNode(
+      (candidateNode as { typeAnnotation?: unknown }).typeAnnotation,
+      captures,
+      context,
+      nearestName,
+      recursionDepth + 1,
+    );
+    return;
+  }
+
+  if (candidateNode.type === "TSArrayType") {
+    inspectAnyTypeNode(
+      (candidateNode as { elementType?: unknown }).elementType,
+      captures,
+      context,
+      nearestName,
+      recursionDepth + 1,
+    );
+    return;
+  }
+
+  if (candidateNode.type === "TSUnionType" || candidateNode.type === "TSIntersectionType") {
+    const operands = (candidateNode.types as unknown[]) ?? [];
+    for (const operand of operands) {
+      inspectAnyTypeNode(operand, captures, context, nearestName, recursionDepth + 1);
+    }
+    return;
+  }
+
+  if (candidateNode.type === "TSTupleType") {
+    const elements = (candidateNode.elementTypes as unknown[]) ?? [];
+    for (const element of elements) {
+      inspectAnyTypeNode(element, captures, context, nearestName, recursionDepth + 1);
+    }
+    return;
+  }
+
+  if (candidateNode.type === "TSTypeReference") {
+    const referenceTypeName = (candidateNode as { typeName?: { name?: string } }).typeName?.name;
+    const typeArguments = (candidateNode as { typeArguments?: { params?: unknown[] } }).typeArguments;
+    if (referenceTypeName && typeArguments?.params && GENERIC_WRAPPERS_TO_RECURSE.has(referenceTypeName)) {
+      for (const param of typeArguments.params) {
+        inspectAnyTypeNode(
+          param,
+          captures,
+          context,
+          nearestName,
+          recursionDepth + 1,
+        );
+      }
+    }
+  }
+};
+
 const inspectTypeAnnotation = (
   typeAnnotationNode: unknown,
   captures: InlineTypeLiteralCapture[],
   context: InlineTypeContext,
   nearestName: string | undefined,
 ): void => {
-  if (!isNode(typeAnnotationNode)) return;
-  if (typeAnnotationNode.type === "TSTypeAnnotation") {
-    captureIfTypeLiteral(
-      typeAnnotationNode.typeAnnotation,
-      captures,
-      context,
-      nearestName,
-    );
-    return;
-  }
-  captureIfTypeLiteral(typeAnnotationNode, captures, context, nearestName);
+  inspectAnyTypeNode(typeAnnotationNode, captures, context, nearestName, 0);
 };
 
 const visitFunctionParameters = (

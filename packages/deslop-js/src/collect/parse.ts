@@ -24,6 +24,7 @@ import type {
   MemberAccess,
   InlineTypeContext,
   RedundantTypePatternKind,
+  SimplifiableFunctionKind,
 } from "../types.js";
 import { getLineFromOffset, getColumnFromOffset } from "../utils/line-column.js";
 import { extractDefaultExportLocalName } from "../utils/extract-default-export-local-name.js";
@@ -34,6 +35,7 @@ import {
 import { detectIdentityWrapperFromInitializer } from "../utils/detect-identity-wrapper.js";
 import { normalizeTypeAstHash } from "../utils/normalize-type-hash.js";
 import { collectInlineTypeLiterals } from "../utils/collect-inline-type-literals.js";
+import { collectSimplifiableFunctions } from "../utils/collect-simplifiable-functions.js";
 
 export interface ParsedRedundantTypePattern {
   typeName: string;
@@ -68,6 +70,15 @@ export interface ParsedInlineTypeLiteral {
   column: number;
 }
 
+export interface ParsedSimplifiableFunction {
+  kind: SimplifiableFunctionKind;
+  functionName?: string;
+  line: number;
+  column: number;
+  reason: string;
+  suggestion: string;
+}
+
 export interface ParsedSource {
   imports: ImportReference[];
   exports: ExportReference[];
@@ -78,6 +89,7 @@ export interface ParsedSource {
   identityWrappers: ParsedIdentityWrapper[];
   typeDefinitionHashes: ParsedTypeDefinitionHash[];
   inlineTypeLiterals: ParsedInlineTypeLiteral[];
+  simplifiableFunctions: ParsedSimplifiableFunction[];
 }
 
 const extractMdxImportsExports = (sourceText: string): string => {
@@ -202,6 +214,7 @@ const parseCssImports = (filePath: string): ParsedSource => {
     identityWrappers: [],
     typeDefinitionHashes: [],
     inlineTypeLiterals: [],
+    simplifiableFunctions: [],
   };
 };
 
@@ -265,6 +278,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       identityWrappers: [],
       typeDefinitionHashes: [],
       inlineTypeLiterals: [],
+    simplifiableFunctions: [],
     };
   }
 
@@ -322,6 +336,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       identityWrappers: [],
       typeDefinitionHashes: [],
       inlineTypeLiterals: [],
+    simplifiableFunctions: [],
     };
   }
 
@@ -337,6 +352,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       identityWrappers: [],
       typeDefinitionHashes: [],
       inlineTypeLiterals: [],
+    simplifiableFunctions: [],
     };
   }
 
@@ -390,6 +406,16 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     column: getColumnFromOffset(sourceText, capture.startOffset),
   }));
 
+  const simplifiableCaptures = collectSimplifiableFunctions(program.body);
+  const simplifiableFunctions: ParsedSimplifiableFunction[] = simplifiableCaptures.map((capture) => ({
+    kind: capture.kind,
+    functionName: capture.functionName,
+    line: getLineFromOffset(sourceText, capture.startOffset),
+    column: getColumnFromOffset(sourceText, capture.startOffset),
+    reason: capture.reason,
+    suggestion: capture.suggestion,
+  }));
+
   return {
     imports,
     exports,
@@ -400,6 +426,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     identityWrappers,
     typeDefinitionHashes,
     inlineTypeLiterals,
+    simplifiableFunctions,
   };
 };
 

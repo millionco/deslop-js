@@ -76,6 +76,15 @@ export interface SourceModuleInlineTypeLiteral {
   column: number;
 }
 
+export interface SourceModuleSimplifiableFunction {
+  kind: SimplifiableFunctionKind;
+  functionName?: string;
+  line: number;
+  column: number;
+  reason: string;
+  suggestion: string;
+}
+
 export interface SourceModule {
   fileId: SourceFile;
   imports: ImportReference[];
@@ -87,6 +96,7 @@ export interface SourceModule {
   identityWrappers: SourceModuleIdentityWrapper[];
   typeDefinitionHashes: SourceModuleTypeDefinitionHash[];
   inlineTypeLiterals: SourceModuleInlineTypeLiteral[];
+  simplifiableFunctions: SourceModuleSimplifiableFunction[];
   isEntryPoint: boolean;
   isTestEntry: boolean;
   isReachable: boolean;
@@ -318,6 +328,22 @@ export interface DuplicateInlineType {
   reason: string;
 }
 
+export type SimplifiableFunctionKind =
+  | "block-arrow-single-return"
+  | "redundant-await-return"
+  | "useless-async-no-await";
+
+export interface SimplifiableFunction {
+  path: string;
+  kind: SimplifiableFunctionKind;
+  functionName?: string;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+  suggestion: string;
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -334,6 +360,7 @@ export interface ScanResult {
   identityWrappers: IdentityWrapper[];
   duplicateTypeDefinitions: DuplicateTypeDefinition[];
   duplicateInlineTypes: DuplicateInlineType[];
+  simplifiableFunctions: SimplifiableFunction[];
   totalFiles: number;
   totalExports: number;
   analysisTimeMs: number;

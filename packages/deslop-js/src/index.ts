@@ -80,6 +80,8 @@ export type {
   DuplicateInlineType,
   InlineTypeOccurrence,
   InlineTypeContext,
+  SimplifiableFunction,
+  SimplifiableFunctionKind,
 } from "./types.js";
 
 const fillSemanticConfig = (

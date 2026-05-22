@@ -8,6 +8,7 @@ import type {
   IdentityWrapper,
   InlineTypeOccurrence,
   RedundantTypePattern,
+  SimplifiableFunction,
 } from "../types.js";
 
 export const detectDuplicateImports = (graph: DependencyGraph): DuplicateImport[] => {
@@ -135,6 +136,26 @@ export const detectDuplicateTypeDefinitions = (
     });
   }
 
+  return findings;
+};
+
+export const detectSimplifiableFunctions = (graph: DependencyGraph): SimplifiableFunction[] => {
+  const findings: SimplifiableFunction[] = [];
+  for (const module of graph.modules) {
+    if (module.isDeclarationFile) continue;
+    for (const parsedFunction of module.simplifiableFunctions) {
+      findings.push({
+        path: module.fileId.path,
+        kind: parsedFunction.kind,
+        functionName: parsedFunction.functionName,
+        line: parsedFunction.line,
+        column: parsedFunction.column,
+        confidence: parsedFunction.kind === "useless-async-no-await" ? "low" : "high",
+        reason: parsedFunction.reason,
+        suggestion: parsedFunction.suggestion,
+      });
+    }
+  }
   return findings;
 };
 
