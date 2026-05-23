@@ -33,6 +33,7 @@ export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph
     memberAccesses: input.parsed.memberAccesses,
     wholeObjectUses: input.parsed.wholeObjectUses,
     localIdentifierReferences: input.parsed.localIdentifierReferences,
+    referencedFilenames: input.parsed.referencedFilenames,
     redundantTypePatterns: input.parsed.redundantTypePatterns,
     identityWrappers: input.parsed.identityWrappers,
     typeDefinitionHashes: input.parsed.typeDefinitionHashes,

@@ -178,6 +178,153 @@ describe("css-tilde-import", () => {
   });
 });
 
+describe("tailwind-v4-plugin", () => {
+  it('should treat Tailwind v4 `@plugin "pkg"` directives as dependency usage', async () => {
+    const result = await scanFixture("tailwind-v4-plugin");
+    const deps = staleDependencyNames(result);
+    assert.ok(
+      !deps.includes("tailwindcss-animate"),
+      `tailwindcss-animate is loaded via @plugin in CSS and must not be flagged, got: ${deps}`,
+    );
+    assert.ok(deps.includes("unused-dep"), `unused-dep should still be unused, got: ${deps}`);
+  });
+});
+
+describe("workspace-local-bin", () => {
+  it("should resolve script binaries from workspace-local node_modules (pnpm isolation)", async () => {
+    const result = await scanFixture("workspace-local-bin");
+    const deps = staleDependencyNames(result);
+    assert.ok(
+      !deps.includes("react-email"),
+      `react-email provides the 'email' bin used by email:preview script and must not be flagged, got: ${deps}`,
+    );
+    assert.ok(
+      deps.includes("unused-dev-tool"),
+      `unused-dev-tool should still be unused, got: ${deps}`,
+    );
+  });
+});
+
+describe("monorepo-script-entry", () => {
+  it("should treat files referenced by parent monorepo scripts as workspace entry points", async () => {
+    const fixtureDir = resolve(FIXTURES_DIR, "monorepo-script-entry", "packages", "sub");
+    const config = defineConfig({ rootDir: fixtureDir });
+    const result = await analyze(config);
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("internal-tools/tui.ts"),
+      `tui.ts is referenced by parent monorepo script and must not be flagged unused, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("internal-tools/renderer.ts"),
+      `renderer.ts is transitively reachable from parent monorepo script entry, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("duplicate-import-type-value", () => {
+  it("should not flag a type-only import + a value import of the same module as duplicates", async () => {
+    const result = await scanFixture("duplicate-import-type-value");
+    const fixtureDir = resolve(FIXTURES_DIR, "duplicate-import-type-value");
+    const dupes = result.duplicateImports.filter(
+      (dup) => dup.path === resolve(fixtureDir, "src/consumer-split.ts"),
+    );
+    const valueDupes = dupes.filter((dup) =>
+      dup.occurrences.every((occurrence) => !occurrence.isTypeOnly),
+    );
+    const typeDupes = dupes.filter((dup) =>
+      dup.occurrences.every((occurrence) => occurrence.isTypeOnly),
+    );
+    const mixedDupes = dupes.filter(
+      (dup) =>
+        dup.occurrences.some((occurrence) => occurrence.isTypeOnly) &&
+        dup.occurrences.some((occurrence) => !occurrence.isTypeOnly),
+    );
+    assert.strictEqual(
+      mixedDupes.length,
+      0,
+      `type-only + value imports must NOT be grouped together: ${JSON.stringify(mixedDupes)}`,
+    );
+    assert.strictEqual(
+      typeDupes.length,
+      0,
+      `single type-only import should not be flagged: ${JSON.stringify(typeDupes)}`,
+    );
+    assert.ok(
+      valueDupes.some((dup) => dup.specifier === "./api"),
+      `3 value-imports of "./api" SHOULD be flagged as duplicates: ${JSON.stringify(dupes)}`,
+    );
+  });
+});
+
+describe("jsx-block-arrow", () => {
+  it("should not flag arrow components returning JSX as block-arrow-single-return", async () => {
+    const result = await scanFixture("jsx-block-arrow");
+    const simplifiable = result.simplifiableFunctions.filter(
+      (item) => item.kind === "block-arrow-single-return",
+    );
+    const jsxNames = ["HrComponent", "FragmentComponent"];
+    for (const componentName of jsxNames) {
+      assert.ok(
+        !simplifiable.some((item) => item.functionName === componentName),
+        `JSX-returning arrow ${componentName} must not be flagged: ${JSON.stringify(simplifiable)}`,
+      );
+    }
+    assert.ok(
+      simplifiable.some((item) => item.functionName === "shouldFlagIdentity"),
+      `non-JSX single-return arrow shouldFlagIdentity SHOULD still be flagged: ${JSON.stringify(simplifiable)}`,
+    );
+  });
+});
+
+describe("filename-registry-entries", () => {
+  it("should treat unique filename string literals in source as soft entries (dynamic-loading pattern)", async () => {
+    const result = await scanFixture("filename-registry-entries");
+    const fixtureDir = resolve(FIXTURES_DIR, "filename-registry-entries");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("tools/diagnose-user.ts"),
+      `diagnose-user.ts is registered by basename string and must be treated as entry, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("tools/export-data.ts"),
+      `export-data.ts is registered by basename string and must be treated as entry, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("tools/genuinely-dead.ts"),
+      `genuinely-dead.ts has no string-literal references and SHOULD still be flagged, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("nested-dist-non-workspace", () => {
+  it("should exclude `dist/` directories at ANY depth, not just at workspace roots", async () => {
+    const result = await scanFixture("nested-dist-non-workspace");
+    const fixtureDir = resolve(FIXTURES_DIR, "nested-dist-non-workspace");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("apps/orphan/dist/index.mjs"),
+      `apps/orphan/dist/ must be globally excluded (no package.json so dir isn't a workspace), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("empty-and-binary-files", () => {
+  it("should not flag minified/binary files as unusedFiles (parser can't see their imports)", async () => {
+    const result = await scanFixture("empty-and-binary-files");
+    const fixtureDir = resolve(FIXTURES_DIR, "empty-and-binary-files");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/minified-bundle.js"),
+      `minified bundle must not be in unusedFiles (analysisError already signals it), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/binary-file.ts"),
+      `binary file must not be in unusedFiles, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("reexport-star", () => {
   it("should not flag foo as unused (used via barrel)", async () => {
     const result = await scanFixture("reexport-star");

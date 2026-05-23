@@ -70,10 +70,23 @@ const containsCallOrPromiseSurface = (node: unknown, recursionDepth = 0): boolea
   return false;
 };
 
+const unwrapParenthesizedExpression = (node: OxcAstNode): OxcAstNode => {
+  let current = node;
+  while (current.type === "ParenthesizedExpression") {
+    const inner = (current as { expression?: OxcAstNode }).expression;
+    if (!inner || !isOxcAstNode(inner)) return current;
+    current = inner;
+  }
+  return current;
+};
+
 const isSimpleReturnArgument = (argumentNode: unknown): boolean => {
   if (!isOxcAstNode(argumentNode)) return false;
-  if (argumentNode.type === "BlockStatement") return false;
-  if (argumentNode.type === "ObjectExpression") return false;
+  const unwrapped = unwrapParenthesizedExpression(argumentNode);
+  if (unwrapped.type === "BlockStatement") return false;
+  if (unwrapped.type === "ObjectExpression") return false;
+  if (unwrapped.type === "JSXElement") return false;
+  if (unwrapped.type === "JSXFragment") return false;
   return true;
 };
 
@@ -140,13 +153,50 @@ const detectRedundantAwaitReturn = (
 const isAsyncFunction = (functionNode: OxcAstNode): boolean =>
   Boolean((functionNode as { async?: boolean }).async);
 
+const containsPromiseTypeReference = (node: unknown, recursionDepth = 0): boolean => {
+  if (recursionDepth > MAX_FUNCTION_BODY_INSPECT_DEPTH) return false;
+  if (!isOxcAstNode(node)) return false;
+  if (node.type === "TSTypeReference") {
+    const typeName = (node as { typeName?: { name?: string; right?: { name?: string } } }).typeName;
+    if (typeName?.name === "Promise") return true;
+    if (typeName?.right?.name === "Promise") return true;
+  }
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) {
+      for (const element of value) {
+        if (containsPromiseTypeReference(element, recursionDepth + 1)) return true;
+      }
+    } else if (isOxcAstNode(value)) {
+      if (containsPromiseTypeReference(value, recursionDepth + 1)) return true;
+    }
+  }
+  return false;
+};
+
+const hasExplicitPromiseReturnType = (functionNode: OxcAstNode): boolean => {
+  const returnType = (functionNode as { returnType?: OxcAstNode }).returnType;
+  if (!returnType || !isOxcAstNode(returnType)) return false;
+  const annotation = (returnType as { typeAnnotation?: OxcAstNode }).typeAnnotation;
+  if (!annotation || !isOxcAstNode(annotation)) return false;
+  return containsPromiseTypeReference(annotation);
+};
+
+export interface DetectSimplifiableFunctionContext {
+  isMethodContext?: boolean;
+  isInlineCallback?: boolean;
+}
+
 const detectUselessAsync = (
   functionNode: OxcAstNode,
+  context: DetectSimplifiableFunctionContext,
 ): SimplifiableFunctionDetection | undefined => {
   if (!isAsyncFunction(functionNode)) return undefined;
   if (functionNode.type === "ClassDeclaration" || functionNode.type === "MethodDefinition") {
     return undefined;
   }
+  if (context.isMethodContext) return undefined;
+  if (context.isInlineCallback) return undefined;
+  if (hasExplicitPromiseReturnType(functionNode)) return undefined;
   const bodyNode = functionNode.body as unknown;
   if (!isOxcAstNode(bodyNode)) return undefined;
   if (containsAwaitExpression(bodyNode)) return undefined;
@@ -163,6 +213,7 @@ const detectUselessAsync = (
 
 export const detectSimplifiableFunctionPatterns = (
   functionNode: unknown,
+  context: DetectSimplifiableFunctionContext = {},
 ): SimplifiableFunctionDetection[] => {
   if (!isOxcAstNode(functionNode)) return [];
   const findings: SimplifiableFunctionDetection[] = [];
@@ -170,7 +221,7 @@ export const detectSimplifiableFunctionPatterns = (
   if (blockArrow) findings.push(blockArrow);
   const awaitReturn = detectRedundantAwaitReturn(functionNode);
   if (awaitReturn) findings.push(awaitReturn);
-  const uselessAsync = detectUselessAsync(functionNode);
+  const uselessAsync = detectUselessAsync(functionNode, context);
   if (uselessAsync) findings.push(uselessAsync);
   return findings;
 };

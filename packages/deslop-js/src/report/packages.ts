@@ -65,7 +65,10 @@ export const detectStalePackages = (
   const usedPackageNames = collectUsedPackages(graph);
 
   const monorepoRoot = findMonorepoRoot(config.rootDir);
-  const nodeModulesRoot = monorepoRoot ?? config.rootDir;
+  const nodeModulesSearchRoots =
+    monorepoRoot && monorepoRoot !== config.rootDir
+      ? [config.rootDir, monorepoRoot]
+      : [config.rootDir];
 
   const allPackageJsonPaths = discoverAllPackageJsonPaths(config.rootDir);
   if (monorepoRoot) {
@@ -75,7 +78,7 @@ export const detectStalePackages = (
     }
   }
 
-  const binToPackage = buildBinToPackageMap(nodeModulesRoot, declaredNames);
+  const binToPackage = buildBinToPackageMap(nodeModulesSearchRoots, declaredNames);
 
   for (const workspacePackageJsonPath of allPackageJsonPaths) {
     const scriptReferenced = collectScriptReferencedPackages(
@@ -160,7 +163,7 @@ export const detectStalePackages = (
   }
 
   const peerSatisfied = collectPeerSatisfiedPackages(
-    nodeModulesRoot,
+    nodeModulesSearchRoots,
     declaredNames,
     usedPackageNames,
   );
@@ -237,21 +240,23 @@ const hasJsxFiles = (graph: DependencyGraph): boolean =>
   });
 
 const collectPeerSatisfiedPackages = (
-  rootDir: string,
+  nodeModulesSearchRoots: string[],
   declaredNames: Set<string>,
   confirmedUsedNames: Set<string>,
 ): Set<string> => {
   const peerSatisfied = new Set<string>();
-  const nodeModulesDir = join(rootDir, "node_modules");
 
   for (const installedName of declaredNames) {
     if (!confirmedUsedNames.has(installedName)) continue;
 
-    const packageJsonPath = installedName.startsWith("@")
-      ? join(nodeModulesDir, ...installedName.split("/"), "package.json")
-      : join(nodeModulesDir, installedName, "package.json");
+    const installedPackageJsonPath = findInstalledPackageJsonPath(
+      installedName,
+      nodeModulesSearchRoots,
+    );
+    if (!installedPackageJsonPath) continue;
+
     try {
-      const content = readFileSync(packageJsonPath, "utf-8");
+      const content = readFileSync(installedPackageJsonPath, "utf-8");
       const packageJson = JSON.parse(content);
       const peerDeps = packageJson.peerDependencies;
       if (peerDeps && typeof peerDeps === "object") {
@@ -267,6 +272,19 @@ const collectPeerSatisfiedPackages = (
   }
 
   return peerSatisfied;
+};
+
+const findInstalledPackageJsonPath = (
+  packageName: string,
+  nodeModulesSearchRoots: string[],
+): string | undefined => {
+  for (const searchRoot of nodeModulesSearchRoots) {
+    const candidatePath = packageName.startsWith("@")
+      ? join(searchRoot, "node_modules", ...packageName.split("/"), "package.json")
+      : join(searchRoot, "node_modules", packageName, "package.json");
+    if (existsSync(candidatePath)) return candidatePath;
+  }
+  return undefined;
 };
 
 const STATIC_PEER_DEPENDENCY_MAP: Record<string, string[]> = {
@@ -395,15 +413,17 @@ const ENV_WRAPPER_BINARY_SET = new Set(["cross-env", "dotenv", "dotenv-flow", "e
 
 const INLINE_ENV_VAR_PATTERN = /^[A-Z_][A-Z0-9_]*=/;
 
-const buildBinToPackageMap = (rootDir: string, declaredNames: Set<string>): Map<string, string> => {
+const buildBinToPackageMap = (
+  nodeModulesSearchRoots: string[],
+  declaredNames: Set<string>,
+): Map<string, string> => {
   const binToPackage = new Map<string, string>();
   for (const [binary, packageName] of Object.entries(CLI_BINARY_TO_PACKAGE)) {
     binToPackage.set(binary, packageName);
   }
   for (const packageName of declaredNames) {
-    const packageBinJsonPath = packageName.startsWith("@")
-      ? join(rootDir, "node_modules", ...packageName.split("/"), "package.json")
-      : join(rootDir, "node_modules", packageName, "package.json");
+    const packageBinJsonPath = findInstalledPackageJsonPath(packageName, nodeModulesSearchRoots);
+    if (!packageBinJsonPath) continue;
     try {
       const binContent = readFileSync(packageBinJsonPath, "utf-8");
       const binPackageJson = JSON.parse(binContent);

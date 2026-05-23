@@ -24,9 +24,31 @@ export const fetchDataMultiAwait = async (): Promise<number> => {
   return remaining;
 };
 
-export const uselessAsync = async (input: number): Promise<number> => {
+export const uselessAsync = async (input: number) => {
   return input * 2;
 };
+
+export const uselessAsyncWithPromiseReturnType = async (
+  input: number,
+): Promise<number> => {
+  return input * 2;
+};
+
+export const nextConfigLike = {
+  async redirects() {
+    return [{ source: "/old", destination: "/new", permanent: true }];
+  },
+};
+
+export const mockResponse = {
+  text: async () => "mocked body",
+  json: async () => ({ ok: true }),
+};
+
+export const inlineCallbackInvoker = (callback: (input: number) => Promise<number>): unknown =>
+  callback(42);
+
+inlineCallbackInvoker(async (input) => input * 2);
 
 export const legitAsync = async (input: number): Promise<number> => {
   const doubled = await Promise.resolve(input * 2);
@@ -41,5 +63,7 @@ console.log(
   fetchDataDirect(),
   fetchDataMultiAwait(),
   uselessAsync(2),
+  uselessAsyncWithPromiseReturnType(3),
+  nextConfigLike.redirects(),
   legitAsync(3),
 );

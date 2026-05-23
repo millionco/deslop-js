@@ -29,6 +29,49 @@ const STYLE_EXTENSIONS = [".css", ".scss"];
 
 const REACT_NATIVE_ENABLERS = ["react-native", "expo"];
 
+const basenameFromPath = (filePath: string): string => {
+  const lastSlashIndex = filePath.lastIndexOf("/");
+  return lastSlashIndex === -1 ? filePath : filePath.slice(lastSlashIndex + 1);
+};
+
+/**
+ * Dynamic registry pattern: many codebases use a central "schema/registry"
+ * module that lists tool/command/page filenames as string literals, then a
+ * runner spawns them via `path.resolve(dir, file)` or `import()`. Static
+ * analysis can't follow the indirection, so those targets get falsely
+ * flagged as unused.
+ *
+ * Heuristic: if a parsed string literal exactly matches the basename of
+ * exactly one file in the project, treat that file as an entry point.
+ * Uniqueness guards against false-positives from common names like
+ * `index.ts` matching dozens of unrelated files.
+ */
+const markFilenameRegistryEntries = (
+  moduleGraph: ReturnType<typeof buildDependencyGraph>,
+): void => {
+  const basenameToModuleIndex = new Map<string, number | "ambiguous">();
+  for (const module of moduleGraph.modules) {
+    const basename = basenameFromPath(module.fileId.path);
+    const existing = basenameToModuleIndex.get(basename);
+    if (existing === undefined) {
+      basenameToModuleIndex.set(basename, module.fileId.index);
+    } else if (existing !== "ambiguous") {
+      basenameToModuleIndex.set(basename, "ambiguous");
+    }
+  }
+
+  for (const module of moduleGraph.modules) {
+    for (const referencedFilename of module.referencedFilenames) {
+      const targetIndex = basenameToModuleIndex.get(referencedFilename);
+      if (typeof targetIndex !== "number") continue;
+      const targetModule = moduleGraph.modules[targetIndex];
+      if (!targetModule || targetModule.isEntryPoint) continue;
+      if (targetModule.fileId.index === module.fileId.index) continue;
+      targetModule.isEntryPoint = true;
+    }
+  }
+};
+
 const detectReactNative = (
   rootDir: string,
   workspacePackages: Array<{ directory: string }>,
@@ -272,13 +315,10 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
   }
 
   const absoluteRoot = resolve(config.rootDir);
-  const outputDirectoryExclusions = OUTPUT_DIRECTORIES.flatMap((outputDirectory) => {
-    const exclusions = [`${absoluteRoot}/${outputDirectory}/**`];
-    for (const workspacePackage of workspacePackages) {
-      exclusions.push(`${workspacePackage.directory}/${outputDirectory}/**`);
-    }
-    return exclusions;
-  });
+  const outputDirectoryExclusions = OUTPUT_DIRECTORIES.flatMap((outputDirectory) => [
+    `${absoluteRoot}/${outputDirectory}/**`,
+    `${absoluteRoot}/**/${outputDirectory}/**`,
+  ]);
 
   const allExclusionPatterns = [
     ...workspaceDiscovery.excludedDirectories.map((directory) => `${directory}/**`),
@@ -528,6 +568,8 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
       }),
     );
   }
+
+  markFilenameRegistryEntries(moduleGraph);
 
   try {
     traceReachability(moduleGraph);

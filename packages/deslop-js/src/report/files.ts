@@ -31,6 +31,22 @@ const isExcludedByPattern = (filePath: string): boolean =>
   EXCLUDED_DIRECTORY_PATTERN.test(filePath) ||
   CONFIG_FILE_PATTERN.test(filePath);
 
+/**
+ * Files the parser couldn't analyze (minified bundles, oversized files, binaries)
+ * have no detectable imports — they're effectively opaque. Flagging them as
+ * "unused" is a false positive because we can't see who imports them, and they
+ * may be static assets, generated bundles, or build artifacts that get loaded
+ * outside the JS module graph (HTML `<script src>`, `vite-plugin-string`, etc.).
+ * The parser already records a `file-minified`/`file-too-large`/`file-binary`
+ * info-level entry in `analysisErrors`, which is the actionable signal.
+ */
+const PARSE_OPAQUE_ERROR_CODES = new Set(["file-minified", "file-too-large", "file-binary"]);
+
+const isOpaqueToAnalysis = (module: SourceModule): boolean =>
+  module.parseErrors.some(
+    (parseError) => parseError.code && PARSE_OPAQUE_ERROR_CODES.has(parseError.code),
+  );
+
 export const detectOrphanFiles = (graph: DependencyGraph): UnusedFile[] => {
   const unusedFiles: UnusedFile[] = [];
 
@@ -41,6 +57,7 @@ export const detectOrphanFiles = (graph: DependencyGraph): UnusedFile[] => {
     if (module.isConfigFile) continue;
     if (hasExcludedExtension(module.fileId.path)) continue;
     if (isExcludedByPattern(module.fileId.path)) continue;
+    if (isOpaqueToAnalysis(module)) continue;
     if (isBarrelWithReachableSources(module, graph)) continue;
     if (hasReachableDirectImporter(module.fileId.index, graph)) continue;
 

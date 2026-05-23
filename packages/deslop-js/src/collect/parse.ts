@@ -113,6 +113,7 @@ export interface ParsedSource {
   memberAccesses: MemberAccess[];
   wholeObjectUses: string[];
   localIdentifierReferences: string[];
+  referencedFilenames: string[];
   redundantTypePatterns: ParsedRedundantTypePattern[];
   identityWrappers: ParsedIdentityWrapper[];
   typeDefinitionHashes: ParsedTypeDefinitionHash[];
@@ -210,12 +211,17 @@ const CSS_EXTENSIONS = [".css", ".scss", ".less", ".sass"];
 
 const CSS_IMPORT_PATTERN = /@import\s+(?:url\()?['"]([^'"]+)['"]\)?/g;
 const SCSS_USE_FORWARD_PATTERN = /@(?:use|forward)\s+['"]([^'"]+)['"]/g;
+const TAILWIND_PLUGIN_REFERENCE_PATTERN = /@(?:plugin|reference|config)\s+['"]([^'"]+)['"]/g;
 
 const parseCssImports = (filePath: string): ParsedSource => {
   const sourceText = readFileSync(filePath, "utf-8");
   const imports: ImportReference[] = [];
 
-  const patterns = [CSS_IMPORT_PATTERN, SCSS_USE_FORWARD_PATTERN];
+  const patterns = [
+    CSS_IMPORT_PATTERN,
+    SCSS_USE_FORWARD_PATTERN,
+    TAILWIND_PLUGIN_REFERENCE_PATTERN,
+  ];
   for (const pattern of patterns) {
     let match: RegExpExecArray | null;
     pattern.lastIndex = 0;
@@ -241,6 +247,7 @@ const parseCssImports = (filePath: string): ParsedSource => {
     memberAccesses: [],
     wholeObjectUses: [],
     localIdentifierReferences: [],
+    referencedFilenames: [],
     redundantTypePatterns: [],
     identityWrappers: [],
     typeDefinitionHashes: [],
@@ -300,6 +307,7 @@ const createEmptyParsedSource = (): ParsedSource => ({
   memberAccesses: [],
   wholeObjectUses: [],
   localIdentifierReferences: [],
+  referencedFilenames: [],
   redundantTypePatterns: [],
   identityWrappers: [],
   typeDefinitionHashes: [],
@@ -506,6 +514,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       ...createEmptyParsedSource(),
       imports,
       exports,
+      referencedFilenames: extractReferencedFilenames(sourceText),
       errors: [
         ...earlyErrors,
         new ParseError({
@@ -524,6 +533,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
       ...createEmptyParsedSource(),
       imports,
       exports,
+      referencedFilenames: extractReferencedFilenames(sourceText),
       errors: [
         ...earlyErrors,
         new ParseError({
@@ -690,12 +700,15 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     }),
   );
 
+  const referencedFilenames = extractReferencedFilenames(sourceText);
+
   return {
     imports,
     exports,
     memberAccesses,
     wholeObjectUses,
     localIdentifierReferences,
+    referencedFilenames,
     redundantTypePatterns,
     identityWrappers,
     typeDefinitionHashes,
@@ -705,6 +718,19 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     duplicateConstantCandidates,
     errors: [...earlyErrors, ...detectorErrors],
   };
+};
+
+const REFERENCED_FILENAME_LITERAL_PATTERN =
+  /(?<![./@\w-])(?:["'`])([a-z][\w-]*\.(?:ts|tsx|js|jsx|mts|mjs|cts|cjs))(?:["'`])/g;
+
+const extractReferencedFilenames = (sourceText: string): string[] => {
+  const captured = new Set<string>();
+  REFERENCED_FILENAME_LITERAL_PATTERN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = REFERENCED_FILENAME_LITERAL_PATTERN.exec(sourceText)) !== null) {
+    captured.add(match[1]);
+  }
+  return [...captured];
 };
 
 const collectDryPatterns = (
