@@ -24,7 +24,7 @@ export const detectDuplicateImports = (graph: DependencyGraph): DuplicateImport[
   for (const module of graph.modules) {
     if (module.isDeclarationFile) continue;
 
-    const specifierToOccurrences = new Map<string, DuplicateImportOccurrence[]>();
+    const groupedByKindAndSpecifier = new Map<string, DuplicateImportOccurrence[]>();
     for (const importInfo of module.imports) {
       if (importInfo.isSideEffect) continue;
       if (importInfo.isDynamic) continue;
@@ -37,22 +37,25 @@ export const detectDuplicateImports = (graph: DependencyGraph): DuplicateImport[
         ),
         isTypeOnly: importInfo.isTypeOnly,
       };
-      const existing = specifierToOccurrences.get(importInfo.specifier);
+      const groupKey = `${importInfo.isTypeOnly ? "type" : "value"}:${importInfo.specifier}`;
+      const existing = groupedByKindAndSpecifier.get(groupKey);
       if (existing) {
         existing.push(occurrence);
       } else {
-        specifierToOccurrences.set(importInfo.specifier, [occurrence]);
+        groupedByKindAndSpecifier.set(groupKey, [occurrence]);
       }
     }
 
-    for (const [specifier, occurrences] of specifierToOccurrences) {
+    for (const [groupKey, occurrences] of groupedByKindAndSpecifier) {
       if (occurrences.length < 2) continue;
+      const specifier = groupKey.slice(groupKey.indexOf(":") + 1);
+      const kindLabel = groupKey.startsWith("type:") ? "type-only " : "";
       findings.push({
         path: module.fileId.path,
         specifier,
         occurrences,
         confidence: "high",
-        reason: `"${specifier}" is imported ${occurrences.length} times in this file — merge into a single statement`,
+        reason: `"${specifier}" is imported ${occurrences.length} times in this file as ${kindLabel}imports — merge into a single statement`,
       });
     }
   }
@@ -178,6 +181,7 @@ export const detectDuplicateConstants = (graph: DependencyGraph): DuplicateConst
     const uniqueFilePaths = new Set(bucket.occurrences.map((occurrence) => occurrence.path));
     if (uniqueFilePaths.size < MIN_FILES_FOR_DUPLICATE_CONSTANT) continue;
     const uniqueNames = new Set(bucket.occurrences.map((occurrence) => occurrence.constantName));
+    if (uniqueNames.size > 1 && hasDistinctUnitSuffixes([...uniqueNames])) continue;
     findings.push({
       literalHash,
       literalPreview: bucket.literalPreview,
@@ -190,6 +194,32 @@ export const detectDuplicateConstants = (graph: DependencyGraph): DuplicateConst
     });
   }
   return findings;
+};
+
+const TRAILING_NAME_TOKEN_PATTERN = /_([A-Z][A-Z0-9]*)$/;
+
+const extractTrailingNameToken = (constantName: string): string | undefined => {
+  const match = constantName.match(TRAILING_NAME_TOKEN_PATTERN);
+  return match ? match[1] : undefined;
+};
+
+/**
+ * AGENTS.md requires magic numbers to use trailing unit suffixes (`_MS`, `_PX`,
+ * `_TOKENS`, `_WIDTH`, …). When same-value constants carry DIFFERENT trailing
+ * tokens (e.g. `STEP_DELAY_MS = 1000` vs `MINIMUM_TOKENS = 1000`), they
+ * represent semantically distinct quantities that cannot be consolidated —
+ * flagging them as duplicates is misleading. Constants sharing the same
+ * trailing token (e.g. `CACHE_INTERVAL_MS` + `RECONNECT_DELAY_MS`, both `_MS`)
+ * stay flagged because they are at least same-unit and might be extractable.
+ */
+const hasDistinctUnitSuffixes = (constantNames: string[]): boolean => {
+  const trailingTokens = new Set<string>();
+  for (const name of constantNames) {
+    const token = extractTrailingNameToken(name);
+    if (!token) return false;
+    trailingTokens.add(token);
+  }
+  return trailingTokens.size > 1;
 };
 
 export const detectSimplifiableExpressions = (graph: DependencyGraph): SimplifiableExpression[] => {

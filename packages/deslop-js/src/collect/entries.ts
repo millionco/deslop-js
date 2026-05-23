@@ -171,9 +171,20 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
 
   const entryEligiblePackages = workspacePackages.filter(isEntryEligible);
 
+  const monorepoRootForEntries = findMonorepoRoot(absoluteRoot);
+  const ancestorPackageJsonRoots =
+    monorepoRootForEntries && monorepoRootForEntries !== absoluteRoot
+      ? [monorepoRootForEntries]
+      : [];
+
   const scriptEntries = extractScriptEntries(absoluteRoot);
   for (const workspacePackage of entryEligiblePackages) {
     scriptEntries.push(...extractScriptEntries(workspacePackage.directory));
+  }
+  for (const ancestorRoot of ancestorPackageJsonRoots) {
+    for (const entryPath of extractScriptEntries(ancestorRoot)) {
+      if (entryPath.startsWith(`${absoluteRoot}/`)) scriptEntries.push(entryPath);
+    }
   }
 
   const webpackEntries = extractWebpackEntryPoints(absoluteRoot);

@@ -1009,6 +1009,64 @@ describe("redundancy / simplifiable functions", () => {
     );
   });
 
+  it("does NOT flag useless-async when the function has an explicit Promise<T> return type (contract preserved)", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-functions");
+    const flaggedNames = new Set(
+      result.simplifiableFunctions
+        .filter((finding) => finding.kind === "useless-async-no-await")
+        .map((finding) => finding.functionName),
+    );
+    assert.ok(
+      !flaggedNames.has("uselessAsyncWithPromiseReturnType"),
+      `Promise<T> annotation makes async load-bearing — must NOT flag, got: ${[...flaggedNames]}`,
+    );
+  });
+
+  it("does NOT flag useless-async on object method shorthands (interface-contract methods)", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-functions");
+    const flaggedNames = new Set(
+      result.simplifiableFunctions
+        .filter((finding) => finding.kind === "useless-async-no-await")
+        .map((finding) => finding.functionName),
+    );
+    assert.ok(
+      !flaggedNames.has("redirects"),
+      `object method shorthand 'async redirects() {}' must NOT flag (Next.js config pattern), got: ${[...flaggedNames]}`,
+    );
+  });
+
+  it("does NOT flag useless-async on object property arrows (e.g. mock-response callbacks)", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-functions");
+    const flaggedNames = new Set(
+      result.simplifiableFunctions
+        .filter((finding) => finding.kind === "useless-async-no-await")
+        .map((finding) => finding.functionName),
+    );
+    assert.ok(
+      !flaggedNames.has("text"),
+      `'{ text: async () => "x" }' must NOT flag (Response.text() callback signature), got: ${[...flaggedNames]}`,
+    );
+    assert.ok(
+      !flaggedNames.has("json"),
+      `'{ json: async () => ({}) }' must NOT flag, got: ${[...flaggedNames]}`,
+    );
+  });
+
+  it("does NOT flag useless-async on arrows passed directly as CallExpression arguments", async () => {
+    const result = await scanFixtureSyntactic("simplifiable-functions");
+    const inlineAsyncCallbacks = result.simplifiableFunctions.filter(
+      (finding) =>
+        finding.kind === "useless-async-no-await" &&
+        finding.path.endsWith("simplifiable-functions/src/index.ts") &&
+        finding.line > 30,
+    );
+    assert.equal(
+      inlineAsyncCallbacks.length,
+      0,
+      `inline 'inlineCallbackInvoker(async (input) => input * 2)' must NOT flag (callback signature is contract), got: ${JSON.stringify(inlineAsyncCallbacks)}`,
+    );
+  });
+
   it("respects reportRedundancy=false", async () => {
     const result = await analyze(
       defineConfig({
@@ -1179,6 +1237,32 @@ describe("redundancy / cross-file duplicate constants", () => {
       }),
     );
     assert.deepEqual(result.duplicateConstants, []);
+  });
+});
+
+describe("redundancy / duplicate-constants unit-suffix awareness", () => {
+  it("does NOT flag same-value constants whose names use distinct unit suffixes (semantically different quantities)", async () => {
+    const result = await scanFixtureSyntactic("duplicate-constants-unit-mismatch");
+    const value1000Finding = result.duplicateConstants.find(
+      (finding) => finding.literalPreview === "1000",
+    );
+    assert.equal(
+      value1000Finding,
+      undefined,
+      `STEP_DELAY_MS(_MS) + MINIMUM_TOKENS(_TOKENS) + SCREEN_WIDTH(_WIDTH) all = 1000 but represent different units — must NOT flag, got: ${JSON.stringify(value1000Finding)}`,
+    );
+  });
+
+  it("STILL flags same-value constants when all names share the same unit suffix (truly extractable)", async () => {
+    const result = await scanFixtureSyntactic("duplicate-constants-unit-mismatch");
+    const value2000Finding = result.duplicateConstants.find(
+      (finding) => finding.literalPreview === "2000",
+    );
+    assert.ok(
+      value2000Finding,
+      `CACHE_INTERVAL_MS + RECONNECT_DELAY_MS + POLL_INTERVAL_MS all = 2000 ms — SHOULD still flag, got: ${JSON.stringify(result.duplicateConstants)}`,
+    );
+    assert.equal(value2000Finding.confidence, "medium");
   });
 });
 

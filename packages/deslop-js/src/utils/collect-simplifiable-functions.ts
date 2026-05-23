@@ -30,9 +30,14 @@ const visitFunctionAndDescend = (
   captures: SimplifiableFunctionCapture[],
   contextName: string | undefined,
   recursionDepth: number,
+  isMethodContext: boolean,
+  isInlineCallback: boolean,
 ): void => {
   const functionName = inferFunctionName(functionNode, contextName);
-  const detections = detectSimplifiableFunctionPatterns(functionNode);
+  const detections = detectSimplifiableFunctionPatterns(functionNode, {
+    isMethodContext,
+    isInlineCallback,
+  });
   for (const detection of detections) {
     captures.push({
       kind: detection.kind,
@@ -52,6 +57,17 @@ const visitFunctionAndDescend = (
   }
 };
 
+const isObjectMethodShorthand = (node: OxcAstNode): boolean =>
+  (node.type === "Property" || node.type === "ObjectProperty") &&
+  (node as { method?: boolean }).method === true;
+
+const isObjectPropertyAssignment = (node: OxcAstNode): boolean =>
+  (node.type === "Property" || node.type === "ObjectProperty") &&
+  (node as { method?: boolean }).method !== true;
+
+const isCallOrNewExpression = (node: OxcAstNode): boolean =>
+  node.type === "CallExpression" || node.type === "NewExpression";
+
 const walkForFunctions = (
   node: OxcAstNode,
   captures: SimplifiableFunctionCapture[],
@@ -60,7 +76,7 @@ const walkForFunctions = (
 ): void => {
   if (recursionDepth > MAX_AST_WALK_DEPTH) return;
   if (looksLikeFunction(node)) {
-    visitFunctionAndDescend(node, captures, contextName, recursionDepth);
+    visitFunctionAndDescend(node, captures, contextName, recursionDepth, false, false);
     return;
   }
 
@@ -76,6 +92,66 @@ const walkForFunctions = (
   if (node.type === "ClassDeclaration") {
     const className = getIdentifierName((node as { id?: unknown }).id);
     if (className) nextContext = className;
+  }
+
+  const isMethodDefining = node.type === "MethodDefinition" || isObjectMethodShorthand(node);
+  if (isMethodDefining) {
+    const methodValue = (node as { value?: OxcAstNode }).value;
+    if (methodValue && isOxcAstNode(methodValue) && looksLikeFunction(methodValue)) {
+      const methodKeyName = getIdentifierName((node as { key?: unknown }).key);
+      const methodContextName = methodKeyName ?? nextContext;
+      visitFunctionAndDescend(
+        methodValue,
+        captures,
+        methodContextName,
+        recursionDepth + 1,
+        true,
+        false,
+      );
+      const keyNode = (node as { key?: OxcAstNode }).key;
+      if (keyNode && isOxcAstNode(keyNode) && (node as { computed?: boolean }).computed) {
+        walkForFunctions(keyNode, captures, nextContext, recursionDepth + 1);
+      }
+      return;
+    }
+  }
+
+  if (isObjectPropertyAssignment(node)) {
+    const propertyValue = (node as { value?: OxcAstNode }).value;
+    if (propertyValue && isOxcAstNode(propertyValue) && looksLikeFunction(propertyValue)) {
+      const propertyKeyName = getIdentifierName((node as { key?: unknown }).key);
+      const propertyContextName = propertyKeyName ?? nextContext;
+      visitFunctionAndDescend(
+        propertyValue,
+        captures,
+        propertyContextName,
+        recursionDepth + 1,
+        false,
+        true,
+      );
+      const keyNode = (node as { key?: OxcAstNode }).key;
+      if (keyNode && isOxcAstNode(keyNode) && (node as { computed?: boolean }).computed) {
+        walkForFunctions(keyNode, captures, nextContext, recursionDepth + 1);
+      }
+      return;
+    }
+  }
+
+  if (isCallOrNewExpression(node)) {
+    const callee = (node as { callee?: OxcAstNode }).callee;
+    if (callee && isOxcAstNode(callee)) {
+      walkForFunctions(callee, captures, nextContext, recursionDepth + 1);
+    }
+    const callArguments = (node as { arguments?: unknown[] }).arguments ?? [];
+    for (const argument of callArguments) {
+      if (!isOxcAstNode(argument)) continue;
+      if (looksLikeFunction(argument)) {
+        visitFunctionAndDescend(argument, captures, nextContext, recursionDepth + 1, false, true);
+      } else {
+        walkForFunctions(argument, captures, nextContext, recursionDepth + 1);
+      }
+    }
+    return;
   }
 
   for (const value of Object.values(node)) {

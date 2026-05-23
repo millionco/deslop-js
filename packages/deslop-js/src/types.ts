@@ -118,6 +118,7 @@ export interface SourceModule {
   memberAccesses: MemberAccess[];
   wholeObjectUses: string[];
   localIdentifierReferences: string[];
+  referencedFilenames: string[];
   redundantTypePatterns: SourceModuleRedundantTypePattern[];
   identityWrappers: SourceModuleIdentityWrapper[];
   typeDefinitionHashes: SourceModuleTypeDefinitionHash[];
