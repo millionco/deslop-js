@@ -16,5 +16,6 @@ export const DESLOP_DIST_INDEX = resolve(DESLOP_PACKAGE_DIR, "dist", "index.mjs"
 
 export const GIT_CLONE_TIMEOUT_MS = 300_000;
 export const PER_ENTRY_ANALYSIS_TIMEOUT_MS = 300_000;
+export const INSTALL_DEPS_TIMEOUT_MS = 300_000;
 export const CLONE_CONCURRENCY = 4;
 export const ANALYSIS_CONCURRENCY = 2;

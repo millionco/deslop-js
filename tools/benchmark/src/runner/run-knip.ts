@@ -20,12 +20,12 @@ interface KnipIssueItem {
 
 interface KnipIssue {
   file?: string;
-  dependencies?: string[];
-  devDependencies?: string[];
-  optionalPeerDependencies?: string[];
-  unlisted?: string[];
-  binaries?: string[];
-  unresolved?: string[];
+  dependencies?: KnipIssueItem[];
+  devDependencies?: KnipIssueItem[];
+  optionalPeerDependencies?: KnipIssueItem[];
+  unlisted?: KnipIssueItem[];
+  binaries?: KnipIssueItem[];
+  unresolved?: KnipIssueItem[];
   exports?: KnipIssueItem[];
   types?: KnipIssueItem[];
   enumMembers?: Record<string, KnipIssueItem[]>;
@@ -57,13 +57,13 @@ const parseKnipOutput = (jsonText: string, repoDir: string): ToolResult => {
       const filePath = issue.file ? resolve(repoDir, issue.file) : "";
 
       if (issue.dependencies) {
-        for (const depName of issue.dependencies) {
-          unusedDependencies.push({ name: depName });
+        for (const depItem of issue.dependencies) {
+          unusedDependencies.push({ name: depItem.name });
         }
       }
       if (issue.devDependencies) {
-        for (const depName of issue.devDependencies) {
-          unusedDependencies.push({ name: depName });
+        for (const depItem of issue.devDependencies) {
+          unusedDependencies.push({ name: depItem.name });
         }
       }
 

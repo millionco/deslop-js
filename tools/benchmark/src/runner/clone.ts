@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { resolve, join } from "node:path";
 import type { BenchmarkRepo, CloneOutcome } from "../types.js";
-import { BENCHMARK_CACHE_DIR, GIT_CLONE_TIMEOUT_MS } from "../constants.js";
+import { BENCHMARK_CACHE_DIR, GIT_CLONE_TIMEOUT_MS, INSTALL_DEPS_TIMEOUT_MS } from "../constants.js";
 import { repoSlug } from "../repos.js";
 
 const runShell = (
@@ -75,6 +75,30 @@ const fetchDefaultBranch = async (
   return { ok: true, stderr: "" };
 };
 
+const detectPackageManager = (repoDir: string): "pnpm" | "yarn" | "npm" => {
+  if (existsSync(join(repoDir, "pnpm-lock.yaml"))) return "pnpm";
+  if (existsSync(join(repoDir, "yarn.lock"))) return "yarn";
+  return "npm";
+};
+
+const installDependencies = async (
+  repoDir: string,
+): Promise<{ ok: boolean; packageManager: string }> => {
+  const packageManager = detectPackageManager(repoDir);
+  const installArgs: Record<string, string[]> = {
+    pnpm: ["install", "--ignore-scripts", "--no-frozen-lockfile"],
+    yarn: ["install", "--ignore-scripts", "--no-immutable"],
+    npm: ["install", "--ignore-scripts", "--no-audit", "--no-fund"],
+  };
+
+  const result = await runShell(packageManager, installArgs[packageManager], {
+    cwd: repoDir,
+    timeoutMs: INSTALL_DEPS_TIMEOUT_MS,
+  });
+
+  return { ok: result.exitCode === 0 || !result.didTimeout, packageManager };
+};
+
 export const cloneRepo = async (repo: BenchmarkRepo): Promise<CloneOutcome> => {
   mkdirSync(BENCHMARK_CACHE_DIR, { recursive: true });
   const slug = repoSlug(repo);
@@ -83,6 +107,10 @@ export const cloneRepo = async (repo: BenchmarkRepo): Promise<CloneOutcome> => {
 
   const headFile = join(repoDir, ".git", "HEAD");
   if (existsSync(headFile)) {
+    const hasNodeModules = existsSync(join(repoDir, "node_modules"));
+    if (!hasNodeModules) {
+      await installDependencies(repoDir);
+    }
     return {
       repo,
       repoDir,
@@ -104,6 +132,8 @@ export const cloneRepo = async (repo: BenchmarkRepo): Promise<CloneOutcome> => {
       durationMs: Date.now() - startedAt,
     };
   }
+
+  await installDependencies(repoDir);
 
   return {
     repo,
