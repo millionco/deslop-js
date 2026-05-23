@@ -13,7 +13,68 @@ Finds unused files, dead exports, dead dependencies, circular imports, redundant
 npm install deslop-js
 ```
 
-## Usage
+## CLI
+
+The `deslop-cli` package provides a command-line interface:
+
+```bash
+npm install -g deslop-cli
+```
+
+### Quick start
+
+```bash
+# scan the current directory
+deslop
+
+# scan a specific project
+deslop ./my-project
+
+# use the explicit analyze sub-command (equivalent to the above)
+deslop analyze ./my-project
+```
+
+### Options
+
+```bash
+deslop [root] [options]
+
+# custom entry points
+deslop --entry src/main.ts --entry src/worker.ts
+
+# ignore test files
+deslop --ignore "**/*.test.ts" --ignore "**/__mocks__/**"
+
+# only scan specific extensions
+deslop --extensions .ts .tsx
+
+# resolve path aliases via tsconfig
+deslop --tsconfig ./tsconfig.json
+
+# include type-only exports in results
+deslop --report-types
+
+# report unused exports from entry files too
+deslop --include-entry-exports
+
+# output results as JSON (useful for CI or piping to other tools)
+deslop --json
+
+# exit with code 1 when unused code is found (for CI gates)
+deslop --fail-on-issues
+
+# exit with code 1 when circular imports are found
+deslop --fail-on-cycles
+```
+
+### CI example
+
+```bash
+# fail the build if there are unused exports or circular imports
+deslop ./src --fail-on-issues --fail-on-cycles --ignore "**/*.test.ts"
+```
+
+## Programmatic Usage
 
 ```ts
 import { analyze, defineConfig } from "deslop-js";
@@ -52,7 +113,7 @@ result.totalExports;
 result.analysisTimeMs;
 ```
 
-## Options
+## Programmatic Options
 
 `defineConfig` accepts a required `rootDir` and optional overrides:
 
