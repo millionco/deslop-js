@@ -561,6 +561,8 @@ const SCRIPT_MULTIPLEXERS = new Set([
   "ultra",
 ]);
 
+const TSCONFIG_PROJECT_FLAGS = new Set(["--project", "-p"]);
+
 const CONFIG_LIKE_FLAGS = new Set([
   "--config",
   "-c",
@@ -727,7 +729,14 @@ const extractScriptFileArguments = (scriptCommand: string, directory: string): s
           if (looksLikeFilePath(configPath)) {
             const absoluteConfigPath = resolve(directory, configPath);
             if (existsSync(absoluteConfigPath)) {
-              entries.push(absoluteConfigPath);
+              const isTscProjectFlag =
+                TSCONFIG_PROJECT_FLAGS.has(token) &&
+                TSCONFIG_PROJECT_PATTERN.test(absoluteConfigPath);
+              if (isTscProjectFlag) {
+                entries.push(...expandTsConfigProjectEntries(absoluteConfigPath));
+              } else {
+                entries.push(absoluteConfigPath);
+              }
             }
           }
           tokenIndex++;
@@ -738,10 +747,18 @@ const extractScriptFileArguments = (scriptCommand: string, directory: string): s
       const equalsIndex = token.indexOf("=");
       if (equalsIndex > 0 && CONFIG_LIKE_FLAGS.has(token.slice(0, equalsIndex))) {
         const configValue = token.slice(equalsIndex + 1);
+        const flagName = token.slice(0, equalsIndex);
         if (configValue && looksLikeFilePath(configValue)) {
           const absoluteConfigPath = resolve(directory, configValue);
           if (existsSync(absoluteConfigPath)) {
-            entries.push(absoluteConfigPath);
+            const isTscProjectFlag =
+              TSCONFIG_PROJECT_FLAGS.has(flagName) &&
+              TSCONFIG_PROJECT_PATTERN.test(absoluteConfigPath);
+            if (isTscProjectFlag) {
+              entries.push(...expandTsConfigProjectEntries(absoluteConfigPath));
+            } else {
+              entries.push(absoluteConfigPath);
+            }
           }
         }
         continue;
@@ -1154,6 +1171,7 @@ const extractScriptTagsFromHtmlFile = (htmlFilePath: string): string[] => {
 };
 
 const TSCONFIG_FILENAME_GLOBS = ["tsconfig.json", "tsconfig.*.json"];
+const TSCONFIG_PROJECT_PATTERN = /(?:^|[\\/])tsconfig(?:\.[^.]+)?\.json$/;
 
 const stripJsoncCommentsLocal = (sourceText: string): string => {
   let result = "";
@@ -1232,6 +1250,38 @@ const extractTsConfigIncludeFilesEntries = (directory: string): string[] => {
     } catch {}
   }
 
+  return entries;
+};
+
+const expandTsConfigProjectEntries = (tsconfigAbsolutePath: string): string[] => {
+  const entries: string[] = [];
+  try {
+    const rawText = readFileSync(tsconfigAbsolutePath, "utf-8");
+    const cleaned = stripJsoncCommentsLocal(rawText);
+    const tsconfigJson = JSON.parse(cleaned);
+    const tsconfigDir = dirname(tsconfigAbsolutePath);
+
+    if (Array.isArray(tsconfigJson.files)) {
+      for (const fileItem of tsconfigJson.files) {
+        if (typeof fileItem !== "string") continue;
+        const candidatePath = resolve(tsconfigDir, fileItem);
+        if (existsSync(candidatePath)) entries.push(candidatePath);
+      }
+    }
+
+    if (Array.isArray(tsconfigJson.include)) {
+      for (const includePattern of tsconfigJson.include) {
+        if (typeof includePattern !== "string") continue;
+        const expandedFiles = fg.sync(includePattern, {
+          cwd: tsconfigDir,
+          absolute: true,
+          onlyFiles: true,
+          ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
+        });
+        entries.push(...expandedFiles);
+      }
+    }
+  } catch {}
   return entries;
 };
 

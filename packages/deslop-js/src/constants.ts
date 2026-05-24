@@ -210,6 +210,7 @@ export const BUILTIN_MODULES = new Set([
 
 export const PLATFORM_SUFFIXES = [
   ".web",
+  ".react-native",
   ".native",
   ".ios",
   ".android",
@@ -217,6 +218,7 @@ export const PLATFORM_SUFFIXES = [
   ".windows",
   ".macos",
   ".any",
+  ".react-server",
   ".server",
   ".client",
 ];
