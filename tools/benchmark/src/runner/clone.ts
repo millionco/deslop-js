@@ -2,7 +2,11 @@ import { existsSync, mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { resolve, join } from "node:path";
 import type { BenchmarkRepo, CloneOutcome } from "../types.js";
-import { BENCHMARK_CACHE_DIR, GIT_CLONE_TIMEOUT_MS, INSTALL_DEPS_TIMEOUT_MS } from "../constants.js";
+import {
+  BENCHMARK_CACHE_DIR,
+  GIT_CLONE_TIMEOUT_MS,
+  INSTALL_DEPS_TIMEOUT_MS,
+} from "../constants.js";
 import { repoSlug } from "../repos.js";
 
 const runShell = (

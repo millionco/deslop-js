@@ -6,7 +6,7 @@ import type {
   VerificationVerdict,
   RepoToolResult,
 } from "../types.js";
-import { basename, relative } from "node:path";
+import { basename, dirname, relative } from "node:path";
 
 const SKIP_EXPORT_NAMES = new Set(["default", "*"]);
 const VERIFIABLE_EXPORT_MIN_NAME_LENGTH = 2;
@@ -117,22 +117,56 @@ const verifyUnusedFile = async (
     };
   }
 
-  const basenameWithoutExt = fileBasename.replace(/\.[^.]+$/, "");
-  if (basenameWithoutExt.length >= 3) {
-    const basenameEscaped = escapeRegex(basenameWithoutExt);
-    const basenameMatches = await ripgrepSearch(`from\\s+['"].*${basenameEscaped}`, searchDir, [
+  const relativeSegments = relativePath.split("/");
+  const directoryQualifiedStem =
+    relativeSegments.length >= 2
+      ? relativeSegments
+          .slice(-2)
+          .join("/")
+          .replace(/\.[^.]+$/, "")
+      : fileBasename.replace(/\.[^.]+$/, "");
+  const parentDirectoryName =
+    relativeSegments.length >= 2 ? dirname(relativePath).split("/").pop() : undefined;
+
+  if (directoryQualifiedStem.length >= 3) {
+    const qualifiedEscaped = escapeRegex(directoryQualifiedStem);
+    const qualifiedMatches = await ripgrepSearch(`from\\s+['"].*${qualifiedEscaped}`, searchDir, [
       "--type-add",
       "tsjs:*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
       "--type",
       "tsjs",
     ]);
-    const otherBasenameMatches = basenameMatches.filter(
+    const otherQualifiedMatches = qualifiedMatches.filter(
       (matchPath) => matchPath !== flaggedFile.path,
     );
-    if (otherBasenameMatches.length > 0) {
+    if (otherQualifiedMatches.length > 0) {
       return {
         ...flaggedFile,
-        verdict: { kind: "likely_fp", reason: "basename appears in import statements" },
+        verdict: { kind: "likely_fp", reason: "directory-qualified path appears in imports" },
+      };
+    }
+  }
+
+  const basenameWithoutExt = fileBasename.replace(/\.[^.]+$/, "");
+  if (basenameWithoutExt.length >= 3 && parentDirectoryName) {
+    const basenameEscaped = escapeRegex(basenameWithoutExt);
+    const relativeImportPattern = `from\\s+['"]\\.\\.?/.*${basenameEscaped}`;
+    const basenameMatches = await ripgrepSearch(relativeImportPattern, searchDir, [
+      "--type-add",
+      "tsjs:*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
+      "--type",
+      "tsjs",
+    ]);
+    const importersInSameDirectory = basenameMatches.filter((matchPath) => {
+      if (matchPath === flaggedFile.path) return false;
+      const matchRelative = relative(searchDir, matchPath);
+      const matchParentDir = dirname(matchRelative).split("/").pop();
+      return matchParentDir === parentDirectoryName;
+    });
+    if (importersInSameDirectory.length > 0) {
+      return {
+        ...flaggedFile,
+        verdict: { kind: "likely_fp", reason: "basename imported from same directory" },
       };
     }
   }

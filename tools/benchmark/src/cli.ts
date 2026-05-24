@@ -26,7 +26,7 @@ const deduplicateRepos = (repos: BenchmarkRepo[]): BenchmarkRepo[] => {
 };
 
 const commandClone = async (): Promise<void> => {
-  const repos = deduplicateRepos(TOP_REACT_REPOS);
+  const repos = filterRepos(deduplicateRepos(TOP_REACT_REPOS));
   log(`[clone] cloning ${repos.length} repos...`);
   const outcomes = await cloneAllRepos(repos, {
     onProgress: (outcome, completed, total) => {
@@ -40,7 +40,7 @@ const commandClone = async (): Promise<void> => {
 };
 
 const commandRun = async (): Promise<void> => {
-  const repos = deduplicateRepos(TOP_REACT_REPOS);
+  const repos = filterRepos(deduplicateRepos(TOP_REACT_REPOS));
   log(`[benchmark] cloning ${repos.length} repos...`);
 
   const cloneOutcomes = await cloneAllRepos(repos, {
@@ -170,16 +170,37 @@ const commandReport = (): void => {
   process.stdout.write(markdown + "\n");
 };
 
+const parseRepoFilter = (): Set<string> | undefined => {
+  const reposArgIndex = process.argv.indexOf("--repos");
+  if (reposArgIndex === -1 || reposArgIndex + 1 >= process.argv.length) return undefined;
+  const rawSlugs = process.argv[reposArgIndex + 1]
+    .split(",")
+    .map((slug) => slug.trim().toLowerCase());
+  return new Set(rawSlugs);
+};
+
+const filterRepos = (repos: BenchmarkRepo[]): BenchmarkRepo[] => {
+  const allowedSlugs = parseRepoFilter();
+  if (!allowedSlugs) return repos;
+  return repos.filter((repo) => {
+    const slug = `${repo.org}/${repo.name}`.toLowerCase();
+    return allowedSlugs.has(slug);
+  });
+};
+
 const main = async (): Promise<void> => {
   const command = process.argv[2];
 
   if (!command || command === "--help" || command === "-h") {
-    log(`benchmark [command]
+    log(`benchmark [command] [--repos org/name,org/name]
 
 Commands:
   clone    Clone the top 100 React repos
   run      Clone repos, run deslop + knip, verify FPs, generate report
-  report   Display the latest benchmark report`);
+  report   Display the latest benchmark report
+
+Options:
+  --repos  Comma-separated list of org/name slugs to filter`);
     return;
   }
 
