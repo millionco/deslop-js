@@ -471,6 +471,67 @@ export interface CodeClonesConfig {
   skipLocal: boolean;
 }
 
+export type ReExportCycleKind = "self-loop" | "multi-node";
+
+export interface ReExportCycle {
+  files: string[];
+  kind: ReExportCycleKind;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export type FeatureFlagKind = "env-var" | "sdk-call" | "config-object";
+
+export interface FeatureFlag {
+  path: string;
+  name: string;
+  kind: FeatureFlagKind;
+  line: number;
+  column: number;
+  sdkProvider?: string;
+  guardLineStart?: number;
+  guardLineEnd?: number;
+  guardsDeadCode: boolean;
+}
+
+export interface FeatureFlagsConfig {
+  enabled: boolean;
+  extraEnvPrefixes: string[];
+  extraSdkFunctionNames: string[];
+  detectConfigObjects: boolean;
+}
+
+export interface FunctionComplexity {
+  path: string;
+  functionName: string;
+  line: number;
+  column: number;
+  cyclomatic: number;
+  cognitive: number;
+  lineCount: number;
+  paramCount: number;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export interface ComplexityConfig {
+  enabled: boolean;
+  cyclomaticThreshold: number;
+  cognitiveThreshold: number;
+  paramCountThreshold: number;
+  functionLineThreshold: number;
+}
+
+export interface PrivateTypeLeak {
+  path: string;
+  exportName: string;
+  typeName: string;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -494,6 +555,10 @@ export interface ScanResult {
   codeClones: CodeClone[];
   codeCloneFamilies: CodeCloneFamily[];
   mirroredDirectories: MirroredDirectory[];
+  reExportCycles: ReExportCycle[];
+  featureFlags: FeatureFlag[];
+  complexFunctions: FunctionComplexity[];
+  privateTypeLeaks: PrivateTypeLeak[];
   analysisErrors: DeslopError[];
   totalFiles: number;
   totalExports: number;
@@ -528,4 +593,6 @@ export interface DeslopConfig {
   reportRedundancy: boolean;
   semantic: SemanticConfig | undefined;
   codeClones: CodeClonesConfig | undefined;
+  featureFlags: FeatureFlagsConfig | undefined;
+  complexity: ComplexityConfig | undefined;
 }

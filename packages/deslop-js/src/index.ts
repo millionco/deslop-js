@@ -13,6 +13,10 @@ import {
   DEFAULT_CODE_CLONE_MIN_LINES,
   DEFAULT_CODE_CLONE_MIN_OCCURRENCES,
   DEFAULT_CODE_CLONE_MIN_TOKENS,
+  DEFAULT_COGNITIVE_THRESHOLD,
+  DEFAULT_CYCLOMATIC_THRESHOLD,
+  DEFAULT_FUNCTION_LINE_THRESHOLD,
+  DEFAULT_PARAM_COUNT_THRESHOLD,
   DEFAULT_ENTRY_GLOBS,
   DEFAULT_EXTENSIONS,
   DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
@@ -148,6 +152,14 @@ export type {
   CodeCloneMode,
   CodeClonesConfig,
   MirroredDirectory,
+  ReExportCycle,
+  ReExportCycleKind,
+  FeatureFlag,
+  FeatureFlagKind,
+  FeatureFlagsConfig,
+  FunctionComplexity,
+  ComplexityConfig,
+  PrivateTypeLeak,
   DeslopError,
   DeslopErrorCode,
   DeslopErrorModule,
@@ -214,6 +226,32 @@ const fillCodeClonesConfig = (
   };
 };
 
+
+const fillFeatureFlagsConfig = (
+  flagsOverrides: Partial<DeslopConfig["featureFlags"]> | undefined,
+): DeslopConfig["featureFlags"] => {
+  if (flagsOverrides === undefined) return undefined;
+  return {
+    enabled: flagsOverrides.enabled ?? false,
+    extraEnvPrefixes: flagsOverrides.extraEnvPrefixes ?? [],
+    extraSdkFunctionNames: flagsOverrides.extraSdkFunctionNames ?? [],
+    detectConfigObjects: flagsOverrides.detectConfigObjects ?? false,
+  };
+};
+
+const fillComplexityConfig = (
+  complexityOverrides: Partial<DeslopConfig["complexity"]> | undefined,
+): DeslopConfig["complexity"] => {
+  if (complexityOverrides === undefined) return undefined;
+  return {
+    enabled: complexityOverrides.enabled ?? false,
+    cyclomaticThreshold: complexityOverrides.cyclomaticThreshold ?? DEFAULT_CYCLOMATIC_THRESHOLD,
+    cognitiveThreshold: complexityOverrides.cognitiveThreshold ?? DEFAULT_COGNITIVE_THRESHOLD,
+    paramCountThreshold: complexityOverrides.paramCountThreshold ?? DEFAULT_PARAM_COUNT_THRESHOLD,
+    functionLineThreshold:
+      complexityOverrides.functionLineThreshold ?? DEFAULT_FUNCTION_LINE_THRESHOLD,
+  };
+};
 export const defineConfig = (
   options: Partial<DeslopConfig> & { rootDir: string },
 ): DeslopConfig => ({
@@ -227,6 +265,8 @@ export const defineConfig = (
   reportRedundancy: options.reportRedundancy ?? true,
   semantic: fillSemanticConfig(options.semantic),
   codeClones: fillCodeClonesConfig(options.codeClones),
+  featureFlags: fillFeatureFlagsConfig(options.featureFlags),
+  complexity: fillComplexityConfig(options.complexity),
 });
 
 const buildEmptyScanResult = (errors: DeslopError[], elapsedMs: number): ScanResult => ({
@@ -252,6 +292,10 @@ const buildEmptyScanResult = (errors: DeslopError[], elapsedMs: number): ScanRes
   codeClones: [],
   codeCloneFamilies: [],
   mirroredDirectories: [],
+  reExportCycles: [],
+  featureFlags: [],
+  complexFunctions: [],
+  privateTypeLeaks: [],
   analysisErrors: errors,
   totalFiles: 0,
   totalExports: 0,

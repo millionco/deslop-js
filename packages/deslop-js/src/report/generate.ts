@@ -20,6 +20,10 @@ import {
 } from "./dry-patterns.js";
 import { detectCrossFileDuplicateExports } from "./cross-file-duplicate-exports.js";
 import { detectCodeClones } from "../clones/index.js";
+import { detectReExportCycles } from "./re-export-cycles.js";
+import { correlateFlagsWithDeadCode, detectFeatureFlags } from "./feature-flags.js";
+import { detectComplexHotspots } from "./complexity.js";
+import { detectPrivateTypeLeaks } from "./private-type-leaks.js";
 import { runSemanticAnalysis } from "../semantic/index.js";
 import { DetectorError, describeUnknownError } from "../errors.js";
 import { MAX_ANALYSIS_ERRORS } from "../constants.js";
@@ -179,6 +183,30 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     errorSink,
   );
 
+  const reExportCycles = safeReportDetector(
+    "detectReExportCycles",
+    () => detectReExportCycles(graph),
+    [],
+    errorSink,
+  );
+  const featureFlags = safeReportDetector(
+    "detectFeatureFlags",
+    () => detectFeatureFlags(graph, config.featureFlags),
+    [],
+    errorSink,
+  );
+  const complexFunctions = safeReportDetector(
+    "detectComplexHotspots",
+    () => detectComplexHotspots(graph, config.complexity),
+    [],
+    errorSink,
+  );
+  const privateTypeLeaks = safeReportDetector(
+    "detectPrivateTypeLeaks",
+    () => detectPrivateTypeLeaks(graph),
+    [],
+    errorSink,
+  );
   let semanticResult: ReturnType<typeof runSemanticAnalysis>;
   try {
     semanticResult = runSemanticAnalysis(graph, config);
@@ -209,6 +237,10 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     ? [...syntacticRedundantAliases, ...semanticResult.redundantAliases]
     : [];
 
+
+  if (featureFlags.length > 0) {
+    correlateFlagsWithDeadCode(featureFlags, { unusedExports });
+  }
   const totalExports = graph.modules.reduce(
     (exportCount, module) =>
       exportCount +
@@ -241,6 +273,10 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     codeClones: cloneDetectionResult.codeClones,
     codeCloneFamilies: cloneDetectionResult.codeCloneFamilies,
     mirroredDirectories: cloneDetectionResult.mirroredDirectories,
+    reExportCycles,
+    featureFlags,
+    complexFunctions,
+    privateTypeLeaks,
     analysisErrors: errorSink,
     totalFiles: graph.modules.length,
     totalExports,

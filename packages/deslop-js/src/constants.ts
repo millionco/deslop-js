@@ -372,3 +372,11 @@ export const DEFAULT_SEMANTIC_TSCONFIG_NAMES = [
   "tsconfig.src.json",
   "jsconfig.json",
 ];
+
+export const DEFAULT_CYCLOMATIC_THRESHOLD = 10;
+
+export const DEFAULT_COGNITIVE_THRESHOLD = 15;
+
+export const DEFAULT_PARAM_COUNT_THRESHOLD = 5;
+
+export const DEFAULT_FUNCTION_LINE_THRESHOLD = 80;

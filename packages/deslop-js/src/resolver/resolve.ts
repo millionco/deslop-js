@@ -4,7 +4,6 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import fg from "fast-glob";
 import type { DeslopConfig } from "../types.js";
 import {
-  BUILTIN_MODULES,
   RESOLVER_EXTENSIONS,
   REACT_NATIVE_PLATFORM_EXTENSIONS,
   OUTPUT_DIRECTORIES,
@@ -1107,16 +1106,8 @@ const stripJsonComments = (content: string): string => {
   return result.replace(/,(\s*[}\]])/g, "$1");
 };
 
-const BUILTIN_SUBPATH_MODULES = new Set(["fs", "dns", "stream", "readline", "timers", "util"]);
-
-const isBuiltinModule = (specifier: string): boolean => {
-  if (specifier.startsWith("node:")) return true;
-  const baseName = specifier.split("/")[0];
-  if (!BUILTIN_MODULES.has(baseName)) return false;
-  const hasSubpath = specifier.includes("/");
-  if (!hasSubpath) return true;
-  return BUILTIN_SUBPATH_MODULES.has(baseName);
-};
+const isBuiltinModule = (specifier: string): boolean =>
+  isPlatformBuiltinOrVirtualSpecifier(specifier);
 
 const isBareSpecifier = (specifier: string): boolean =>
   !specifier.startsWith(".") && !specifier.startsWith("/");

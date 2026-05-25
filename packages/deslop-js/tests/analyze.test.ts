@@ -4306,3 +4306,85 @@ describe("code-clones", () => {
     }
   });
 });
+
+describe("re-export-cycles", () => {
+  it("detects multi-node re-export cycles", async () => {
+    const result = await scanFixture("re-export-cycle");
+    assert.ok(
+      result.reExportCycles.length > 0,
+      `expected at least one re-export cycle, got ${JSON.stringify(result.reExportCycles)}`,
+    );
+    const multiNodeCycle = result.reExportCycles.find((cycle) => cycle.kind === "multi-node");
+    assert.ok(multiNodeCycle, "expected a multi-node re-export cycle for barrel <-> other");
+    assert.equal(multiNodeCycle.confidence, "high");
+  });
+});
+
+describe("feature-flags", () => {
+  it("returns no flags when feature flag detection is disabled", async () => {
+    const result = await scanFixture("feature-flags-basic");
+    assert.deepEqual(result.featureFlags, []);
+  });
+
+  it("detects env var, SDK, and provider attribution", async () => {
+    const result = await scanFixture("feature-flags-basic", {
+      featureFlags: { enabled: true },
+    });
+    const envVarFlag = result.featureFlags.find((flag) => flag.kind === "env-var");
+    assert.ok(envVarFlag, `expected an env-var flag finding, got: ${JSON.stringify(result.featureFlags)}`);
+    assert.equal(envVarFlag.name, "FEATURE_NEW_CHECKOUT");
+
+    const statsigFlag = result.featureFlags.find((flag) => flag.sdkProvider === "Statsig");
+    assert.ok(statsigFlag, "expected Statsig sdkProvider attribution");
+    assert.equal(statsigFlag.name, "legacy_billing");
+
+    const launchDarklyFlag = result.featureFlags.find(
+      (flag) => flag.sdkProvider === "LaunchDarkly",
+    );
+    assert.ok(launchDarklyFlag, "expected LaunchDarkly sdkProvider attribution");
+    assert.equal(launchDarklyFlag.name, "payments-flag");
+  });
+});
+
+describe("private-type-leaks", () => {
+  it("flags exports whose signatures reference unexported local types", async () => {
+    const result = await scanFixture("private-type-leak");
+    const initializeLeak = result.privateTypeLeaks.find(
+      (leak) => leak.exportName === "initialize" && leak.typeName === "InternalConfig",
+    );
+    assert.ok(
+      initializeLeak,
+      `expected initialize -> InternalConfig leak, got: ${JSON.stringify(result.privateTypeLeaks)}`,
+    );
+    assert.equal(initializeLeak.confidence, "high");
+
+    const teardownLeak = result.privateTypeLeaks.find(
+      (leak) => leak.exportName === "teardown" && leak.typeName === "InternalConfig",
+    );
+    assert.ok(teardownLeak, "expected teardown -> InternalConfig leak");
+  });
+});
+
+describe("complex-functions", () => {
+  it("returns no hotspots when complexity detection is disabled", async () => {
+    const result = await scanFixture("complex-functions");
+    assert.deepEqual(result.complexFunctions, []);
+  });
+
+  it("flags only functions that breach a threshold", async () => {
+    const result = await scanFixture("complex-functions", {
+      complexity: {
+        enabled: true,
+        cyclomaticThreshold: 5,
+        cognitiveThreshold: 5,
+        paramCountThreshold: 4,
+        functionLineThreshold: 10,
+      },
+    });
+    const tangled = result.complexFunctions.find((finding) => finding.functionName === "tangledFn");
+    assert.ok(tangled, "tangledFn should be flagged");
+    assert.ok(tangled.cyclomatic >= 5, `tangledFn cyclomatic ${tangled.cyclomatic} should be >= 5`);
+    const simple = result.complexFunctions.find((finding) => finding.functionName === "simpleFn");
+    assert.equal(simple, undefined, "simpleFn must not be flagged");
+  });
+});
