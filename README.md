@@ -171,6 +171,33 @@ const config = defineConfig({
 | `reportRedundantVariableAliases`  | `true`       | Local aliases like `const X = Y; export { X }`                                                                                                                 |
 | `reportRoundTripAliases`          | `true`       | `import { X as Y } from "./a"; export { Y as X }`                                                                                                              |
 
+### Code clones (token-based copy-paste detection)
+
+Off by default. Enable to detect maximal duplicated token sequences across files (suffix-array + LCP, ported from [fallow](https://github.com/fallow-rs/fallow)):
+
+```ts
+const config = defineConfig({
+  rootDir: "./my-project",
+  codeClones: {
+    enabled: true,
+    mode: "semantic", // "strict" preserves identifiers/literals; "semantic" blinds them
+    minTokens: 50,
+    minLines: 5,
+    minOccurrences: 2,
+    skipLocal: false, // when true, only report cross-directory duplicates
+  },
+});
+```
+
+| Option           | Default        | Notes                                                                                    |
+| ---------------- | -------------- | ---------------------------------------------------------------------------------------- |
+| `enabled`        | `false`        | Master switch; clone detection re-tokenizes every source file                            |
+| `mode`           | `"semantic"`   | `"strict"` matches token-for-token; `"semantic"` ignores identifier/string/numeric values |
+| `minTokens`      | `50`           | Minimum clone length in tokens                                                           |
+| `minLines`       | `5`            | Minimum clone length in lines                                                            |
+| `minOccurrences` | `2`            | Minimum number of clone instances to report a group                                      |
+| `skipLocal`      | `false`        | When true, only report duplicates spanning more than one directory                       |
+
 ## Findings have confidence tiers
 
 Every redundancy / semantic finding carries `confidence: "high" | "medium" | "low"`. Use `"high"` for CI gates; `"medium"` and `"low"` are best treated as code-review prompts since intent is sometimes unknowable from syntax alone (e.g. `?? null` may be required by a typed callback signature).

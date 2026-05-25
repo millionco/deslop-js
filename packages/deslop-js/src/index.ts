@@ -10,6 +10,9 @@ import {
   describeUnknownError,
 } from "./errors.js";
 import {
+  DEFAULT_CODE_CLONE_MIN_LINES,
+  DEFAULT_CODE_CLONE_MIN_OCCURRENCES,
+  DEFAULT_CODE_CLONE_MIN_TOKENS,
   DEFAULT_ENTRY_GLOBS,
   DEFAULT_EXTENSIONS,
   DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
@@ -135,6 +138,16 @@ export type {
   SimplifiableExpressionKind,
   DuplicateConstant,
   DuplicateConstantOccurrence,
+  CrossFileDuplicateExport,
+  CrossFileDuplicateExportLocation,
+  CodeClone,
+  CodeCloneInstance,
+  CodeCloneFamily,
+  CodeCloneRefactoringKind,
+  CodeCloneRefactoringSuggestion,
+  CodeCloneMode,
+  CodeClonesConfig,
+  MirroredDirectory,
   DeslopError,
   DeslopErrorCode,
   DeslopErrorModule,
@@ -164,6 +177,11 @@ export type {
  *
  * - `reportRedundancy: true` — on because redundancy findings are mostly
  *   high-signal and the detectors carry their own confidence tiers.
+ *
+ * - `codeClones: undefined` — token-based copy-paste detection (suffix
+ *   array + LCP, ported from fallow) is opt-in. It re-parses every source
+ *   file to emit a token stream and adds significant runtime to the scan.
+ *   Pass `codeClones: { enabled: true }` to turn it on.
  */
 const fillSemanticConfig = (
   semanticOverrides: Partial<DeslopConfig["semantic"]> | undefined,
@@ -182,6 +200,20 @@ const fillSemanticConfig = (
   };
 };
 
+const fillCodeClonesConfig = (
+  cloneOverrides: Partial<DeslopConfig["codeClones"]> | undefined,
+): DeslopConfig["codeClones"] => {
+  if (cloneOverrides === undefined) return undefined;
+  return {
+    enabled: cloneOverrides.enabled ?? false,
+    mode: cloneOverrides.mode ?? "semantic",
+    minTokens: cloneOverrides.minTokens ?? DEFAULT_CODE_CLONE_MIN_TOKENS,
+    minLines: cloneOverrides.minLines ?? DEFAULT_CODE_CLONE_MIN_LINES,
+    minOccurrences: cloneOverrides.minOccurrences ?? DEFAULT_CODE_CLONE_MIN_OCCURRENCES,
+    skipLocal: cloneOverrides.skipLocal ?? false,
+  };
+};
+
 export const defineConfig = (
   options: Partial<DeslopConfig> & { rootDir: string },
 ): DeslopConfig => ({
@@ -194,6 +226,7 @@ export const defineConfig = (
   includeEntryExports: options.includeEntryExports ?? false,
   reportRedundancy: options.reportRedundancy ?? true,
   semantic: fillSemanticConfig(options.semantic),
+  codeClones: fillCodeClonesConfig(options.codeClones),
 });
 
 const buildEmptyScanResult = (errors: DeslopError[], elapsedMs: number): ScanResult => ({
@@ -215,6 +248,10 @@ const buildEmptyScanResult = (errors: DeslopError[], elapsedMs: number): ScanRes
   simplifiableFunctions: [],
   simplifiableExpressions: [],
   duplicateConstants: [],
+  crossFileDuplicateExports: [],
+  codeClones: [],
+  codeCloneFamilies: [],
+  mirroredDirectories: [],
   analysisErrors: errors,
   totalFiles: 0,
   totalExports: 0,

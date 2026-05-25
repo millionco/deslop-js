@@ -18,6 +18,7 @@ import {
   detectSimplifiableExpressions,
   detectDuplicateConstants,
 } from "./dry-patterns.js";
+import { detectCrossFileDuplicateExports } from "./cross-file-duplicate-exports.js";
 import { runSemanticAnalysis } from "../semantic/index.js";
 import { DetectorError, describeUnknownError } from "../errors.js";
 import { MAX_ANALYSIS_ERRORS } from "../constants.js";
@@ -162,6 +163,14 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
         errorSink,
       )
     : [];
+  const crossFileDuplicateExports = config.reportRedundancy
+    ? safeReportDetector(
+        "detectCrossFileDuplicateExports",
+        () => detectCrossFileDuplicateExports(graph),
+        [],
+        errorSink,
+      )
+    : [];
 
   let semanticResult: ReturnType<typeof runSemanticAnalysis>;
   try {
@@ -221,6 +230,10 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     simplifiableFunctions,
     simplifiableExpressions,
     duplicateConstants,
+    crossFileDuplicateExports,
+    codeClones: [],
+    codeCloneFamilies: [],
+    mirroredDirectories: [],
     analysisErrors: errorSink,
     totalFiles: graph.modules.length,
     totalExports,

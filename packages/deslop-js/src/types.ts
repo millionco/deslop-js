@@ -407,6 +407,70 @@ export interface DuplicateConstant {
   reason: string;
 }
 
+export interface CrossFileDuplicateExportLocation {
+  path: string;
+  line: number;
+  column: number;
+  isTypeOnly: boolean;
+}
+
+export interface CrossFileDuplicateExport {
+  name: string;
+  locations: CrossFileDuplicateExportLocation[];
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export type CodeCloneMode = "strict" | "semantic";
+
+export interface CodeCloneInstance {
+  path: string;
+  startLine: number;
+  endLine: number;
+  startColumn: number;
+  endColumn: number;
+}
+
+export interface CodeClone {
+  instances: CodeCloneInstance[];
+  tokenCount: number;
+  lineCount: number;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export type CodeCloneRefactoringKind = "extract-function" | "extract-module";
+
+export interface CodeCloneRefactoringSuggestion {
+  kind: CodeCloneRefactoringKind;
+  description: string;
+  estimatedSavings: number;
+}
+
+export interface CodeCloneFamily {
+  files: string[];
+  groups: CodeClone[];
+  totalDuplicatedLines: number;
+  totalDuplicatedTokens: number;
+  suggestions: CodeCloneRefactoringSuggestion[];
+}
+
+export interface MirroredDirectory {
+  directoryA: string;
+  directoryB: string;
+  sharedFiles: string[];
+  totalDuplicatedLines: number;
+}
+
+export interface CodeClonesConfig {
+  enabled: boolean;
+  mode: CodeCloneMode;
+  minTokens: number;
+  minLines: number;
+  minOccurrences: number;
+  skipLocal: boolean;
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -426,6 +490,10 @@ export interface ScanResult {
   simplifiableFunctions: SimplifiableFunction[];
   simplifiableExpressions: SimplifiableExpression[];
   duplicateConstants: DuplicateConstant[];
+  crossFileDuplicateExports: CrossFileDuplicateExport[];
+  codeClones: CodeClone[];
+  codeCloneFamilies: CodeCloneFamily[];
+  mirroredDirectories: MirroredDirectory[];
   analysisErrors: DeslopError[];
   totalFiles: number;
   totalExports: number;
@@ -459,4 +527,5 @@ export interface DeslopConfig {
   includeEntryExports: boolean;
   reportRedundancy: boolean;
   semantic: SemanticConfig | undefined;
+  codeClones: CodeClonesConfig | undefined;
 }

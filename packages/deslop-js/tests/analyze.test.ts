@@ -4194,3 +4194,37 @@ describe("reexport-star-named", () => {
     );
   });
 });
+
+describe("cross-file-duplicate-exports", () => {
+  it("should flag the same exported name in 2+ files that share an importer", async () => {
+    const result = await scanFixture("cross-file-duplicate-exports");
+    const findings = result.crossFileDuplicateExports;
+    const sharedFinding = findings.find((finding) => finding.name === "sharedThing");
+    assert.ok(
+      sharedFinding,
+      `expected a cross-file duplicate for "sharedThing", got: ${JSON.stringify(findings.map((finding) => finding.name))}`,
+    );
+    assert.equal(sharedFinding.locations.length, 2);
+    assert.equal(sharedFinding.confidence, "medium");
+  });
+
+  it("should not flag unique exports", async () => {
+    const result = await scanFixture("cross-file-duplicate-exports");
+    const onlyHere = result.crossFileDuplicateExports.find(
+      (finding) => finding.name === "onlyHere",
+    );
+    assert.equal(onlyHere, undefined, "onlyHere appears in only one file and must not be flagged");
+  });
+
+  it("should not flag entry-point modules whose duplicates are part of the public API surface", async () => {
+    const result = await scanFixture("cross-file-duplicate-exports-unrelated");
+    const handlerFinding = result.crossFileDuplicateExports.find(
+      (finding) => finding.name === "handler",
+    );
+    assert.equal(
+      handlerFinding,
+      undefined,
+      "package.json-declared route entry points are part of the API surface, not actionable duplicates",
+    );
+  });
+});
