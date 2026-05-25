@@ -1,0 +1,25 @@
+packages/deslop-js/src/constants.ts
+  s_a8a17f4b20a2ef::t_3ac3203b16e5bd 73-74
+packages/deslop-js/src/utils/collect-effect-cleanup-issues.ts
+  s_a8a17f4b20a2ef::t_3eb32901249b99 310
+  s_a8a17f4b20a2ef::t_cc520e6358ddad 216-218
+  s_a8a17f4b20a2ef::t_cbf5160c8bce12 4,33-37,116,118-120,123-127,136-140,172,182,190,195,211,220,235,304-309
+packages/deslop-js/tests/effect-cleanup.test.ts
+  s_a8a17f4b20a2ef::t_fe25f758819c54 79-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "c9954d81fa4d58508dbf0b485c86b211a39bcb68",
+  "prompts": {},
+  "sessions": {
+    "s_a8a17f4b20a2ef": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d8befa90-2675-48db-bbe3-f30ee7abbeb5",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
