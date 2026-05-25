@@ -99,11 +99,25 @@ result.duplicateInlineTypes; // anonymous `{ a, b, c }` repeated across modules
 result.simplifiableFunctions; // `() => { return x }`, `await x; return x`
 result.simplifiableExpressions; // `!!x`, `x ? x : y`, `cond ? true : false`
 result.duplicateConstants; // same literal value across files
+result.crossFileDuplicateExports; // same export name shipped by 2+ files that share an importer
+result.reExportCycles; // `export * from "./a"` cycles (self-loop or multi-node)
+result.privateTypeLeaks; // exported signature references a non-exported local type
+
+// code clones (token-based copy-paste, opt-in via `codeClones.enabled: true`)
+result.codeClones; // suffix-array + LCP detected duplicate code blocks
+result.codeCloneFamilies; // clones grouped by file set + refactoring suggestions
+result.mirroredDirectories; // directory pairs with many identical files
+
+// feature flags (opt-in via `featureFlags.enabled: true`)
+result.featureFlags; // LaunchDarkly/Statsig/Unleash/PostHog/Vercel Flags/process.env.* uses
+
+// function complexity hotspots (opt-in via `complexity.enabled: true`)
+result.complexFunctions; // McCabe cyclomatic + SonarSource cognitive per function
 
 // semantic findings (type-aware, opt-in via `semantic.enabled: true`)
 result.unusedTypes; // type aliases / interfaces never referenced
 result.unusedEnumMembers; // enum members no reference site uses
-result.unusedClassMembers; // class members no caller invokes
+result.unusedClassMembers; // class members no caller invokes (skips React/Angular lifecycle methods)
 result.misclassifiedDependencies; // `dependencies` entries used only as types
 
 // diagnostics
@@ -171,6 +185,7 @@ const config = defineConfig({
 | `reportRedundantVariableAliases`  | `true`       | Local aliases like `const X = Y; export { X }`                                                                                                                 |
 | `reportRoundTripAliases`          | `true`       | `import { X as Y } from "./a"; export { Y as X }`                                                                                                              |
 
+
 ### Code clones (token-based copy-paste detection)
 
 Off by default. Enable to detect maximal duplicated token sequences across files (suffix-array + LCP, ported from [fallow](https://github.com/fallow-rs/fallow)):
@@ -184,19 +199,43 @@ const config = defineConfig({
     minTokens: 50,
     minLines: 5,
     minOccurrences: 2,
-    skipLocal: false, // when true, only report cross-directory duplicates
+    skipLocal: false, // true => only report cross-directory duplicates
   },
 });
 ```
 
-| Option           | Default        | Notes                                                                                    |
-| ---------------- | -------------- | ---------------------------------------------------------------------------------------- |
-| `enabled`        | `false`        | Master switch; clone detection re-tokenizes every source file                            |
-| `mode`           | `"semantic"`   | `"strict"` matches token-for-token; `"semantic"` ignores identifier/string/numeric values |
-| `minTokens`      | `50`           | Minimum clone length in tokens                                                           |
-| `minLines`       | `5`            | Minimum clone length in lines                                                            |
-| `minOccurrences` | `2`            | Minimum number of clone instances to report a group                                      |
-| `skipLocal`      | `false`        | When true, only report duplicates spanning more than one directory                       |
+### Feature flags (LaunchDarkly / Statsig / Unleash / PostHog / Vercel Flags / process.env)
+
+Off by default. When enabled, `result.featureFlags` carries every detected flag use with `kind: "env-var" | "sdk-call" | "config-object"`, optional `sdkProvider`, and a `guardsDeadCode` boolean correlated with `unusedExports`:
+
+```ts
+const config = defineConfig({
+  rootDir: "./my-project",
+  featureFlags: {
+    enabled: true,
+    extraEnvPrefixes: ["MYAPP_FF_"],
+    extraSdkFunctionNames: ["myCustomFlag"],
+    detectConfigObjects: false, // heuristic config.features.x — opt in if you use that pattern
+  },
+});
+```
+
+### Function complexity (cyclomatic + cognitive)
+
+Off by default. When enabled, `result.complexFunctions` reports per-function McCabe cyclomatic and SonarSource cognitive complexity, function size, and parameter count for every function that breaches at least one threshold:
+
+```ts
+const config = defineConfig({
+  rootDir: "./my-project",
+  complexity: {
+    enabled: true,
+    cyclomaticThreshold: 10,
+    cognitiveThreshold: 15,
+    paramCountThreshold: 5,
+    functionLineThreshold: 80,
+  },
+});
+```
 
 ## Findings have confidence tiers
 
