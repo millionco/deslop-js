@@ -194,7 +194,7 @@ const config = defineConfig({
 
 ### Code clones (token-based copy-paste detection)
 
-Off by default. Enable to detect maximal duplicated token sequences across files (suffix-array + LCP, ported from [fallow](https://github.com/fallow-rs/fallow)):
+Off by default. Enable to detect maximal duplicated token sequences across files (suffix-array + LCP):
 
 ```ts
 const config = defineConfig({

@@ -17,7 +17,7 @@ const BUILTIN_SUBPATH_NODE_MODULES = new Set<string>([
  * Module specifiers that don't correspond to a real package on disk and must
  * therefore not be flagged as `unused-dependency` or `unresolved-import`.
  *
- * Matches fallow's `is_builtin_module` + `is_virtual_module` helpers:
+ * Recognizes the following module specifier families:
  *
  * - Node.js builtins (`fs`, `node:fs`, `fs/promises`, `path/posix`, …)
  * - Bun built-ins (`bun`, `bun:sqlite`, `bun:test`, `bun:ffi`)

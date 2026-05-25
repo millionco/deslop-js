@@ -339,8 +339,7 @@ const annotateConfidence = (
 };
 
 /**
- * Per-function cyclomatic + cognitive complexity, ported from
- * fallow's `crates/extract/src/complexity.rs`.
+ * Per-function cyclomatic + cognitive complexity.
  *
  * Cyclomatic (McCabe): 1 + decision points. Counts if/for/while/do/case/catch,
  * the ?: ternary, &&, ||, ??, &&=/||=/??=, and ?. (optional chaining).

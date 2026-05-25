@@ -199,7 +199,7 @@ export type {
  *   high-signal and the detectors carry their own confidence tiers.
  *
  * - `codeClones: undefined` — token-based copy-paste detection (suffix
- *   array + LCP, ported from fallow) is opt-in. It re-parses every source
+ *   array + LCP) is opt-in. It re-parses every source
  *   file to emit a token stream and adds significant runtime to the scan.
  *   Pass `codeClones: { enabled: true }` to turn it on.
  */

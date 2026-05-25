@@ -67,18 +67,16 @@ const safeNumberOrZero = (candidate: unknown): number => (typeof candidate === "
  * token sequence (modulo identifier/literal-value normalization, applied later
  * in `normalize.ts`).
  *
- * Implementation note: instead of porting fallow's hand-written keyword/operator
- * lexer-style visitor (~750 LOC of Rust), we walk the AST generically and emit
- * one `node-enter` token per visited node. This trades a slightly different
- * token-density profile for ~10x less code. AST-shape tokens still distinguish
- * `function add(a, b) { return a + b }` from `const add = (a, b) => a + b`,
- * which fallow's keyword-based stream would also distinguish. Identifiers and
- * value literals get dedicated tokens so semantic-mode normalization can blind
- * them.
+ * Implementation note: rather than a hand-written keyword/operator lexer-style
+ * visitor, we walk the AST generically and emit one `node-enter` token per
+ * visited node. This trades a slightly different token-density profile for
+ * less code. AST-shape tokens still distinguish
+ * `function add(a, b) { return a + b }` from `const add = (a, b) => a + b`.
+ * Identifiers and value literals get dedicated tokens so semantic-mode
+ * normalization can blind them.
  *
  * Imports and type-only constructs are dropped to keep import-block boilerplate
- * and ambient type declarations from inflating the noise floor (matches
- * fallow's `skip_imports` + `strip_types` defaults).
+ * and ambient type declarations from inflating the noise floor.
  */
 export const tokenizeAst = (program: unknown): SourceToken[] => {
   const tokens: SourceToken[] = [];

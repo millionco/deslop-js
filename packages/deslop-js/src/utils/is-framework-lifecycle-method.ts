@@ -2,7 +2,7 @@
  * Methods invoked by-name by frameworks rather than by user code, so static
  * "no caller" analysis would falsely flag them as unused class members.
  *
- * Ports fallow's `predicates/lifecycle.rs` allowlists:
+ * Allowlist of framework-invoked lifecycle methods:
  *
  * - React class component lifecycle hooks (Component / PureComponent / error
  *   boundaries) and the `getDerivedState*` static factories

@@ -19,7 +19,7 @@ import type { DependencyGraph, ReExportCycle } from "../types.js";
  *   bidirectional collaboration; every re-export cycle does not.
  *
  * Distinguishes self-loops (`export * from "./a"` inside `a.ts`) from
- * multi-node cycles, mirroring fallow's `ReExportCycleKind`.
+ * multi-node cycles.
  */
 export const detectReExportCycles = (graph: DependencyGraph): ReExportCycle[] => {
   const adjacency: number[][] = Array.from({ length: graph.modules.length }, () => []);

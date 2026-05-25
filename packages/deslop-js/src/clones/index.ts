@@ -186,8 +186,7 @@ export interface CodeClonesResult {
 }
 
 /**
- * Token-based code clone detector ported from fallow's
- * `crates/core/src/duplicates/`.
+ * Token-based code clone detector.
  *
  * Pipeline:
  *  1. Tokenize each file with the AST visitor in `token-visitor.ts`

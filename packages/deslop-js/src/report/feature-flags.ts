@@ -435,7 +435,7 @@ export const detectFeatureFlags = (
 
 /**
  * Mark each flag whose guard span overlaps an unused export as
- * `guardsDeadCode: true`. Mirrors fallow's `correlate_with_dead_code`.
+ * `guardsDeadCode: true`.
  */
 export const correlateFlagsWithDeadCode = (
   flags: FeatureFlag[],

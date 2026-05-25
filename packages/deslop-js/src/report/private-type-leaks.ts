@@ -272,13 +272,10 @@ const collectLocalTypeNames = (programNode: unknown): { localTypeNames: Set<stri
  * itself exported. Consumers of the export need that type to satisfy the
  * signature, but cannot import it.
  *
- * Ports fallow's `find_private_type_leaks` (`crates/core/src/analyze/unused_exports.rs`).
- *
  * Skips declaration files (`.d.ts`) — they are pure type modules where this
  * pattern is the norm. Keeps it simple: doesn't try to chase aliased re-export
- * paths the way fallow does (deslop-js's broader resolver work covers that
- * elsewhere); a leak that's actually re-exported gets filtered out at the
- * `exportedNames` set.
+ * paths (deslop-js's broader resolver work covers that elsewhere); a leak
+ * that's actually re-exported gets filtered out at the `exportedNames` set.
  */
 export const detectPrivateTypeLeaks = (graph: DependencyGraph): PrivateTypeLeak[] => {
   const findings: PrivateTypeLeak[] = [];
