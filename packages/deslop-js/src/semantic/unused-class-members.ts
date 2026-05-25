@@ -10,6 +10,7 @@ import type { SemanticContext } from "./program.js";
 import type { ReferenceIndex } from "./references.js";
 import { SEMANTIC_TRACE_MAX_ENTRIES } from "../constants.js";
 import { buildSourceFileLookup, normalizeSourcePath } from "./utils/source-file-lookup.js";
+import { isFrameworkLifecycleMethod } from "../utils/is-framework-lifecycle-method.js";
 
 interface ClassContext {
   sourceFile: ts.SourceFile;
@@ -231,6 +232,7 @@ export const detectUnusedClassMembers = (
         : member.name.getText(sourceFile);
       const isOverriddenInSubclass = overriddenMemberNames.has(memberName);
       if (isOverriddenInSubclass) continue;
+      if (isFrameworkLifecycleMethod(memberName)) continue;
 
       const { line: zeroIndexedLine, character: zeroIndexedColumn } =
         sourceFile.getLineAndCharacterOfPosition(member.getStart(sourceFile));
