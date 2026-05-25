@@ -19,6 +19,7 @@ import {
   detectDuplicateConstants,
 } from "./dry-patterns.js";
 import { detectCrossFileDuplicateExports } from "./cross-file-duplicate-exports.js";
+import { detectCodeClones } from "../clones/index.js";
 import { runSemanticAnalysis } from "../semantic/index.js";
 import { DetectorError, describeUnknownError } from "../errors.js";
 import { MAX_ANALYSIS_ERRORS } from "../constants.js";
@@ -171,6 +172,12 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
         errorSink,
       )
     : [];
+  const cloneDetectionResult = safeReportDetector(
+    "detectCodeClones",
+    () => detectCodeClones(graph, config.codeClones, config.rootDir),
+    { codeClones: [], codeCloneFamilies: [], mirroredDirectories: [] },
+    errorSink,
+  );
 
   let semanticResult: ReturnType<typeof runSemanticAnalysis>;
   try {
@@ -231,9 +238,9 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     simplifiableExpressions,
     duplicateConstants,
     crossFileDuplicateExports,
-    codeClones: [],
-    codeCloneFamilies: [],
-    mirroredDirectories: [],
+    codeClones: cloneDetectionResult.codeClones,
+    codeCloneFamilies: cloneDetectionResult.codeCloneFamilies,
+    mirroredDirectories: cloneDetectionResult.mirroredDirectories,
     analysisErrors: errorSink,
     totalFiles: graph.modules.length,
     totalExports,

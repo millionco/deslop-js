@@ -4228,3 +4228,81 @@ describe("cross-file-duplicate-exports", () => {
     );
   });
 });
+
+describe("code-clones", () => {
+  it("returns no clones when codeClones is not configured", async () => {
+    const result = await scanFixture("code-clones-basic");
+    assert.deepEqual(result.codeClones, []);
+    assert.deepEqual(result.codeCloneFamilies, []);
+    assert.deepEqual(result.mirroredDirectories, []);
+  });
+
+  it("detects structurally-identical functions in semantic mode", async () => {
+    const result = await scanFixture("code-clones-basic", {
+      codeClones: { enabled: true, mode: "semantic", minTokens: 30, minLines: 3 },
+    });
+    assert.ok(
+      result.codeClones.length > 0,
+      `expected at least one code clone, got: ${JSON.stringify(result.codeClones, null, 2)}`,
+    );
+    const ordersInvoicesClone = result.codeClones.find(
+      (codeClone) =>
+        codeClone.instances.some((instance) => instance.path.endsWith("orders.ts")) &&
+        codeClone.instances.some((instance) => instance.path.endsWith("invoices.ts")),
+    );
+    assert.ok(
+      ordersInvoicesClone,
+      `expected a clone spanning orders.ts and invoices.ts, got files: ${result.codeClones
+        .map((codeClone) => codeClone.instances.map((instance) => instance.path).join(","))
+        .join("|")}`,
+    );
+  });
+
+  it("groups clones from the same file pair into a family", async () => {
+    const result = await scanFixture("code-clones-basic", {
+      codeClones: { enabled: true, mode: "semantic", minTokens: 30, minLines: 3 },
+    });
+    if (result.codeClones.length === 0) return;
+    assert.ok(
+      result.codeCloneFamilies.length > 0,
+      "expected at least one clone family when clones are present",
+    );
+    for (const family of result.codeCloneFamilies) {
+      assert.ok(family.files.length >= 2, "family must span 2+ files");
+      assert.ok(family.suggestions.length > 0, "family must produce a refactoring suggestion");
+    }
+  });
+
+  it("respects skipLocal: true and drops within-directory clones", async () => {
+    const result = await scanFixture("code-clones-basic", {
+      codeClones: {
+        enabled: true,
+        mode: "semantic",
+        minTokens: 30,
+        minLines: 3,
+        skipLocal: true,
+      },
+    });
+    for (const codeClone of result.codeClones) {
+      const directories = new Set(
+        codeClone.instances.map((instance) => instance.path.replace(/\/[^/]*$/, "")),
+      );
+      assert.ok(
+        directories.size >= 2,
+        "skipLocal should remove within-directory clones from the report",
+      );
+    }
+  });
+
+  it("does not flag dissimilar files", async () => {
+    const result = await scanFixture("simple-app", {
+      codeClones: { enabled: true, mode: "semantic", minTokens: 50, minLines: 5 },
+    });
+    for (const codeClone of result.codeClones) {
+      assert.ok(
+        codeClone.tokenCount >= 50,
+        `every reported clone must satisfy minTokens, got ${codeClone.tokenCount}`,
+      );
+    }
+  });
+});
