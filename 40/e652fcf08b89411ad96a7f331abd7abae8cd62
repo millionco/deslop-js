@@ -1,0 +1,23 @@
+packages/deslop-js/src/constants.ts
+  s_a8a17f4b20a2ef::t_dcf2333ef44cba 61-95
+packages/deslop-js/src/utils/collect-effect-cleanup-issues.ts
+  s_a8a17f4b20a2ef::t_f195191a43e1a4 82-213
+.changeset/tidy-native-subscriptions.md
+  s_a8a17f4b20a2ef::t_95f23bf2d366a2 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "40e652fcf08b89411ad96a7f331abd7abae8cd62",
+  "prompts": {},
+  "sessions": {
+    "s_a8a17f4b20a2ef": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d8befa90-2675-48db-bbe3-f30ee7abbeb5",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
