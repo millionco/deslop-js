@@ -1,6 +1,7 @@
 import { parseSync } from "oxc-parser";
 import {
   BOUND_RESOURCE_RELEASE_METHOD_NAMES,
+  CALLABLE_CLEANUP_SUBSCRIBE_METHOD_NAMES,
   EFFECT_HOOK_NAMES,
   GLOBAL_RELEASE_METHOD_NAMES,
   SUBSCRIBE_LIKE_METHOD_NAMES,
@@ -27,6 +28,11 @@ export interface EffectCleanupIssue extends EffectCleanupIssueCapture {
 interface ResourceUsage {
   resourceName: string;
   resourceKind: "subscription" | "timer";
+}
+
+interface ReleasableBindingNames {
+  callableCleanupNames: Set<string>;
+  boundResourceNames: Set<string>;
 }
 
 const isFunctionLikeNode = (node: OxcAstNode): boolean =>
@@ -107,15 +113,18 @@ const isSubscribeLikeCallExpression = (node: OxcAstNode): boolean => {
   return methodName !== undefined && SUBSCRIBE_LIKE_METHOD_NAMES.has(methodName);
 };
 
-const isTimerRegistrationCallExpression = (node: OxcAstNode): boolean => {
+const isCallableCleanupSubscribeCallExpression = (node: OxcAstNode): boolean => {
   const callee = getCallCallee(node);
-  if (!callee || callee.type !== "Identifier") return false;
-  const calleeName = getIdentifierName(callee);
-  return calleeName !== undefined && TIMER_CALLEE_NAMES_REQUIRING_CLEANUP.has(calleeName);
+  if (!callee) return false;
+  const methodName = getStaticMemberName(callee);
+  return methodName !== undefined && CALLABLE_CLEANUP_SUBSCRIBE_METHOD_NAMES.has(methodName);
 };
 
-const collectReleasableBindingNames = (effectCallback: OxcAstNode): Set<string> => {
-  const bindingNames = new Set<string>();
+const collectReleasableBindingNames = (effectCallback: OxcAstNode): ReleasableBindingNames => {
+  const bindingNames: ReleasableBindingNames = {
+    callableCleanupNames: new Set<string>(),
+    boundResourceNames: new Set<string>(),
+  };
   const bodyNode = effectCallback.body;
   if (!isOxcAstNode(bodyNode)) return bindingNames;
   walkEffectScope(bodyNode, (child) => {
@@ -124,11 +133,11 @@ const collectReleasableBindingNames = (effectCallback: OxcAstNode): Set<string> 
     if (!bindingName) return;
     const initializer = child.init;
     if (!isOxcAstNode(initializer)) return;
-    if (
-      isSubscribeLikeCallExpression(initializer) ||
-      isTimerRegistrationCallExpression(initializer)
-    ) {
-      bindingNames.add(bindingName);
+    if (isSubscribeLikeCallExpression(initializer)) {
+      bindingNames.boundResourceNames.add(bindingName);
+      if (isCallableCleanupSubscribeCallExpression(initializer)) {
+        bindingNames.callableCleanupNames.add(bindingName);
+      }
     }
   });
   return bindingNames;
@@ -160,7 +169,7 @@ const findResourceUsages = (effectCallback: OxcAstNode): ResourceUsage[] => {
 
 const isReleaseLikeCall = (
   callNode: OxcAstNode,
-  releasableBindingNames: ReadonlySet<string>,
+  releasableBindingNames: ReleasableBindingNames,
 ): boolean => {
   const callee = getCallCallee(callNode);
   if (!callee) return false;
@@ -170,7 +179,7 @@ const isReleaseLikeCall = (
     return (
       TIMER_CLEANUP_CALLEE_NAMES.has(calleeName) ||
       GLOBAL_RELEASE_METHOD_NAMES.has(calleeName) ||
-      releasableBindingNames.has(calleeName)
+      releasableBindingNames.callableCleanupNames.has(calleeName)
     );
   }
   const methodName = getStaticMemberName(callee);
@@ -178,12 +187,12 @@ const isReleaseLikeCall = (
   if (GLOBAL_RELEASE_METHOD_NAMES.has(methodName)) return true;
   if (!BOUND_RESOURCE_RELEASE_METHOD_NAMES.has(methodName)) return false;
   const receiverName = getStaticMemberReceiverName(callee);
-  return receiverName !== undefined && releasableBindingNames.has(receiverName);
+  return receiverName !== undefined && releasableBindingNames.boundResourceNames.has(receiverName);
 };
 
 const containsReleaseLikeCall = (
   node: OxcAstNode,
-  releasableBindingNames: ReadonlySet<string>,
+  releasableBindingNames: ReleasableBindingNames,
 ): boolean => {
   let didFindReleaseCall = false;
   walkEffectScope(node, (child) => {
@@ -199,14 +208,16 @@ const containsReleaseLikeCall = (
 
 const isCleanupReturn = (
   returnedValue: unknown,
-  releasableBindingNames: ReadonlySet<string>,
+  releasableBindingNames: ReleasableBindingNames,
 ): boolean => {
   if (!isOxcAstNode(returnedValue)) return false;
   if (returnedValue.type === "Identifier") {
     const returnedName = getIdentifierName(returnedValue);
-    return returnedName !== undefined && releasableBindingNames.has(returnedName);
+    return (
+      returnedName !== undefined && releasableBindingNames.callableCleanupNames.has(returnedName)
+    );
   }
-  if (isSubscribeLikeCallExpression(returnedValue)) return true;
+  if (isCallableCleanupSubscribeCallExpression(returnedValue)) return true;
   if (
     returnedValue.type !== "ArrowFunctionExpression" &&
     returnedValue.type !== "FunctionExpression"
@@ -221,7 +232,7 @@ const isCleanupReturn = (
 const effectHasCleanupRelease = (effectCallback: OxcAstNode): boolean => {
   const bodyNode = effectCallback.body;
   if (!isOxcAstNode(bodyNode)) return false;
-  if (bodyNode.type !== "BlockStatement") return isSubscribeLikeCallExpression(bodyNode);
+  if (bodyNode.type !== "BlockStatement") return isCallableCleanupSubscribeCallExpression(bodyNode);
   const releasableBindingNames = collectReleasableBindingNames(effectCallback);
   let didFindCleanupReturn = false;
   walkEffectScope(bodyNode, (child) => {
@@ -290,7 +301,13 @@ export const detectEffectCleanupIssues = (
   sourceText: string,
   filePath = "input.tsx",
 ): EffectCleanupIssue[] => {
-  const parseResult = parseSync(filePath, sourceText, { sourceType: "module" });
+  let parseResult: ReturnType<typeof parseSync>;
+  try {
+    parseResult = parseSync(filePath, sourceText, { sourceType: "module" });
+  } catch {
+    return [];
+  }
+  if (parseResult.errors.length > 0) return [];
   return collectEffectCleanupIssues(parseResult.program.body).map((issue) => ({
     ...issue,
     filePath,

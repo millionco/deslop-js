@@ -76,4 +76,64 @@ export const Resize = () => {
       );
     }
   });
+
+  it("does not treat timer handles as callable cleanup functions", () => {
+    const resourceNames = collectEffectCleanupResourceNames(`
+import { useEffect } from "react";
+
+declare const handler: () => void;
+
+export const Timer = () => {
+  useEffect(() => {
+    const timeoutId = setTimeout(handler, 1000);
+    return () => {
+      timeoutId();
+    };
+  }, []);
+};
+`);
+
+    assert.deepEqual(resourceNames, ["setTimeout"]);
+  });
+
+  it("accepts returning subscribe() directly when it returns an unsubscribe function", () => {
+    const resourceNames = collectEffectCleanupResourceNames(`
+import { useEffect } from "react";
+
+declare const store: { subscribe: (handler: () => void) => () => void };
+declare const handler: () => void;
+
+export const Subscribed = () => {
+  useEffect(() => store.subscribe(handler), []);
+};
+`);
+
+    assert.deepEqual(resourceNames, []);
+  });
+
+  it("does not treat returned addEventListener() subscription objects as cleanup functions", () => {
+    const resourceNames = collectEffectCleanupResourceNames(`
+import { useEffect } from "react";
+import { AppState } from "react-native";
+
+declare const onChange: () => void;
+
+export const AppStateFocus = () => {
+  useEffect(() => AppState.addEventListener("change", onChange), []);
+};
+`);
+
+    assert.deepEqual(resourceNames, ["addEventListener"]);
+  });
+
+  it("returns no issues for syntax errors", () => {
+    const resourceNames = collectEffectCleanupResourceNames(`
+import { useEffect } from "react";
+
+export const Broken = () => {
+  useEffect(() => {
+`);
+
+    assert.deepEqual(resourceNames, []);
+  });
 });

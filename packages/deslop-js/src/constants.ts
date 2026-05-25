@@ -70,6 +70,8 @@ export const SUBSCRIBE_LIKE_METHOD_NAMES = new Set([
   "sub",
 ]);
 
+export const CALLABLE_CLEANUP_SUBSCRIBE_METHOD_NAMES = new Set(["subscribe", "sub"]);
+
 export const TIMER_CALLEE_NAMES_REQUIRING_CLEANUP = new Set(["setInterval", "setTimeout"]);
 
 export const TIMER_CLEANUP_CALLEE_NAMES = new Set(["clearInterval", "clearTimeout"]);
