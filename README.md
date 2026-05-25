@@ -114,6 +114,12 @@ result.featureFlags; // LaunchDarkly/Statsig/Unleash/PostHog/Vercel Flags/proces
 // function complexity hotspots (opt-in via `complexity.enabled: true`)
 result.complexFunctions; // McCabe cyclomatic + SonarSource cognitive per function
 
+// TypeScript-specific smells (on by default)
+result.unnecessaryAssertions; // `x as unknown as T`, `x as any`, `x!!`, `<T>x`, `"foo"!`
+result.lazyImportsAtTopLevel; // top-level `await import(...)` / `.then(...)` that should be static
+result.commonjsInEsm; // `require()`, `module.exports`, `exports.x` inside ESM modules
+result.typeScriptEscapeHatches; // `// @ts-ignore`, `// @ts-nocheck`, undocumented `@ts-expect-error`
+
 // semantic findings (type-aware, opt-in via `semantic.enabled: true`)
 result.unusedTypes; // type aliases / interfaces never referenced
 result.unusedEnumMembers; // enum members no reference site uses
@@ -236,6 +242,27 @@ const config = defineConfig({
   },
 });
 ```
+
+
+### TypeScript code smells
+
+On by default. Four families of TypeScript-specific patterns surfaced at high or medium confidence — no extra config required.
+
+```ts
+result.unnecessaryAssertions; // type assertions that drop type-safety or do nothing
+result.lazyImportsAtTopLevel; // dynamic imports at the module top level
+result.commonjsInEsm; // CommonJS forms inside ESM modules
+result.typeScriptEscapeHatches; // @ts-ignore / @ts-nocheck / undocumented @ts-expect-error
+```
+
+| Finding                              | Kinds                                                                                                                                                                  |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `result.unnecessaryAssertions`       | `redundant-double-assertion` (`x as unknown as T`), `assertion-to-any`, `redundant-non-null-on-literal` (`"foo"!`), `double-non-null` (`x!!`), `angle-bracket-assertion` (`<T>x`) |
+| `result.lazyImportsAtTopLevel`       | `top-level-await-import`, `top-level-then-import`                                                                                                                      |
+| `result.commonjsInEsm`               | `require`, `module-exports`, `exports-assignment`                                                                                                                      |
+| `result.typeScriptEscapeHatches`     | `ts-ignore`, `ts-nocheck`, `ts-expect-error-without-explanation`                                                                                                       |
+
+ESM detection follows the runtime rules: `.mts`/`.mjs` extensions are always ESM, `.cts`/`.cjs` are always CommonJS, and other files inherit from the nearest `package.json`'s `"type"` field.
 
 ## Findings have confidence tiers
 

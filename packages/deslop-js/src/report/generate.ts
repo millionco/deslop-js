@@ -24,6 +24,7 @@ import { detectReExportCycles } from "./re-export-cycles.js";
 import { correlateFlagsWithDeadCode, detectFeatureFlags } from "./feature-flags.js";
 import { detectComplexHotspots } from "./complexity.js";
 import { detectPrivateTypeLeaks } from "./private-type-leaks.js";
+import { detectTypeScriptSmells } from "./typescript-smells.js";
 import { runSemanticAnalysis } from "../semantic/index.js";
 import { DetectorError, describeUnknownError } from "../errors.js";
 import { MAX_ANALYSIS_ERRORS } from "../constants.js";
@@ -207,6 +208,17 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     [],
     errorSink,
   );
+  const typeScriptSmellsResult = safeReportDetector(
+    "detectTypeScriptSmells",
+    () => detectTypeScriptSmells(graph),
+    {
+      unnecessaryAssertions: [],
+      lazyImportsAtTopLevel: [],
+      commonjsInEsm: [],
+      typeScriptEscapeHatches: [],
+    },
+    errorSink,
+  );
   let semanticResult: ReturnType<typeof runSemanticAnalysis>;
   try {
     semanticResult = runSemanticAnalysis(graph, config);
@@ -277,6 +289,10 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     featureFlags,
     complexFunctions,
     privateTypeLeaks,
+    unnecessaryAssertions: typeScriptSmellsResult.unnecessaryAssertions,
+    lazyImportsAtTopLevel: typeScriptSmellsResult.lazyImportsAtTopLevel,
+    commonjsInEsm: typeScriptSmellsResult.commonjsInEsm,
+    typeScriptEscapeHatches: typeScriptSmellsResult.typeScriptEscapeHatches,
     analysisErrors: errorSink,
     totalFiles: graph.modules.length,
     totalExports,

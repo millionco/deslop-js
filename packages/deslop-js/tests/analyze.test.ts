@@ -4388,3 +4388,97 @@ describe("complex-functions", () => {
     assert.equal(simple, undefined, "simpleFn must not be flagged");
   });
 });
+
+describe("typescript-smells", () => {
+  it("flags redundant double assertions like `x as unknown as T`", async () => {
+    const result = await scanFixture("typescript-smells");
+    const doubleAssertion = result.unnecessaryAssertions.find(
+      (finding) => finding.kind === "redundant-double-assertion",
+    );
+    assert.ok(
+      doubleAssertion,
+      `expected a redundant-double-assertion finding, got: ${JSON.stringify(result.unnecessaryAssertions.map((finding) => finding.kind))}`,
+    );
+    assert.equal(doubleAssertion.confidence, "high");
+  });
+
+  it("flags `as any`", async () => {
+    const result = await scanFixture("typescript-smells");
+    const asAny = result.unnecessaryAssertions.find((finding) => finding.kind === "assertion-to-any");
+    assert.ok(asAny, "expected an assertion-to-any finding");
+  });
+
+  it("flags non-null assertion on a literal", async () => {
+    const result = await scanFixture("typescript-smells");
+    const onLiteral = result.unnecessaryAssertions.find(
+      (finding) => finding.kind === "redundant-non-null-on-literal",
+    );
+    assert.ok(onLiteral, "expected a redundant-non-null-on-literal finding");
+    assert.equal(onLiteral.confidence, "high");
+  });
+
+  it("flags double non-null assertions `x!!`", async () => {
+    const result = await scanFixture("typescript-smells");
+    const doubleNonNull = result.unnecessaryAssertions.find(
+      (finding) => finding.kind === "double-non-null",
+    );
+    assert.ok(doubleNonNull, "expected a double-non-null finding");
+  });
+
+  it("flags `<T>x` angle-bracket assertions", async () => {
+    const result = await scanFixture("typescript-smells");
+    const angleBracket = result.unnecessaryAssertions.find(
+      (finding) => finding.kind === "angle-bracket-assertion",
+    );
+    assert.ok(angleBracket, "expected an angle-bracket-assertion finding");
+  });
+
+  it("flags top-level `await import()` and `import().then()`", async () => {
+    const result = await scanFixture("typescript-smells");
+    const awaitImport = result.lazyImportsAtTopLevel.find(
+      (finding) => finding.kind === "top-level-await-import",
+    );
+    assert.ok(awaitImport, "expected a top-level-await-import finding");
+    assert.ok(
+      awaitImport.specifier.endsWith("alpha.js"),
+      `expected alpha.js specifier, got ${awaitImport.specifier}`,
+    );
+    const thenImport = result.lazyImportsAtTopLevel.find(
+      (finding) => finding.kind === "top-level-then-import",
+    );
+    assert.ok(thenImport, "expected a top-level-then-import finding");
+  });
+
+  it("flags `require()` and `module.exports` / `exports.x` in ESM modules", async () => {
+    const result = await scanFixture("typescript-smells");
+    const requireFinding = result.commonjsInEsm.find((finding) => finding.kind === "require");
+    assert.ok(requireFinding, "expected a require() finding in this ESM (`type: module`) fixture");
+    const moduleExportsFinding = result.commonjsInEsm.find(
+      (finding) => finding.kind === "module-exports",
+    );
+    assert.ok(moduleExportsFinding, "expected a module.exports finding");
+    const exportsAssignmentFinding = result.commonjsInEsm.find(
+      (finding) => finding.kind === "exports-assignment",
+    );
+    assert.ok(exportsAssignmentFinding, "expected an exports.x = ... finding");
+  });
+
+  it("flags `@ts-ignore` and `@ts-nocheck` comments", async () => {
+    const result = await scanFixture("typescript-smells");
+    const tsIgnore = result.typeScriptEscapeHatches.find((finding) => finding.kind === "ts-ignore");
+    assert.ok(tsIgnore, "expected ts-ignore finding");
+    assert.equal(tsIgnore.confidence, "high");
+  });
+
+  it("flags `@ts-expect-error` without an explanation, but allows it when the comment carries a justification", async () => {
+    const result = await scanFixture("typescript-smells");
+    const expectErrorFindings = result.typeScriptEscapeHatches.filter(
+      (finding) => finding.kind === "ts-expect-error-without-explanation",
+    );
+    assert.equal(
+      expectErrorFindings.length,
+      1,
+      `expected exactly one ts-expect-error-without-explanation finding, got ${expectErrorFindings.length}: ${JSON.stringify(expectErrorFindings)}`,
+    );
+  });
+});

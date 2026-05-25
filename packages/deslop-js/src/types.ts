@@ -532,6 +532,63 @@ export interface PrivateTypeLeak {
   reason: string;
 }
 
+export type UnnecessaryAssertionKind =
+  | "redundant-double-assertion"
+  | "assertion-to-any"
+  | "redundant-non-null-on-literal"
+  | "double-non-null"
+  | "angle-bracket-assertion";
+
+export interface UnnecessaryAssertion {
+  path: string;
+  kind: UnnecessaryAssertionKind;
+  snippet: string;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+  suggestion: string;
+}
+
+export type LazyImportKind = "top-level-await-import" | "top-level-then-import";
+
+export interface LazyImportAtTopLevel {
+  path: string;
+  specifier: string;
+  kind: LazyImportKind;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export type CommonjsInEsmKind = "require" | "module-exports" | "exports-assignment";
+
+export interface CommonjsInEsm {
+  path: string;
+  kind: CommonjsInEsmKind;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+  snippet: string;
+}
+
+export type TypeScriptEscapeHatchKind =
+  | "ts-ignore"
+  | "ts-nocheck"
+  | "ts-expect-error-without-explanation";
+
+export interface TypeScriptEscapeHatch {
+  path: string;
+  kind: TypeScriptEscapeHatchKind;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+  suggestion: string;
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -559,6 +616,10 @@ export interface ScanResult {
   featureFlags: FeatureFlag[];
   complexFunctions: FunctionComplexity[];
   privateTypeLeaks: PrivateTypeLeak[];
+  unnecessaryAssertions: UnnecessaryAssertion[];
+  lazyImportsAtTopLevel: LazyImportAtTopLevel[];
+  commonjsInEsm: CommonjsInEsm[];
+  typeScriptEscapeHatches: TypeScriptEscapeHatch[];
   analysisErrors: DeslopError[];
   totalFiles: number;
   totalExports: number;
