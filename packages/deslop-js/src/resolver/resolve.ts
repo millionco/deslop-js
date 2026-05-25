@@ -11,6 +11,7 @@ import {
   SOURCE_EXTENSIONS,
 } from "../constants.js";
 import { resolveSourcePath } from "./source-path.js";
+import { isPlatformBuiltinOrVirtualSpecifier } from "../utils/is-platform-builtin-or-virtual.js";
 
 const fileExistsCache = new Map<string, boolean>();
 const pathExistsCache = new Map<string, boolean>();
