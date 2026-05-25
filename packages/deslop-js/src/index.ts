@@ -140,6 +140,14 @@ export type {
   DeslopErrorModule,
   DeslopErrorSeverity,
 } from "./types.js";
+export {
+  collectEffectCleanupIssues,
+  detectEffectCleanupIssues,
+} from "./utils/collect-effect-cleanup-issues.js";
+export type {
+  EffectCleanupIssue,
+  EffectCleanupIssueCapture,
+} from "./utils/collect-effect-cleanup-issues.js";
 
 /**
  * Default flags below mark rules off-by-default. Rationale for each:

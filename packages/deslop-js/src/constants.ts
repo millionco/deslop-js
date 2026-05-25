@@ -58,6 +58,41 @@ export const DEFAULT_ENTRY_GLOBS = [
   "main.{ts,tsx,js,jsx}",
 ];
 
+export const EFFECT_HOOK_NAMES = new Set(["useEffect", "useLayoutEffect"]);
+
+export const SUBSCRIBE_LIKE_METHOD_NAMES = new Set([
+  "subscribe",
+  "addEventListener",
+  "addListener",
+  "on",
+  "watch",
+  "listen",
+  "sub",
+]);
+
+export const TIMER_CALLEE_NAMES_REQUIRING_CLEANUP = new Set(["setInterval", "setTimeout"]);
+
+export const TIMER_CLEANUP_CALLEE_NAMES = new Set(["clearInterval", "clearTimeout"]);
+
+export const GLOBAL_RELEASE_METHOD_NAMES = new Set([
+  "unsubscribe",
+  "removeEventListener",
+  "removeListener",
+  "off",
+  "unwatch",
+  "unlisten",
+  "unsub",
+  "abort",
+]);
+
+export const BOUND_RESOURCE_RELEASE_METHOD_NAMES = new Set([
+  "remove",
+  "cleanup",
+  "dispose",
+  "destroy",
+  "teardown",
+]);
+
 export const KNOWN_CONFIG_PREFIXES = [
   "babel.config.",
   "rollup.config.",
