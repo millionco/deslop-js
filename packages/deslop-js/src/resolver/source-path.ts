@@ -1,4 +1,4 @@
-import { resolve, relative } from "node:path";
+import { resolve, relative, dirname, basename } from "node:path";
 import { existsSync } from "node:fs";
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs"];
@@ -54,6 +54,8 @@ export const resolveSourcePath = (distPath: string, directory: string): string |
         return sourceCandidate;
       }
     }
+    const indexPrefixedCandidate = resolveWithIndexPrefix(withoutExtension, directory);
+    if (indexPrefixedCandidate) return indexPrefixedCandidate;
   }
 
   if (matchesOutputDirectory(relativeToDist)) {
@@ -77,7 +79,21 @@ export const resolveSourcePath = (distPath: string, directory: string): string |
     }
     const indexCandidate = resolve(directory, withoutExtension, "index.ts");
     if (existsSync(indexCandidate)) return indexCandidate;
+
+    const indexPrefixedCandidate = resolveWithIndexPrefix(withoutExtension, directory);
+    if (indexPrefixedCandidate) return indexPrefixedCandidate;
   }
 
+  return undefined;
+};
+
+const resolveWithIndexPrefix = (stemPath: string, directory: string): string | undefined => {
+  const parentDirectory = dirname(stemPath);
+  const stemBasename = basename(stemPath);
+  const indexPrefixedStem = `${parentDirectory}/index.${stemBasename}`;
+  for (const sourceExtension of SOURCE_EXTENSIONS) {
+    const candidate = resolve(directory, indexPrefixedStem + sourceExtension);
+    if (existsSync(candidate)) return candidate;
+  }
   return undefined;
 };
