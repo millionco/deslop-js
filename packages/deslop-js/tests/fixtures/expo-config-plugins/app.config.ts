@@ -1,14 +1,14 @@
 const internalToolingConfig = {
-  plugins: ["./plugins/orphan.ts"],
+  plugins: ["./plugins/false-positive-target.ts"],
 };
 
 export default () => ({
   plugins: [
-    `./plugins/android-secure-flag.plugin.ts`,
-    ["./plugins/with-directory-plugin", { enabled: true }],
+    `./plugins/template-literal-plugin.ts`,
+    ["./plugins/directory-index-plugin", { enabled: true }],
     "./plugins/*.ts",
-    "/plugins/orphan.ts",
-    ["./plugins/orphan.ts".replace("orphan", "orphan"), { enabled: true }],
+    "/plugins/false-positive-target.ts",
+    ["./plugins/false-positive-target.ts".replace("target", "target"), { enabled: true }],
     "expo-camera",
   ],
   extra: internalToolingConfig,

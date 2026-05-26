@@ -1,3 +1,3 @@
 module.exports = () => ({
-  plugins: ["./plugins/with-nested-config-plugin"],
+  plugins: ["./plugins/nested-config-relative-plugin"],
 });

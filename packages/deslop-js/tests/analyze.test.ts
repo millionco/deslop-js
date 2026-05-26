@@ -304,11 +304,16 @@ describe("expo-config-plugins", () => {
     const unusedFilePaths = orphanPaths(result, fixtureDir);
 
     for (const expectedReachableFile of [
-      "plugins/android-secure-flag.plugin.ts",
-      "plugins/with-directory-plugin/index.ts",
-      "plugins/with-json-plugin.ts",
-      "plugins/with-root-json-plugin.ts",
-      "apps/mobile/plugins/with-nested-config-plugin.ts",
+      // A plain template string in app.config.ts.
+      "plugins/template-literal-plugin.ts",
+      // A tuple entry that points at a directory with index.ts.
+      "plugins/directory-index-plugin/index.ts",
+      // An extensionless local path in expo.plugins.
+      "plugins/expo-json-extensionless-plugin.ts",
+      // A root-level plugins array in app.json.
+      "plugins/root-json-plugin.ts",
+      // A nested app.config.js resolves paths from its own folder.
+      "apps/mobile/plugins/nested-config-relative-plugin.ts",
     ]) {
       assert.ok(
         !unusedFilePaths.includes(expectedReachableFile),
@@ -317,12 +322,12 @@ describe("expo-config-plugins", () => {
     }
 
     assert.ok(
-      unusedFilePaths.includes("plugins/expo-camera.ts"),
+      unusedFilePaths.includes("expo-camera.ts"),
       `package-name lookalikes must not be treated as local plugin files, got: ${unusedFilePaths}`,
     );
     assert.ok(
-      unusedFilePaths.includes("plugins/orphan.ts"),
-      `nested non-Expo plugin arrays, dynamic tuple entries, absolute paths, and wildcard paths must not mark orphan.ts reachable, got: ${unusedFilePaths}`,
+      unusedFilePaths.includes("plugins/false-positive-target.ts"),
+      `nested non-Expo plugin arrays, dynamic tuple entries, absolute paths, and wildcard paths must not mark false-positive-target.ts reachable, got: ${unusedFilePaths}`,
     );
   });
 });
