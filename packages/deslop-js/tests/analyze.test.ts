@@ -4194,3 +4194,297 @@ describe("reexport-star-named", () => {
     );
   });
 });
+
+describe("cross-file-duplicate-exports", () => {
+  it("should flag the same exported name in 2+ files that share an importer", async () => {
+    const result = await scanFixture("cross-file-duplicate-exports");
+    const findings = result.crossFileDuplicateExports;
+    const sharedFinding = findings.find((finding) => finding.name === "sharedThing");
+    assert.ok(
+      sharedFinding,
+      `expected a cross-file duplicate for "sharedThing", got: ${JSON.stringify(findings.map((finding) => finding.name))}`,
+    );
+    assert.equal(sharedFinding.locations.length, 2);
+    assert.equal(sharedFinding.confidence, "medium");
+  });
+
+  it("should not flag unique exports", async () => {
+    const result = await scanFixture("cross-file-duplicate-exports");
+    const onlyHere = result.crossFileDuplicateExports.find(
+      (finding) => finding.name === "onlyHere",
+    );
+    assert.equal(onlyHere, undefined, "onlyHere appears in only one file and must not be flagged");
+  });
+
+  it("should not flag entry-point modules whose duplicates are part of the public API surface", async () => {
+    const result = await scanFixture("cross-file-duplicate-exports-unrelated");
+    const handlerFinding = result.crossFileDuplicateExports.find(
+      (finding) => finding.name === "handler",
+    );
+    assert.equal(
+      handlerFinding,
+      undefined,
+      "package.json-declared route entry points are part of the API surface, not actionable duplicates",
+    );
+  });
+});
+
+describe("code-clones", () => {
+  it("can be disabled via duplicateBlocks: { enabled: false }", async () => {
+    const result = await scanFixture("duplicate-blocks-basic", {
+      duplicateBlocks: { enabled: false },
+    });
+    assert.deepEqual(result.duplicateBlocks, []);
+    assert.deepEqual(result.duplicateBlockClusters, []);
+    assert.deepEqual(result.shadowedDirectoryPairs, []);
+  });
+
+  it("detects structurally-identical functions in semantic mode", async () => {
+    const result = await scanFixture("duplicate-blocks-basic", {
+      duplicateBlocks: { enabled: true, mode: "semantic", minTokens: 30, minLines: 3 },
+    });
+    assert.ok(
+      result.duplicateBlocks.length > 0,
+      `expected at least one duplicate block, got: ${JSON.stringify(result.duplicateBlocks, null, 2)}`,
+    );
+    const ordersInvoicesClone = result.duplicateBlocks.find(
+      (duplicateBlock) =>
+        duplicateBlock.instances.some((instance) => instance.path.endsWith("orders.ts")) &&
+        duplicateBlock.instances.some((instance) => instance.path.endsWith("invoices.ts")),
+    );
+    assert.ok(
+      ordersInvoicesClone,
+      `expected a clone spanning orders.ts and invoices.ts, got files: ${result.duplicateBlocks
+        .map((duplicateBlock) => duplicateBlock.instances.map((instance) => instance.path).join(","))
+        .join("|")}`,
+    );
+  });
+
+  it("groups clones from the same file pair into a family", async () => {
+    const result = await scanFixture("duplicate-blocks-basic", {
+      duplicateBlocks: { enabled: true, mode: "semantic", minTokens: 30, minLines: 3 },
+    });
+    if (result.duplicateBlocks.length === 0) return;
+    assert.ok(
+      result.duplicateBlockClusters.length > 0,
+      "expected at least one duplicate-block cluster when clones are present",
+    );
+    for (const family of result.duplicateBlockClusters) {
+      assert.ok(family.files.length >= 2, "family must span 2+ files");
+      assert.ok(family.suggestions.length > 0, "family must produce a refactoring suggestion");
+    }
+  });
+
+  it("respects skipLocal: true and drops within-directory clones", async () => {
+    const result = await scanFixture("duplicate-blocks-basic", {
+      duplicateBlocks: {
+        enabled: true,
+        mode: "semantic",
+        minTokens: 30,
+        minLines: 3,
+        skipLocal: true,
+      },
+    });
+    for (const duplicateBlock of result.duplicateBlocks) {
+      const directories = new Set(
+        duplicateBlock.instances.map((instance) => instance.path.replace(/\/[^/]*$/, "")),
+      );
+      assert.ok(
+        directories.size >= 2,
+        "skipLocal should remove within-directory clones from the report",
+      );
+    }
+  });
+
+  it("does not flag dissimilar files", async () => {
+    const result = await scanFixture("simple-app", {
+      duplicateBlocks: { enabled: true, mode: "semantic", minTokens: 50, minLines: 5 },
+    });
+    for (const duplicateBlock of result.duplicateBlocks) {
+      assert.ok(
+        duplicateBlock.tokenCount >= 50,
+        `every reported clone must satisfy minTokens, got ${duplicateBlock.tokenCount}`,
+      );
+    }
+  });
+});
+
+describe("re-export-cycles", () => {
+  it("detects multi-node re-export cycles", async () => {
+    const result = await scanFixture("re-export-cycle");
+    assert.ok(
+      result.reExportCycles.length > 0,
+      `expected at least one re-export cycle, got ${JSON.stringify(result.reExportCycles)}`,
+    );
+    const multiNodeCycle = result.reExportCycles.find((cycle) => cycle.kind === "multi-node");
+    assert.ok(multiNodeCycle, "expected a multi-node re-export cycle for barrel <-> other");
+    assert.equal(multiNodeCycle.confidence, "high");
+  });
+});
+
+describe("feature-flags", () => {
+  it("can be disabled via featureFlags: { enabled: false }", async () => {
+    const result = await scanFixture("feature-flags-basic", {
+      featureFlags: { enabled: false },
+    });
+    assert.deepEqual(result.featureFlags, []);
+  });
+
+  it("detects env var, SDK, and provider attribution", async () => {
+    const result = await scanFixture("feature-flags-basic", {
+      featureFlags: { enabled: true },
+    });
+    const envVarFlag = result.featureFlags.find((flag) => flag.kind === "env-var");
+    assert.ok(envVarFlag, `expected an env-var flag finding, got: ${JSON.stringify(result.featureFlags)}`);
+    assert.equal(envVarFlag.name, "FEATURE_NEW_CHECKOUT");
+
+    const statsigFlag = result.featureFlags.find((flag) => flag.sdkProvider === "Statsig");
+    assert.ok(statsigFlag, "expected Statsig sdkProvider attribution");
+    assert.equal(statsigFlag.name, "legacy_billing");
+
+    const launchDarklyFlag = result.featureFlags.find(
+      (flag) => flag.sdkProvider === "LaunchDarkly",
+    );
+    assert.ok(launchDarklyFlag, "expected LaunchDarkly sdkProvider attribution");
+    assert.equal(launchDarklyFlag.name, "payments-flag");
+  });
+});
+
+describe("private-type-leaks", () => {
+  it("flags exports whose signatures reference unexported local types", async () => {
+    const result = await scanFixture("private-type-leak");
+    const initializeLeak = result.privateTypeLeaks.find(
+      (leak) => leak.exportName === "initialize" && leak.typeName === "InternalConfig",
+    );
+    assert.ok(
+      initializeLeak,
+      `expected initialize -> InternalConfig leak, got: ${JSON.stringify(result.privateTypeLeaks)}`,
+    );
+    assert.equal(initializeLeak.confidence, "high");
+
+    const teardownLeak = result.privateTypeLeaks.find(
+      (leak) => leak.exportName === "teardown" && leak.typeName === "InternalConfig",
+    );
+    assert.ok(teardownLeak, "expected teardown -> InternalConfig leak");
+  });
+});
+
+describe("complex-functions", () => {
+  it("can be disabled via complexity: { enabled: false }", async () => {
+    const result = await scanFixture("complex-functions", {
+      complexity: { enabled: false },
+    });
+    assert.deepEqual(result.complexFunctions, []);
+  });
+
+  it("flags only functions that breach a threshold", async () => {
+    const result = await scanFixture("complex-functions", {
+      complexity: {
+        enabled: true,
+        cyclomaticThreshold: 5,
+        cognitiveThreshold: 5,
+        paramCountThreshold: 4,
+        functionLineThreshold: 10,
+      },
+    });
+    const tangled = result.complexFunctions.find((finding) => finding.functionName === "tangledFn");
+    assert.ok(tangled, "tangledFn should be flagged");
+    assert.ok(tangled.cyclomatic >= 5, `tangledFn cyclomatic ${tangled.cyclomatic} should be >= 5`);
+    const simple = result.complexFunctions.find((finding) => finding.functionName === "simpleFn");
+    assert.equal(simple, undefined, "simpleFn must not be flagged");
+  });
+});
+
+describe("typescript-smells", () => {
+  it("flags redundant double assertions like `x as unknown as T`", async () => {
+    const result = await scanFixture("typescript-smells");
+    const doubleAssertion = result.unnecessaryAssertions.find(
+      (finding) => finding.kind === "redundant-double-assertion",
+    );
+    assert.ok(
+      doubleAssertion,
+      `expected a redundant-double-assertion finding, got: ${JSON.stringify(result.unnecessaryAssertions.map((finding) => finding.kind))}`,
+    );
+    assert.equal(doubleAssertion.confidence, "high");
+  });
+
+  it("flags `as any`", async () => {
+    const result = await scanFixture("typescript-smells");
+    const asAny = result.unnecessaryAssertions.find((finding) => finding.kind === "assertion-to-any");
+    assert.ok(asAny, "expected an assertion-to-any finding");
+  });
+
+  it("flags non-null assertion on a literal", async () => {
+    const result = await scanFixture("typescript-smells");
+    const onLiteral = result.unnecessaryAssertions.find(
+      (finding) => finding.kind === "redundant-non-null-on-literal",
+    );
+    assert.ok(onLiteral, "expected a redundant-non-null-on-literal finding");
+    assert.equal(onLiteral.confidence, "high");
+  });
+
+  it("flags double non-null assertions `x!!`", async () => {
+    const result = await scanFixture("typescript-smells");
+    const doubleNonNull = result.unnecessaryAssertions.find(
+      (finding) => finding.kind === "double-non-null",
+    );
+    assert.ok(doubleNonNull, "expected a double-non-null finding");
+  });
+
+  it("flags `<T>x` angle-bracket assertions", async () => {
+    const result = await scanFixture("typescript-smells");
+    const angleBracket = result.unnecessaryAssertions.find(
+      (finding) => finding.kind === "angle-bracket-assertion",
+    );
+    assert.ok(angleBracket, "expected an angle-bracket-assertion finding");
+  });
+
+  it("flags top-level `await import()` and `import().then()`", async () => {
+    const result = await scanFixture("typescript-smells");
+    const awaitImport = result.lazyImportsAtTopLevel.find(
+      (finding) => finding.kind === "top-level-await-import",
+    );
+    assert.ok(awaitImport, "expected a top-level-await-import finding");
+    assert.ok(
+      awaitImport.specifier.endsWith("alpha.js"),
+      `expected alpha.js specifier, got ${awaitImport.specifier}`,
+    );
+    const thenImport = result.lazyImportsAtTopLevel.find(
+      (finding) => finding.kind === "top-level-then-import",
+    );
+    assert.ok(thenImport, "expected a top-level-then-import finding");
+  });
+
+  it("flags `require()` and `module.exports` / `exports.x` in ESM modules", async () => {
+    const result = await scanFixture("typescript-smells");
+    const requireFinding = result.commonjsInEsm.find((finding) => finding.kind === "require");
+    assert.ok(requireFinding, "expected a require() finding in this ESM (`type: module`) fixture");
+    const moduleExportsFinding = result.commonjsInEsm.find(
+      (finding) => finding.kind === "module-exports",
+    );
+    assert.ok(moduleExportsFinding, "expected a module.exports finding");
+    const exportsAssignmentFinding = result.commonjsInEsm.find(
+      (finding) => finding.kind === "exports-assignment",
+    );
+    assert.ok(exportsAssignmentFinding, "expected an exports.x = ... finding");
+  });
+
+  it("flags `@ts-ignore` and `@ts-nocheck` comments", async () => {
+    const result = await scanFixture("typescript-smells");
+    const tsIgnore = result.typeScriptEscapeHatches.find((finding) => finding.kind === "ts-ignore");
+    assert.ok(tsIgnore, "expected ts-ignore finding");
+    assert.equal(tsIgnore.confidence, "high");
+  });
+
+  it("flags `@ts-expect-error` without an explanation, but allows it when the comment carries a justification", async () => {
+    const result = await scanFixture("typescript-smells");
+    const expectErrorFindings = result.typeScriptEscapeHatches.filter(
+      (finding) => finding.kind === "ts-expect-error-without-explanation",
+    );
+    assert.equal(
+      expectErrorFindings.length,
+      1,
+      `expected exactly one ts-expect-error-without-explanation finding, got ${expectErrorFindings.length}: ${JSON.stringify(expectErrorFindings)}`,
+    );
+  });
+});

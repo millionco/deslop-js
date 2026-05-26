@@ -18,6 +18,13 @@ import {
   detectSimplifiableExpressions,
   detectDuplicateConstants,
 } from "./dry-patterns.js";
+import { detectCrossFileDuplicateExports } from "./cross-file-duplicate-exports.js";
+import { detectDuplicateBlocks } from "../duplicate-blocks/index.js";
+import { detectReExportCycles } from "./re-export-cycles.js";
+import { correlateFlagsWithDeadCode, detectFeatureFlags } from "./feature-flags.js";
+import { detectComplexHotspots } from "./complexity.js";
+import { detectPrivateTypeLeaks } from "./private-type-leaks.js";
+import { detectTypeScriptSmells } from "./typescript-smells.js";
 import { runSemanticAnalysis } from "../semantic/index.js";
 import { DetectorError, describeUnknownError } from "../errors.js";
 import { MAX_ANALYSIS_ERRORS } from "../constants.js";
@@ -162,7 +169,56 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
         errorSink,
       )
     : [];
+  const crossFileDuplicateExports = config.reportRedundancy
+    ? safeReportDetector(
+        "detectCrossFileDuplicateExports",
+        () => detectCrossFileDuplicateExports(graph),
+        [],
+        errorSink,
+      )
+    : [];
+  const duplicateBlockResult = safeReportDetector(
+    "detectDuplicateBlocks",
+    () => detectDuplicateBlocks(graph, config.duplicateBlocks, config.rootDir),
+    { duplicateBlocks: [], duplicateBlockClusters: [], shadowedDirectoryPairs: [] },
+    errorSink,
+  );
 
+  const reExportCycles = safeReportDetector(
+    "detectReExportCycles",
+    () => detectReExportCycles(graph),
+    [],
+    errorSink,
+  );
+  const featureFlags = safeReportDetector(
+    "detectFeatureFlags",
+    () => detectFeatureFlags(graph, config.featureFlags),
+    [],
+    errorSink,
+  );
+  const complexFunctions = safeReportDetector(
+    "detectComplexHotspots",
+    () => detectComplexHotspots(graph, config.complexity),
+    [],
+    errorSink,
+  );
+  const privateTypeLeaks = safeReportDetector(
+    "detectPrivateTypeLeaks",
+    () => detectPrivateTypeLeaks(graph),
+    [],
+    errorSink,
+  );
+  const typeScriptSmellsResult = safeReportDetector(
+    "detectTypeScriptSmells",
+    () => detectTypeScriptSmells(graph),
+    {
+      unnecessaryAssertions: [],
+      lazyImportsAtTopLevel: [],
+      commonjsInEsm: [],
+      typeScriptEscapeHatches: [],
+    },
+    errorSink,
+  );
   let semanticResult: ReturnType<typeof runSemanticAnalysis>;
   try {
     semanticResult = runSemanticAnalysis(graph, config);
@@ -193,6 +249,10 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     ? [...syntacticRedundantAliases, ...semanticResult.redundantAliases]
     : [];
 
+
+  if (featureFlags.length > 0) {
+    correlateFlagsWithDeadCode(featureFlags, { unusedExports });
+  }
   const totalExports = graph.modules.reduce(
     (exportCount, module) =>
       exportCount +
@@ -221,6 +281,18 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     simplifiableFunctions,
     simplifiableExpressions,
     duplicateConstants,
+    crossFileDuplicateExports,
+    duplicateBlocks: duplicateBlockResult.duplicateBlocks,
+    duplicateBlockClusters: duplicateBlockResult.duplicateBlockClusters,
+    shadowedDirectoryPairs: duplicateBlockResult.shadowedDirectoryPairs,
+    reExportCycles,
+    featureFlags,
+    complexFunctions,
+    privateTypeLeaks,
+    unnecessaryAssertions: typeScriptSmellsResult.unnecessaryAssertions,
+    lazyImportsAtTopLevel: typeScriptSmellsResult.lazyImportsAtTopLevel,
+    commonjsInEsm: typeScriptSmellsResult.commonjsInEsm,
+    typeScriptEscapeHatches: typeScriptSmellsResult.typeScriptEscapeHatches,
     analysisErrors: errorSink,
     totalFiles: graph.modules.length,
     totalExports,

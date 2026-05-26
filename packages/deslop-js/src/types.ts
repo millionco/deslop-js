@@ -407,6 +407,188 @@ export interface DuplicateConstant {
   reason: string;
 }
 
+export interface CrossFileDuplicateExportLocation {
+  path: string;
+  line: number;
+  column: number;
+  isTypeOnly: boolean;
+}
+
+export interface CrossFileDuplicateExport {
+  name: string;
+  locations: CrossFileDuplicateExportLocation[];
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export type DuplicateBlockDetectionMode = "strict" | "semantic";
+
+export interface DuplicateBlockOccurrence {
+  path: string;
+  startLine: number;
+  endLine: number;
+  startColumn: number;
+  endColumn: number;
+}
+
+export interface DuplicateBlock {
+  instances: DuplicateBlockOccurrence[];
+  tokenCount: number;
+  lineCount: number;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export type DuplicateBlockRefactoringKind = "extract-function" | "extract-module";
+
+export interface DuplicateBlockRefactoringHint {
+  kind: DuplicateBlockRefactoringKind;
+  description: string;
+  estimatedSavings: number;
+}
+
+export interface DuplicateBlockCluster {
+  files: string[];
+  groups: DuplicateBlock[];
+  totalDuplicatedLines: number;
+  totalDuplicatedTokens: number;
+  suggestions: DuplicateBlockRefactoringHint[];
+}
+
+export interface ShadowedDirectoryPair {
+  directoryA: string;
+  directoryB: string;
+  sharedFiles: string[];
+  totalDuplicatedLines: number;
+}
+
+export interface DuplicateBlocksConfig {
+  enabled: boolean;
+  mode: DuplicateBlockDetectionMode;
+  minTokens: number;
+  minLines: number;
+  minOccurrences: number;
+  skipLocal: boolean;
+}
+
+export type ReExportCycleKind = "self-loop" | "multi-node";
+
+export interface ReExportCycle {
+  files: string[];
+  kind: ReExportCycleKind;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export type FeatureFlagKind = "env-var" | "sdk-call" | "config-object";
+
+export interface FeatureFlag {
+  path: string;
+  name: string;
+  kind: FeatureFlagKind;
+  line: number;
+  column: number;
+  sdkProvider?: string;
+  guardLineStart?: number;
+  guardLineEnd?: number;
+  guardsDeadCode: boolean;
+}
+
+export interface FeatureFlagsConfig {
+  enabled: boolean;
+  extraEnvPrefixes: string[];
+  extraSdkFunctionNames: string[];
+  detectConfigObjects: boolean;
+}
+
+export interface FunctionComplexity {
+  path: string;
+  functionName: string;
+  line: number;
+  column: number;
+  cyclomatic: number;
+  cognitive: number;
+  lineCount: number;
+  paramCount: number;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export interface ComplexityConfig {
+  enabled: boolean;
+  cyclomaticThreshold: number;
+  cognitiveThreshold: number;
+  paramCountThreshold: number;
+  functionLineThreshold: number;
+}
+
+export interface PrivateTypeLeak {
+  path: string;
+  exportName: string;
+  typeName: string;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export type UnnecessaryAssertionKind =
+  | "redundant-double-assertion"
+  | "assertion-to-any"
+  | "redundant-non-null-on-literal"
+  | "double-non-null"
+  | "angle-bracket-assertion";
+
+export interface UnnecessaryAssertion {
+  path: string;
+  kind: UnnecessaryAssertionKind;
+  snippet: string;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+  suggestion: string;
+}
+
+export type LazyImportKind = "top-level-await-import" | "top-level-then-import";
+
+export interface LazyImportAtTopLevel {
+  path: string;
+  specifier: string;
+  kind: LazyImportKind;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+}
+
+export type CommonjsInEsmKind = "require" | "module-exports" | "exports-assignment";
+
+export interface CommonjsInEsm {
+  path: string;
+  kind: CommonjsInEsmKind;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+  snippet: string;
+}
+
+export type TypeScriptEscapeHatchKind =
+  | "ts-ignore"
+  | "ts-nocheck"
+  | "ts-expect-error-without-explanation";
+
+export interface TypeScriptEscapeHatch {
+  path: string;
+  kind: TypeScriptEscapeHatchKind;
+  line: number;
+  column: number;
+  confidence: SemanticConfidence;
+  reason: string;
+  suggestion: string;
+}
+
 export interface ScanResult {
   unusedFiles: UnusedFile[];
   unusedExports: UnusedExport[];
@@ -426,6 +608,18 @@ export interface ScanResult {
   simplifiableFunctions: SimplifiableFunction[];
   simplifiableExpressions: SimplifiableExpression[];
   duplicateConstants: DuplicateConstant[];
+  crossFileDuplicateExports: CrossFileDuplicateExport[];
+  duplicateBlocks: DuplicateBlock[];
+  duplicateBlockClusters: DuplicateBlockCluster[];
+  shadowedDirectoryPairs: ShadowedDirectoryPair[];
+  reExportCycles: ReExportCycle[];
+  featureFlags: FeatureFlag[];
+  complexFunctions: FunctionComplexity[];
+  privateTypeLeaks: PrivateTypeLeak[];
+  unnecessaryAssertions: UnnecessaryAssertion[];
+  lazyImportsAtTopLevel: LazyImportAtTopLevel[];
+  commonjsInEsm: CommonjsInEsm[];
+  typeScriptEscapeHatches: TypeScriptEscapeHatch[];
   analysisErrors: DeslopError[];
   totalFiles: number;
   totalExports: number;
@@ -459,4 +653,7 @@ export interface DeslopConfig {
   includeEntryExports: boolean;
   reportRedundancy: boolean;
   semantic: SemanticConfig | undefined;
+  duplicateBlocks: DuplicateBlocksConfig | undefined;
+  featureFlags: FeatureFlagsConfig | undefined;
+  complexity: ComplexityConfig | undefined;
 }

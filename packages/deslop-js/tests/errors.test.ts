@@ -178,8 +178,13 @@ describe("errors / analyze() returns DeslopErrors instead of throwing", () => {
     assert.equal(notFoundErrors[0].severity, "info");
   });
 
-  it("scans without semantic enabled report no semantic errors", async () => {
-    const result = await analyze(defineConfig({ rootDir: resolve(FIXTURES_DIR, "simple-app") }));
+  it("scans with semantic disabled report no semantic errors", async () => {
+    const result = await analyze(
+      defineConfig({
+        rootDir: resolve(FIXTURES_DIR, "simple-app"),
+        semantic: { enabled: false },
+      }),
+    );
     const semanticErrors = result.analysisErrors.filter((entry) => entry.module === "semantic");
     assert.equal(semanticErrors.length, 0);
   });
