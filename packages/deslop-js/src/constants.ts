@@ -355,6 +355,8 @@ export const DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST = [
   "SubscribeMessage",
 ];
 
+export const DEFAULT_PRUNE_MAX_ITERATIONS = 8;
+
 export const DEFAULT_SEMANTIC_TSCONFIG_NAMES = [
   "tsconfig.json",
   "tsconfig.app.json",
