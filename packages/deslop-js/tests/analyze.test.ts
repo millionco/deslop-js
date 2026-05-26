@@ -4230,52 +4230,54 @@ describe("cross-file-duplicate-exports", () => {
 });
 
 describe("code-clones", () => {
-  it("returns no clones when codeClones is not configured", async () => {
-    const result = await scanFixture("code-clones-basic");
-    assert.deepEqual(result.codeClones, []);
-    assert.deepEqual(result.codeCloneFamilies, []);
-    assert.deepEqual(result.mirroredDirectories, []);
+  it("can be disabled via duplicateBlocks: { enabled: false }", async () => {
+    const result = await scanFixture("duplicate-blocks-basic", {
+      duplicateBlocks: { enabled: false },
+    });
+    assert.deepEqual(result.duplicateBlocks, []);
+    assert.deepEqual(result.duplicateBlockClusters, []);
+    assert.deepEqual(result.shadowedDirectoryPairs, []);
   });
 
   it("detects structurally-identical functions in semantic mode", async () => {
-    const result = await scanFixture("code-clones-basic", {
-      codeClones: { enabled: true, mode: "semantic", minTokens: 30, minLines: 3 },
+    const result = await scanFixture("duplicate-blocks-basic", {
+      duplicateBlocks: { enabled: true, mode: "semantic", minTokens: 30, minLines: 3 },
     });
     assert.ok(
-      result.codeClones.length > 0,
-      `expected at least one code clone, got: ${JSON.stringify(result.codeClones, null, 2)}`,
+      result.duplicateBlocks.length > 0,
+      `expected at least one duplicate block, got: ${JSON.stringify(result.duplicateBlocks, null, 2)}`,
     );
-    const ordersInvoicesClone = result.codeClones.find(
-      (codeClone) =>
-        codeClone.instances.some((instance) => instance.path.endsWith("orders.ts")) &&
-        codeClone.instances.some((instance) => instance.path.endsWith("invoices.ts")),
+    const ordersInvoicesClone = result.duplicateBlocks.find(
+      (duplicateBlock) =>
+        duplicateBlock.instances.some((instance) => instance.path.endsWith("orders.ts")) &&
+        duplicateBlock.instances.some((instance) => instance.path.endsWith("invoices.ts")),
     );
     assert.ok(
       ordersInvoicesClone,
-      `expected a clone spanning orders.ts and invoices.ts, got files: ${result.codeClones
-        .map((codeClone) => codeClone.instances.map((instance) => instance.path).join(","))
+      `expected a clone spanning orders.ts and invoices.ts, got files: ${result.duplicateBlocks
+        .map((duplicateBlock) => duplicateBlock.instances.map((instance) => instance.path).join(","))
         .join("|")}`,
     );
   });
 
   it("groups clones from the same file pair into a family", async () => {
-    const result = await scanFixture("code-clones-basic", {
-      codeClones: { enabled: true, mode: "semantic", minTokens: 30, minLines: 3 },
+    const result = await scanFixture("duplicate-blocks-basic", {
+      duplicateBlocks: { enabled: true, mode: "semantic", minTokens: 30, minLines: 3 },
     });
-    if (result.codeClones.length === 0) return;
+    if (result.duplicateBlocks.length === 0) return;
     assert.ok(
-      result.codeCloneFamilies.length > 0,
-      "expected at least one clone family when clones are present",
+      result.duplicateBlockClusters.length > 0,
+      "expected at least one duplicate-block cluster when clones are present",
     );
-    for (const family of result.codeCloneFamilies) {
+    for (const family of result.duplicateBlockClusters) {
       assert.ok(family.files.length >= 2, "family must span 2+ files");
       assert.ok(family.suggestions.length > 0, "family must produce a refactoring suggestion");
     }
   });
 
   it("respects skipLocal: true and drops within-directory clones", async () => {
-    const result = await scanFixture("code-clones-basic", {
-      codeClones: {
+    const result = await scanFixture("duplicate-blocks-basic", {
+      duplicateBlocks: {
         enabled: true,
         mode: "semantic",
         minTokens: 30,
@@ -4283,9 +4285,9 @@ describe("code-clones", () => {
         skipLocal: true,
       },
     });
-    for (const codeClone of result.codeClones) {
+    for (const duplicateBlock of result.duplicateBlocks) {
       const directories = new Set(
-        codeClone.instances.map((instance) => instance.path.replace(/\/[^/]*$/, "")),
+        duplicateBlock.instances.map((instance) => instance.path.replace(/\/[^/]*$/, "")),
       );
       assert.ok(
         directories.size >= 2,
@@ -4296,12 +4298,12 @@ describe("code-clones", () => {
 
   it("does not flag dissimilar files", async () => {
     const result = await scanFixture("simple-app", {
-      codeClones: { enabled: true, mode: "semantic", minTokens: 50, minLines: 5 },
+      duplicateBlocks: { enabled: true, mode: "semantic", minTokens: 50, minLines: 5 },
     });
-    for (const codeClone of result.codeClones) {
+    for (const duplicateBlock of result.duplicateBlocks) {
       assert.ok(
-        codeClone.tokenCount >= 50,
-        `every reported clone must satisfy minTokens, got ${codeClone.tokenCount}`,
+        duplicateBlock.tokenCount >= 50,
+        `every reported clone must satisfy minTokens, got ${duplicateBlock.tokenCount}`,
       );
     }
   });
@@ -4321,8 +4323,10 @@ describe("re-export-cycles", () => {
 });
 
 describe("feature-flags", () => {
-  it("returns no flags when feature flag detection is disabled", async () => {
-    const result = await scanFixture("feature-flags-basic");
+  it("can be disabled via featureFlags: { enabled: false }", async () => {
+    const result = await scanFixture("feature-flags-basic", {
+      featureFlags: { enabled: false },
+    });
     assert.deepEqual(result.featureFlags, []);
   });
 
@@ -4366,8 +4370,10 @@ describe("private-type-leaks", () => {
 });
 
 describe("complex-functions", () => {
-  it("returns no hotspots when complexity detection is disabled", async () => {
-    const result = await scanFixture("complex-functions");
+  it("can be disabled via complexity: { enabled: false }", async () => {
+    const result = await scanFixture("complex-functions", {
+      complexity: { enabled: false },
+    });
     assert.deepEqual(result.complexFunctions, []);
   });
 

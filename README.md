@@ -103,15 +103,15 @@ result.crossFileDuplicateExports; // same export name shipped by 2+ files that s
 result.reExportCycles; // `export * from "./a"` cycles (self-loop or multi-node)
 result.privateTypeLeaks; // exported signature references a non-exported local type
 
-// code clones (token-based copy-paste, opt-in via `codeClones.enabled: true`)
-result.codeClones; // suffix-array + LCP detected duplicate code blocks
-result.codeCloneFamilies; // clones grouped by file set + refactoring suggestions
-result.mirroredDirectories; // directory pairs with many identical files
+// duplicate-block detection (token-based copy-paste; on by default, disable via `duplicateBlocks.enabled: false`)
+result.duplicateBlocks; // suffix-array + LCP detected duplicate code blocks
+result.duplicateBlockClusters; // clones grouped by file set + refactoring suggestions
+result.shadowedDirectoryPairs; // directory pairs with many identical files
 
-// feature flags (opt-in via `featureFlags.enabled: true`)
+// feature flag inventory (on by default, disable via `featureFlags.enabled: false`)
 result.featureFlags; // LaunchDarkly/Statsig/Unleash/PostHog/Vercel Flags/process.env.* uses
 
-// function complexity hotspots (opt-in via `complexity.enabled: true`)
+// function complexity hotspots (on by default, disable via `complexity.enabled: false`)
 result.complexFunctions; // McCabe cyclomatic + SonarSource cognitive per function
 
 // TypeScript-specific smells (on by default)
@@ -120,7 +120,7 @@ result.lazyImportsAtTopLevel; // top-level `await import(...)` / `.then(...)` th
 result.commonjsInEsm; // `require()`, `module.exports`, `exports.x` inside ESM modules
 result.typeScriptEscapeHatches; // `// @ts-ignore`, `// @ts-nocheck`, undocumented `@ts-expect-error`
 
-// semantic findings (type-aware, opt-in via `semantic.enabled: true`)
+// semantic findings (type-aware; on by default, disable via `semantic: { enabled: false }`)
 result.unusedTypes; // type aliases / interfaces never referenced
 result.unusedEnumMembers; // enum members no reference site uses
 result.unusedClassMembers; // class members no caller invokes (skips React/Angular lifecycle methods)
@@ -164,7 +164,7 @@ const config = defineConfig({
 
 ### Semantic (type-aware) analysis
 
-Off by default. Enable when you have `typescript` installed and a valid `tsconfig.json`:
+On by default. Loads the TypeScript program when the project has a valid `tsconfig.json`; gracefully no-ops on JS-only projects. Disable with `semantic: { enabled: false }` to skip the ~1–3s program load.
 
 ```ts
 const config = defineConfig({
@@ -192,16 +192,16 @@ const config = defineConfig({
 | `reportRoundTripAliases`          | `true`       | `import { X as Y } from "./a"; export { Y as X }`                                                                                                              |
 
 
-### Code clones (token-based copy-paste detection)
+### Duplicate blocks (token-based copy-paste detection)
 
-Off by default. Enable to detect maximal duplicated token sequences across files (suffix-array + LCP):
+On by default. Detects maximal duplicated token sequences across files via a suffix array + LCP pass over a normalized AST token stream. Tune thresholds or disable entirely:
 
 ```ts
 const config = defineConfig({
   rootDir: "./my-project",
-  codeClones: {
-    enabled: true,
-    mode: "semantic", // "strict" preserves identifiers/literals; "semantic" blinds them
+  duplicateBlocks: {
+    enabled: true, // default
+    mode: "semantic", // "strict" preserves identifiers/literals; "semantic" (default) blinds them
     minTokens: 50,
     minLines: 5,
     minOccurrences: 2,
@@ -210,15 +210,32 @@ const config = defineConfig({
 });
 ```
 
-### Feature flags (LaunchDarkly / Statsig / Unleash / PostHog / Vercel Flags / process.env)
+Surfaces in three result fields:
 
-Off by default. When enabled, `result.featureFlags` carries every detected flag use with `kind: "env-var" | "sdk-call" | "config-object"`, optional `sdkProvider`, and a `guardsDeadCode` boolean correlated with `unusedExports`:
+- `result.duplicateBlocks` — every duplicated block group with all its occurrences
+- `result.duplicateBlockClusters` — duplicate blocks sharing the same file set, plus an `extract-function` / `extract-module` refactoring hint
+- `result.shadowedDirectoryPairs` — directory pairs (e.g. `src/` and `deno/lib/`) whose files mirror each other
+
+### Feature flag inventory
+
+On by default. Scans the codebase for every place a feature flag is *read* and produces a finding per use. The detector recognizes three families:
+
+1. **Env-var flags** — `process.env.X` whose name starts with one of the built-in prefixes `FEATURE_`, `NEXT_PUBLIC_FEATURE_`, `REACT_APP_FEATURE_`, `VITE_FEATURE_`, `NUXT_PUBLIC_FEATURE_`, `ENABLE_`, `FF_`, `FLAG_`, `TOGGLE_` (extend with `extraEnvPrefixes`).
+2. **SDK calls** with provider attribution — LaunchDarkly (`useFlag`/`variation`/...), Statsig (`useGate`/`checkGate`/...), Unleash (`isEnabled`/`getVariant`), GrowthBook (`isOn`/`isOff`/`getFeatureValue`), Split (`getTreatment`), PostHog (`useFeatureFlagEnabled`/...), ConfigCat, Flagsmith, Optimizely, Eppo, and Vercel Flags (`flag()` / `evaluate()` from `flags` or `@vercel/flags`).
+3. **Config-object access** — `config.features.X` style; off by default because it's heuristic. Opt in with `detectConfigObjects: true`.
+
+Each finding carries `name`, `path`, `line`, `column`, `sdkProvider` (when known), and `kind: "env-var" | "sdk-call" | "config-object"`. The detector also tracks the surrounding `if` / ternary guard span and sets `guardsDeadCode: true` when an `unusedExports` finding falls inside that guard — so a flag whose enabled branch contains only dead code lights up immediately.
+
+**The actionable angle**: cross-reference `result.featureFlags` with your live flag dashboard.
+
+- Flags in the dashboard but missing from `result.featureFlags` → no longer read by the codebase, safe to retire from the platform.
+- Flags in `result.featureFlags` with `guardsDeadCode: true` → the guarded code is unreachable, delete both the flag and its body.
 
 ```ts
 const config = defineConfig({
   rootDir: "./my-project",
   featureFlags: {
-    enabled: true,
+    enabled: true, // default
     extraEnvPrefixes: ["MYAPP_FF_"],
     extraSdkFunctionNames: ["myCustomFlag"],
     detectConfigObjects: false, // heuristic config.features.x — opt in if you use that pattern
@@ -228,13 +245,13 @@ const config = defineConfig({
 
 ### Function complexity (cyclomatic + cognitive)
 
-Off by default. When enabled, `result.complexFunctions` reports per-function McCabe cyclomatic and SonarSource cognitive complexity, function size, and parameter count for every function that breaches at least one threshold:
+On by default. Reports per-function McCabe cyclomatic and SonarSource cognitive complexity, function size, and parameter count for every function that breaches at least one threshold. Tune the thresholds or disable entirely:
 
 ```ts
 const config = defineConfig({
   rootDir: "./my-project",
   complexity: {
-    enabled: true,
+    enabled: true, // default
     cyclomaticThreshold: 10,
     cognitiveThreshold: 15,
     paramCountThreshold: 5,

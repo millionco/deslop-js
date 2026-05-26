@@ -63,7 +63,7 @@ const safeNumberOrZero = (candidate: unknown): number => (typeof candidate === "
 
 /**
  * Walk an oxc AST and emit a flat token stream suitable for suffix-array-based
- * clone detection. Two structurally-identical regions of code produce the same
+ * duplicate-block detection. Two structurally-identical regions of code produce the same
  * token sequence (modulo identifier/literal-value normalization, applied later
  * in `normalize.ts`).
  *

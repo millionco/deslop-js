@@ -1,4 +1,4 @@
-import type { CodeCloneMode } from "../types.js";
+import type { DuplicateBlockDetectionMode } from "../types.js";
 import type { HashedToken, SourceToken } from "./token-types.js";
 
 /**
@@ -6,7 +6,7 @@ import type { HashedToken, SourceToken } from "./token-types.js";
  * only care about collisions over a few million tokens. The detector compares
  * tokens by hash equality only inside a single concatenated text, and ties are
  * broken back to the original (path, offset) tuples downstream, so a rare
- * collision inflates a clone group with one extra spurious instance at worst.
+ * collision inflates a duplicate block with one extra spurious instance at worst.
  */
 const FNV_OFFSET_BASIS = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;
@@ -26,7 +26,7 @@ interface ResolvedNormalization {
   ignoreNumericValues: boolean;
 }
 
-const resolveNormalization = (mode: CodeCloneMode): ResolvedNormalization => {
+const resolveNormalization = (mode: DuplicateBlockDetectionMode): ResolvedNormalization => {
   if (mode === "strict") {
     return { ignoreIdentifiers: false, ignoreStringValues: false, ignoreNumericValues: false };
   }
@@ -65,7 +65,7 @@ const hashSourceToken = (
 
 export const normalizeAndHashTokens = (
   tokens: SourceToken[],
-  mode: CodeCloneMode,
+  mode: DuplicateBlockDetectionMode,
 ): HashedToken[] => {
   const normalization = resolveNormalization(mode);
   const hashedTokens: HashedToken[] = new Array(tokens.length);

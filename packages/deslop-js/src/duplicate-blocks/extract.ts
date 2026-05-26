@@ -1,13 +1,13 @@
 import { SENTINEL_FILE_MARKER } from "./concatenate.js";
 
-export interface RawCloneInstance {
+export interface RawDuplicateBlockOccurrence {
   fileIndex: number;
   /** Token offset relative to the file's start. */
   tokenOffsetWithinFile: number;
 }
 
-export interface RawCloneGroup {
-  instances: RawCloneInstance[];
+export interface RawDuplicateBlock {
+  instances: RawDuplicateBlockOccurrence[];
   /** Clone length in tokens. */
   tokenLength: number;
 }
@@ -18,29 +18,29 @@ interface StackEntry {
 }
 
 /**
- * Stack-based extraction of maximal clone groups from a suffix-array+LCP pair.
+ * Stack-based extraction of maximal duplicate blocks from a suffix-array+LCP pair.
  *
  * Iterates `lcp[]` and uses a monotone stack to find every maximal interval
  * `[i, j]` whose minimum LCP is >= `minTokens`. Each such interval is a
- * clone group whose instances are the suffix-array entries `sa[i .. j]`,
+ * duplicate block whose instances are the suffix-array entries `sa[i .. j]`,
  * each of length equal to the interval's minimum LCP.
  *
  * Within-file overlapping instances are deduplicated (keeping the earliest
  * non-overlapping prefix), and we drop any group that ends up with fewer
  * than two instances after that pass.
  */
-export const extractRawCloneGroups = (
+export const extractRawDuplicateBlocks = (
   suffixArray: number[],
   lcpArray: number[],
   fileOf: number[],
   fileOffsets: number[],
   filesTokenCounts: number[],
   minTokens: number,
-): RawCloneGroup[] => {
+): RawDuplicateBlock[] => {
   const sequenceLength = suffixArray.length;
   if (sequenceLength < 2) return [];
 
-  const rawGroups: RawCloneGroup[] = [];
+  const rawBlocks: RawDuplicateBlock[] = [];
   const stack: StackEntry[] = [];
 
   for (let scanIndex = 1; scanIndex <= sequenceLength; scanIndex++) {
@@ -53,7 +53,7 @@ export const extractRawCloneGroups = (
       if (popped.lcpValue >= minTokens) {
         const intervalBegin = intervalStart - 1;
         const intervalEnd = scanIndex;
-        const candidate = buildRawGroup(
+        const candidate = buildRawBlock(
           suffixArray,
           fileOf,
           fileOffsets,
@@ -62,7 +62,7 @@ export const extractRawCloneGroups = (
           intervalEnd,
           popped.lcpValue,
         );
-        if (candidate) rawGroups.push(candidate);
+        if (candidate) rawBlocks.push(candidate);
       }
     }
 
@@ -71,10 +71,10 @@ export const extractRawCloneGroups = (
     }
   }
 
-  return rawGroups;
+  return rawBlocks;
 };
 
-const buildRawGroup = (
+const buildRawBlock = (
   suffixArray: number[],
   fileOf: number[],
   fileOffsets: number[],
@@ -82,8 +82,8 @@ const buildRawGroup = (
   intervalBegin: number,
   intervalEnd: number,
   tokenLength: number,
-): RawCloneGroup | undefined => {
-  const candidateInstances: RawCloneInstance[] = [];
+): RawDuplicateBlock | undefined => {
+  const candidateInstances: RawDuplicateBlockOccurrence[] = [];
   for (let suffixIndex = intervalBegin; suffixIndex < intervalEnd; suffixIndex++) {
     const startPosition = suffixArray[suffixIndex];
     const fileIndex = fileOf[startPosition];
@@ -102,7 +102,7 @@ const buildRawGroup = (
     return firstInstance.tokenOffsetWithinFile - secondInstance.tokenOffsetWithinFile;
   });
 
-  const dedupedInstances: RawCloneInstance[] = [];
+  const dedupedInstances: RawDuplicateBlockOccurrence[] = [];
   for (const instance of candidateInstances) {
     const lastInstance = dedupedInstances[dedupedInstances.length - 1];
     if (

@@ -1,8 +1,8 @@
-import { CODE_CLONE_MODULE_EXTRACTION_THRESHOLD_LINES } from "../constants.js";
+import { DUPLICATE_BLOCK_MODULE_EXTRACTION_THRESHOLD_LINES } from "../constants.js";
 import type {
-  CodeClone,
-  CodeCloneFamily,
-  CodeCloneRefactoringSuggestion,
+  DuplicateBlock,
+  DuplicateBlockCluster,
+  DuplicateBlockRefactoringHint,
 } from "../types.js";
 
 const baseName = (filePath: string): string => {
@@ -16,31 +16,31 @@ const baseName = (filePath: string): string => {
  * a strong hint that the right refactor is to extract a shared module rather
  * than fix each clone in isolation.
  */
-export const groupClonesIntoFamilies = (codeClones: CodeClone[]): CodeCloneFamily[] => {
-  if (codeClones.length === 0) return [];
+export const groupDuplicateBlocksIntoClusters = (duplicateBlocks: DuplicateBlock[]): DuplicateBlockCluster[] => {
+  if (duplicateBlocks.length === 0) return [];
 
-  type FamilyBucket = { files: string[]; groups: CodeClone[] };
+  type FamilyBucket = { files: string[]; groups: DuplicateBlock[] };
   const fileSetKeyToBucket = new Map<string, FamilyBucket>();
 
-  for (const cloneGroup of codeClones) {
-    const sortedFiles = [...new Set(cloneGroup.instances.map((instance) => instance.path))].sort();
+  for (const duplicateBlock of duplicateBlocks) {
+    const sortedFiles = [...new Set(duplicateBlock.instances.map((instance) => instance.path))].sort();
     const fileSetKey = sortedFiles.join("|");
     const existing = fileSetKeyToBucket.get(fileSetKey);
     if (existing) {
-      existing.groups.push(cloneGroup);
+      existing.groups.push(duplicateBlock);
     } else {
-      fileSetKeyToBucket.set(fileSetKey, { files: sortedFiles, groups: [cloneGroup] });
+      fileSetKeyToBucket.set(fileSetKey, { files: sortedFiles, groups: [duplicateBlock] });
     }
   }
 
-  const families: CodeCloneFamily[] = [];
+  const families: DuplicateBlockCluster[] = [];
   for (const bucket of fileSetKeyToBucket.values()) {
     const totalDuplicatedLines = bucket.groups.reduce(
-      (runningSum, cloneGroup) => runningSum + cloneGroup.lineCount,
+      (runningSum, duplicateBlock) => runningSum + duplicateBlock.lineCount,
       0,
     );
     const totalDuplicatedTokens = bucket.groups.reduce(
-      (runningSum, cloneGroup) => runningSum + cloneGroup.tokenCount,
+      (runningSum, duplicateBlock) => runningSum + duplicateBlock.tokenCount,
       0,
     );
     families.push({
@@ -63,32 +63,32 @@ export const groupClonesIntoFamilies = (codeClones: CodeClone[]): CodeCloneFamil
 
 const buildSuggestions = (
   files: string[],
-  cloneGroups: CodeClone[],
+  duplicateBlocks: DuplicateBlock[],
   totalDuplicatedLines: number,
-): CodeCloneRefactoringSuggestion[] => {
+): DuplicateBlockRefactoringHint[] => {
   const fileBaseNames = files.map((filePath) => baseName(filePath));
-  if (totalDuplicatedLines >= CODE_CLONE_MODULE_EXTRACTION_THRESHOLD_LINES) {
-    const estimatedSavings = cloneGroups.reduce(
-      (runningSum, cloneGroup) =>
-        runningSum + cloneGroup.lineCount * Math.max(0, cloneGroup.instances.length - 1),
+  if (totalDuplicatedLines >= DUPLICATE_BLOCK_MODULE_EXTRACTION_THRESHOLD_LINES) {
+    const estimatedSavings = duplicateBlocks.reduce(
+      (runningSum, duplicateBlock) =>
+        runningSum + duplicateBlock.lineCount * Math.max(0, duplicateBlock.instances.length - 1),
       0,
     );
     return [
       {
         kind: "extract-module",
-        description: `Extract ${cloneGroups.length} shared clone group${
-          cloneGroups.length === 1 ? "" : "s"
+        description: `Extract ${duplicateBlocks.length} shared duplicate block${
+          duplicateBlocks.length === 1 ? "" : "s"
         } (${totalDuplicatedLines} lines) from ${fileBaseNames.join(", ")} into a shared module`,
         estimatedSavings,
       },
     ];
   }
 
-  return cloneGroups.map((cloneGroup) => ({
+  return duplicateBlocks.map((duplicateBlock) => ({
     kind: "extract-function",
-    description: `Extract shared function (${cloneGroup.lineCount} lines) from ${fileBaseNames.join(
+    description: `Extract shared function (${duplicateBlock.lineCount} lines) from ${fileBaseNames.join(
       ", ",
     )}`,
-    estimatedSavings: cloneGroup.lineCount * Math.max(0, cloneGroup.instances.length - 1),
+    estimatedSavings: duplicateBlock.lineCount * Math.max(0, duplicateBlock.instances.length - 1),
   }));
 };

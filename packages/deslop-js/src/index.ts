@@ -10,9 +10,9 @@ import {
   describeUnknownError,
 } from "./errors.js";
 import {
-  DEFAULT_CODE_CLONE_MIN_LINES,
-  DEFAULT_CODE_CLONE_MIN_OCCURRENCES,
-  DEFAULT_CODE_CLONE_MIN_TOKENS,
+  DEFAULT_DUPLICATE_BLOCK_MIN_LINES,
+  DEFAULT_DUPLICATE_BLOCK_MIN_OCCURRENCES,
+  DEFAULT_DUPLICATE_BLOCK_MIN_TOKENS,
   DEFAULT_COGNITIVE_THRESHOLD,
   DEFAULT_CYCLOMATIC_THRESHOLD,
   DEFAULT_FUNCTION_LINE_THRESHOLD,
@@ -144,14 +144,14 @@ export type {
   DuplicateConstantOccurrence,
   CrossFileDuplicateExport,
   CrossFileDuplicateExportLocation,
-  CodeClone,
-  CodeCloneInstance,
-  CodeCloneFamily,
-  CodeCloneRefactoringKind,
-  CodeCloneRefactoringSuggestion,
-  CodeCloneMode,
-  CodeClonesConfig,
-  MirroredDirectory,
+  DuplicateBlock,
+  DuplicateBlockOccurrence,
+  DuplicateBlockCluster,
+  DuplicateBlockRefactoringKind,
+  DuplicateBlockRefactoringHint,
+  DuplicateBlockDetectionMode,
+  DuplicateBlocksConfig,
+  ShadowedDirectoryPair,
   ReExportCycle,
   ReExportCycleKind,
   FeatureFlag,
@@ -198,39 +198,38 @@ export type {
  * - `reportRedundancy: true` — on because redundancy findings are mostly
  *   high-signal and the detectors carry their own confidence tiers.
  *
- * - `codeClones: undefined` — token-based copy-paste detection (suffix
+ * - `duplicateBlocks: undefined` — token-based copy-paste detection (suffix
  *   array + LCP) is opt-in. It re-parses every source
  *   file to emit a token stream and adds significant runtime to the scan.
- *   Pass `codeClones: { enabled: true }` to turn it on.
+ *   Pass `duplicateBlocks: { enabled: true }` to turn it on.
  */
 const fillSemanticConfig = (
   semanticOverrides: Partial<DeslopConfig["semantic"]> | undefined,
 ): DeslopConfig["semantic"] => {
-  if (semanticOverrides === undefined) return undefined;
+  const overrides = semanticOverrides ?? {};
   return {
-    enabled: semanticOverrides.enabled ?? false,
-    reportUnusedTypes: semanticOverrides.reportUnusedTypes ?? true,
-    reportUnusedEnumMembers: semanticOverrides.reportUnusedEnumMembers ?? true,
-    reportUnusedClassMembers: semanticOverrides.reportUnusedClassMembers ?? false,
-    reportRedundantVariableAliases: semanticOverrides.reportRedundantVariableAliases ?? true,
-    reportMisclassifiedDependencies: semanticOverrides.reportMisclassifiedDependencies ?? true,
-    reportRoundTripAliases: semanticOverrides.reportRoundTripAliases ?? true,
-    decoratorAllowlist:
-      semanticOverrides.decoratorAllowlist ?? DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
+    enabled: overrides.enabled ?? true,
+    reportUnusedTypes: overrides.reportUnusedTypes ?? true,
+    reportUnusedEnumMembers: overrides.reportUnusedEnumMembers ?? true,
+    reportUnusedClassMembers: overrides.reportUnusedClassMembers ?? false,
+    reportRedundantVariableAliases: overrides.reportRedundantVariableAliases ?? true,
+    reportMisclassifiedDependencies: overrides.reportMisclassifiedDependencies ?? true,
+    reportRoundTripAliases: overrides.reportRoundTripAliases ?? true,
+    decoratorAllowlist: overrides.decoratorAllowlist ?? DEFAULT_SEMANTIC_DECORATOR_ALLOWLIST,
   };
 };
 
-const fillCodeClonesConfig = (
-  cloneOverrides: Partial<DeslopConfig["codeClones"]> | undefined,
-): DeslopConfig["codeClones"] => {
-  if (cloneOverrides === undefined) return undefined;
+const fillDuplicateBlocksConfig = (
+  duplicateBlocksOverrides: Partial<DeslopConfig["duplicateBlocks"]> | undefined,
+): DeslopConfig["duplicateBlocks"] => {
+  const overrides = duplicateBlocksOverrides ?? {};
   return {
-    enabled: cloneOverrides.enabled ?? false,
-    mode: cloneOverrides.mode ?? "semantic",
-    minTokens: cloneOverrides.minTokens ?? DEFAULT_CODE_CLONE_MIN_TOKENS,
-    minLines: cloneOverrides.minLines ?? DEFAULT_CODE_CLONE_MIN_LINES,
-    minOccurrences: cloneOverrides.minOccurrences ?? DEFAULT_CODE_CLONE_MIN_OCCURRENCES,
-    skipLocal: cloneOverrides.skipLocal ?? false,
+    enabled: overrides.enabled ?? true,
+    mode: overrides.mode ?? "semantic",
+    minTokens: overrides.minTokens ?? DEFAULT_DUPLICATE_BLOCK_MIN_TOKENS,
+    minLines: overrides.minLines ?? DEFAULT_DUPLICATE_BLOCK_MIN_LINES,
+    minOccurrences: overrides.minOccurrences ?? DEFAULT_DUPLICATE_BLOCK_MIN_OCCURRENCES,
+    skipLocal: overrides.skipLocal ?? false,
   };
 };
 
@@ -238,26 +237,26 @@ const fillCodeClonesConfig = (
 const fillFeatureFlagsConfig = (
   flagsOverrides: Partial<DeslopConfig["featureFlags"]> | undefined,
 ): DeslopConfig["featureFlags"] => {
-  if (flagsOverrides === undefined) return undefined;
+  const overrides = flagsOverrides ?? {};
   return {
-    enabled: flagsOverrides.enabled ?? false,
-    extraEnvPrefixes: flagsOverrides.extraEnvPrefixes ?? [],
-    extraSdkFunctionNames: flagsOverrides.extraSdkFunctionNames ?? [],
-    detectConfigObjects: flagsOverrides.detectConfigObjects ?? false,
+    enabled: overrides.enabled ?? true,
+    extraEnvPrefixes: overrides.extraEnvPrefixes ?? [],
+    extraSdkFunctionNames: overrides.extraSdkFunctionNames ?? [],
+    detectConfigObjects: overrides.detectConfigObjects ?? false,
   };
 };
 
 const fillComplexityConfig = (
   complexityOverrides: Partial<DeslopConfig["complexity"]> | undefined,
 ): DeslopConfig["complexity"] => {
-  if (complexityOverrides === undefined) return undefined;
+  const overrides = complexityOverrides ?? {};
   return {
-    enabled: complexityOverrides.enabled ?? false,
-    cyclomaticThreshold: complexityOverrides.cyclomaticThreshold ?? DEFAULT_CYCLOMATIC_THRESHOLD,
-    cognitiveThreshold: complexityOverrides.cognitiveThreshold ?? DEFAULT_COGNITIVE_THRESHOLD,
-    paramCountThreshold: complexityOverrides.paramCountThreshold ?? DEFAULT_PARAM_COUNT_THRESHOLD,
+    enabled: overrides.enabled ?? true,
+    cyclomaticThreshold: overrides.cyclomaticThreshold ?? DEFAULT_CYCLOMATIC_THRESHOLD,
+    cognitiveThreshold: overrides.cognitiveThreshold ?? DEFAULT_COGNITIVE_THRESHOLD,
+    paramCountThreshold: overrides.paramCountThreshold ?? DEFAULT_PARAM_COUNT_THRESHOLD,
     functionLineThreshold:
-      complexityOverrides.functionLineThreshold ?? DEFAULT_FUNCTION_LINE_THRESHOLD,
+      overrides.functionLineThreshold ?? DEFAULT_FUNCTION_LINE_THRESHOLD,
   };
 };
 export const defineConfig = (
@@ -272,7 +271,7 @@ export const defineConfig = (
   includeEntryExports: options.includeEntryExports ?? false,
   reportRedundancy: options.reportRedundancy ?? true,
   semantic: fillSemanticConfig(options.semantic),
-  codeClones: fillCodeClonesConfig(options.codeClones),
+  duplicateBlocks: fillDuplicateBlocksConfig(options.duplicateBlocks),
   featureFlags: fillFeatureFlagsConfig(options.featureFlags),
   complexity: fillComplexityConfig(options.complexity),
 });
@@ -297,9 +296,9 @@ const buildEmptyScanResult = (errors: DeslopError[], elapsedMs: number): ScanRes
   simplifiableExpressions: [],
   duplicateConstants: [],
   crossFileDuplicateExports: [],
-  codeClones: [],
-  codeCloneFamilies: [],
-  mirroredDirectories: [],
+  duplicateBlocks: [],
+  duplicateBlockClusters: [],
+  shadowedDirectoryPairs: [],
   reExportCycles: [],
   featureFlags: [],
   complexFunctions: [],

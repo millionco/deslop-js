@@ -421,9 +421,9 @@ export interface CrossFileDuplicateExport {
   reason: string;
 }
 
-export type CodeCloneMode = "strict" | "semantic";
+export type DuplicateBlockDetectionMode = "strict" | "semantic";
 
-export interface CodeCloneInstance {
+export interface DuplicateBlockOccurrence {
   path: string;
   startLine: number;
   endLine: number;
@@ -431,40 +431,40 @@ export interface CodeCloneInstance {
   endColumn: number;
 }
 
-export interface CodeClone {
-  instances: CodeCloneInstance[];
+export interface DuplicateBlock {
+  instances: DuplicateBlockOccurrence[];
   tokenCount: number;
   lineCount: number;
   confidence: SemanticConfidence;
   reason: string;
 }
 
-export type CodeCloneRefactoringKind = "extract-function" | "extract-module";
+export type DuplicateBlockRefactoringKind = "extract-function" | "extract-module";
 
-export interface CodeCloneRefactoringSuggestion {
-  kind: CodeCloneRefactoringKind;
+export interface DuplicateBlockRefactoringHint {
+  kind: DuplicateBlockRefactoringKind;
   description: string;
   estimatedSavings: number;
 }
 
-export interface CodeCloneFamily {
+export interface DuplicateBlockCluster {
   files: string[];
-  groups: CodeClone[];
+  groups: DuplicateBlock[];
   totalDuplicatedLines: number;
   totalDuplicatedTokens: number;
-  suggestions: CodeCloneRefactoringSuggestion[];
+  suggestions: DuplicateBlockRefactoringHint[];
 }
 
-export interface MirroredDirectory {
+export interface ShadowedDirectoryPair {
   directoryA: string;
   directoryB: string;
   sharedFiles: string[];
   totalDuplicatedLines: number;
 }
 
-export interface CodeClonesConfig {
+export interface DuplicateBlocksConfig {
   enabled: boolean;
-  mode: CodeCloneMode;
+  mode: DuplicateBlockDetectionMode;
   minTokens: number;
   minLines: number;
   minOccurrences: number;
@@ -609,9 +609,9 @@ export interface ScanResult {
   simplifiableExpressions: SimplifiableExpression[];
   duplicateConstants: DuplicateConstant[];
   crossFileDuplicateExports: CrossFileDuplicateExport[];
-  codeClones: CodeClone[];
-  codeCloneFamilies: CodeCloneFamily[];
-  mirroredDirectories: MirroredDirectory[];
+  duplicateBlocks: DuplicateBlock[];
+  duplicateBlockClusters: DuplicateBlockCluster[];
+  shadowedDirectoryPairs: ShadowedDirectoryPair[];
   reExportCycles: ReExportCycle[];
   featureFlags: FeatureFlag[];
   complexFunctions: FunctionComplexity[];
@@ -653,7 +653,7 @@ export interface DeslopConfig {
   includeEntryExports: boolean;
   reportRedundancy: boolean;
   semantic: SemanticConfig | undefined;
-  codeClones: CodeClonesConfig | undefined;
+  duplicateBlocks: DuplicateBlocksConfig | undefined;
   featureFlags: FeatureFlagsConfig | undefined;
   complexity: ComplexityConfig | undefined;
 }

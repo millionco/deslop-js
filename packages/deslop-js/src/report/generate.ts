@@ -19,7 +19,7 @@ import {
   detectDuplicateConstants,
 } from "./dry-patterns.js";
 import { detectCrossFileDuplicateExports } from "./cross-file-duplicate-exports.js";
-import { detectCodeClones } from "../clones/index.js";
+import { detectDuplicateBlocks } from "../duplicate-blocks/index.js";
 import { detectReExportCycles } from "./re-export-cycles.js";
 import { correlateFlagsWithDeadCode, detectFeatureFlags } from "./feature-flags.js";
 import { detectComplexHotspots } from "./complexity.js";
@@ -177,10 +177,10 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
         errorSink,
       )
     : [];
-  const cloneDetectionResult = safeReportDetector(
-    "detectCodeClones",
-    () => detectCodeClones(graph, config.codeClones, config.rootDir),
-    { codeClones: [], codeCloneFamilies: [], mirroredDirectories: [] },
+  const duplicateBlockResult = safeReportDetector(
+    "detectDuplicateBlocks",
+    () => detectDuplicateBlocks(graph, config.duplicateBlocks, config.rootDir),
+    { duplicateBlocks: [], duplicateBlockClusters: [], shadowedDirectoryPairs: [] },
     errorSink,
   );
 
@@ -282,9 +282,9 @@ export const generateReport = (graph: DependencyGraph, config: DeslopConfig): Sc
     simplifiableExpressions,
     duplicateConstants,
     crossFileDuplicateExports,
-    codeClones: cloneDetectionResult.codeClones,
-    codeCloneFamilies: cloneDetectionResult.codeCloneFamilies,
-    mirroredDirectories: cloneDetectionResult.mirroredDirectories,
+    duplicateBlocks: duplicateBlockResult.duplicateBlocks,
+    duplicateBlockClusters: duplicateBlockResult.duplicateBlockClusters,
+    shadowedDirectoryPairs: duplicateBlockResult.shadowedDirectoryPairs,
     reExportCycles,
     featureFlags,
     complexFunctions,

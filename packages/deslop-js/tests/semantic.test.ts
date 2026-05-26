@@ -56,9 +56,10 @@ describe("semantic (Phase 0)", () => {
     assert.equal(typeof result.analysisTimeMs, "number");
   });
 
-  it("respects defineConfig defaults: semantic is undefined when not provided", async () => {
+  it("defaults semantic.enabled to true when no override is passed", async () => {
     const config = defineConfig({ rootDir: resolve(FIXTURES_DIR, "simple-app") });
-    assert.equal(config.semantic, undefined);
+    assert.ok(config.semantic, "semantic should be populated by default");
+    assert.equal(config.semantic.enabled, true);
   });
 
   it("fills semantic defaults when {} passed", async () => {
@@ -67,7 +68,7 @@ describe("semantic (Phase 0)", () => {
       semantic: {},
     });
     assert.ok(config.semantic, "semantic should be set");
-    assert.equal(config.semantic.enabled, false);
+    assert.equal(config.semantic.enabled, true);
     assert.equal(config.semantic.reportUnusedTypes, true);
     assert.equal(config.semantic.reportUnusedEnumMembers, true);
     assert.equal(config.semantic.reportMisclassifiedDependencies, true);
@@ -252,9 +253,12 @@ const misclassifiedNames = (result: ScanResult): string[] =>
   result.misclassifiedDependencies.map((finding) => finding.name).sort();
 
 describe("semantic / misclassified-dependencies", () => {
-  it("populates the additive misclassifiedDependencies field as [] when semantic disabled", async () => {
+  it("populates the additive misclassifiedDependencies field as [] when semantic is disabled", async () => {
     const result = await analyze(
-      defineConfig({ rootDir: resolve(FIXTURES_DIR, "misclassified-deps-typeonly") }),
+      defineConfig({
+        rootDir: resolve(FIXTURES_DIR, "misclassified-deps-typeonly"),
+        semantic: { enabled: false },
+      }),
     );
     assert.deepEqual(result.misclassifiedDependencies, []);
   });
@@ -411,10 +415,11 @@ describe("semantic / unused-enum-members: feature flag", () => {
     assert.deepEqual(result.unusedEnumMembers, []);
   });
 
-  it("populates the additive unusedEnumMembers field as [] when semantic disabled", async () => {
+  it("populates the additive unusedEnumMembers field as [] when semantic is disabled", async () => {
     const result = await analyze(
       defineConfig({
         rootDir: resolve(FIXTURES_DIR, "unused-enum-members-string"),
+        semantic: { enabled: false },
       }),
     );
     assert.deepEqual(result.unusedEnumMembers, []);

@@ -9,17 +9,17 @@ import {
   MINIFIED_DETECTION_MIN_BYTES,
 } from "../constants.js";
 import type {
-  CodeClone,
-  CodeCloneFamily,
-  CodeCloneInstance,
-  CodeClonesConfig,
+  DuplicateBlock,
+  DuplicateBlockCluster,
+  DuplicateBlockOccurrence,
+  DuplicateBlocksConfig,
   DependencyGraph,
-  MirroredDirectory,
+  ShadowedDirectoryPair,
 } from "../types.js";
 import { rankReduceAndConcatenate } from "./concatenate.js";
-import { extractRawCloneGroups, type RawCloneGroup } from "./extract.js";
-import { groupClonesIntoFamilies } from "./families.js";
-import { detectMirroredDirectoryPairs } from "./mirrored-directories.js";
+import { extractRawDuplicateBlocks, type RawDuplicateBlock } from "./extract.js";
+import { groupDuplicateBlocksIntoClusters } from "./clusters.js";
+import { detectShadowedDirectoryPairs } from "./shadowed-directory-pairs.js";
 import { normalizeAndHashTokens } from "./normalize.js";
 import { buildLcpArray, buildSuffixArray } from "./suffix-array.js";
 import type { SourceToken } from "./token-types.js";
@@ -114,7 +114,7 @@ const buildCloneInstance = (
   rawInstance: { fileIndex: number; tokenOffsetWithinFile: number },
   tokenLength: number,
   tokenizedFiles: TokenizedFile[],
-): CodeCloneInstance => {
+): DuplicateBlockOccurrence => {
   const file = tokenizedFiles[rawInstance.fileIndex];
   const firstToken = file.sourceTokens[rawInstance.tokenOffsetWithinFile];
   const lastToken = file.sourceTokens[rawInstance.tokenOffsetWithinFile + tokenLength - 1];
@@ -131,15 +131,15 @@ const buildCloneInstance = (
 
 const directoryOf = (filePath: string): string => dirname(filePath);
 
-const filterRawGroupsToReportableClones = (
-  rawGroups: RawCloneGroup[],
+const filterRawBlocksToReportableDuplicates = (
+  rawBlocks: RawDuplicateBlock[],
   tokenizedFiles: TokenizedFile[],
-  config: CodeClonesConfig,
-): CodeClone[] => {
-  const codeClones: CodeClone[] = [];
-  for (const rawGroup of rawGroups) {
-    const instances = rawGroup.instances.map((rawInstance) =>
-      buildCloneInstance(rawInstance, rawGroup.tokenLength, tokenizedFiles),
+  config: DuplicateBlocksConfig,
+): DuplicateBlock[] => {
+  const duplicateBlocks: DuplicateBlock[] = [];
+  for (const rawBlock of rawBlocks) {
+    const instances = rawBlock.instances.map((rawInstance) =>
+      buildCloneInstance(rawInstance, rawBlock.tokenLength, tokenizedFiles),
     );
 
     let lineCount = 0;
@@ -158,55 +158,55 @@ const filterRawGroupsToReportableClones = (
     const distinctFiles = new Set(instances.map((instance) => instance.path));
     const confidence = distinctFiles.size >= 2 ? "high" : "medium";
 
-    codeClones.push({
+    duplicateBlocks.push({
       instances,
-      tokenCount: rawGroup.tokenLength,
+      tokenCount: rawBlock.tokenLength,
       lineCount,
       confidence,
       reason:
         distinctFiles.size >= 2
-          ? `${instances.length} clone instances spanning ${distinctFiles.size} files (≥${rawGroup.tokenLength} tokens, ${lineCount} lines)`
-          : `${instances.length} clone instances within a single file (≥${rawGroup.tokenLength} tokens, ${lineCount} lines)`,
+          ? `${instances.length} occurrences spanning ${distinctFiles.size} files (≥${rawBlock.tokenLength} tokens, ${lineCount} lines)`
+          : `${instances.length} occurrences within a single file (≥${rawBlock.tokenLength} tokens, ${lineCount} lines)`,
     });
   }
 
-  codeClones.sort((firstClone, secondClone) => {
+  duplicateBlocks.sort((firstClone, secondClone) => {
     if (firstClone.lineCount !== secondClone.lineCount) {
       return secondClone.lineCount - firstClone.lineCount;
     }
     return secondClone.tokenCount - firstClone.tokenCount;
   });
-  return codeClones;
+  return duplicateBlocks;
 };
 
-export interface CodeClonesResult {
-  codeClones: CodeClone[];
-  codeCloneFamilies: CodeCloneFamily[];
-  mirroredDirectories: MirroredDirectory[];
+export interface DuplicateBlocksResult {
+  duplicateBlocks: DuplicateBlock[];
+  duplicateBlockClusters: DuplicateBlockCluster[];
+  shadowedDirectoryPairs: ShadowedDirectoryPair[];
 }
 
 /**
- * Token-based code clone detector.
+ * Token-based duplicate block detector.
  *
  * Pipeline:
  *  1. Tokenize each file with the AST visitor in `token-visitor.ts`
  *  2. Hash + normalize tokens with the chosen detection mode
  *  3. Concatenate every file's hashed tokens with unique negative sentinels
  *  4. Build a suffix array (prefix doubling + radix sort) and LCP array
- *  5. Stack-based LCP-interval scan extracts maximal clone groups
+ *  5. Stack-based LCP-interval scan extracts maximal duplicate blocks
  *  6. Filter on min-tokens / min-lines / min-occurrences / skip-local
  *  7. Group clones into families; collapse N two-file families with matching
- *     basenames into a `MirroredDirectory` finding
+ *     basenames into a `ShadowedDirectoryPair` finding
  *
  * Returns empty arrays when `config.enabled` is false.
  */
-export const detectCodeClones = (
+export const detectDuplicateBlocks = (
   graph: DependencyGraph,
-  config: CodeClonesConfig | undefined,
+  config: DuplicateBlocksConfig | undefined,
   rootDir: string,
-): CodeClonesResult => {
+): DuplicateBlocksResult => {
   if (!config || !config.enabled) {
-    return { codeClones: [], codeCloneFamilies: [], mirroredDirectories: [] };
+    return { duplicateBlocks: [], duplicateBlockClusters: [], shadowedDirectoryPairs: [] };
   }
 
   const tokenizedFiles: TokenizedFile[] = [];
@@ -218,7 +218,7 @@ export const detectCodeClones = (
     tokenizedFiles.push(tokenizedFile);
   }
   if (tokenizedFiles.length === 0) {
-    return { codeClones: [], codeCloneFamilies: [], mirroredDirectories: [] };
+    return { duplicateBlocks: [], duplicateBlockClusters: [], shadowedDirectoryPairs: [] };
   }
 
   const filesHashedTokens = tokenizedFiles.map((file) =>
@@ -228,17 +228,17 @@ export const detectCodeClones = (
 
   const filesHaveEnoughTokens = filesTokenCounts.some((count) => count >= config.minTokens);
   if (!filesHaveEnoughTokens) {
-    return { codeClones: [], codeCloneFamilies: [], mirroredDirectories: [] };
+    return { duplicateBlocks: [], duplicateBlockClusters: [], shadowedDirectoryPairs: [] };
   }
 
   const concatenation = rankReduceAndConcatenate(filesHashedTokens);
   if (concatenation.tokenSequence.length === 0) {
-    return { codeClones: [], codeCloneFamilies: [], mirroredDirectories: [] };
+    return { duplicateBlocks: [], duplicateBlockClusters: [], shadowedDirectoryPairs: [] };
   }
 
   const suffixArray = buildSuffixArray(concatenation.tokenSequence);
   const lcpArray = buildLcpArray(concatenation.tokenSequence, suffixArray);
-  const rawCloneGroups = extractRawCloneGroups(
+  const rawDuplicateBlocks = extractRawDuplicateBlocks(
     suffixArray,
     lcpArray,
     concatenation.fileOf,
@@ -247,9 +247,9 @@ export const detectCodeClones = (
     config.minTokens,
   );
 
-  const codeClones = filterRawGroupsToReportableClones(rawCloneGroups, tokenizedFiles, config);
-  const codeCloneFamilies = groupClonesIntoFamilies(codeClones);
-  const mirroredDirectories = detectMirroredDirectoryPairs(codeCloneFamilies, rootDir);
+  const duplicateBlocks = filterRawBlocksToReportableDuplicates(rawDuplicateBlocks, tokenizedFiles, config);
+  const duplicateBlockClusters = groupDuplicateBlocksIntoClusters(duplicateBlocks);
+  const shadowedDirectoryPairs = detectShadowedDirectoryPairs(duplicateBlockClusters, rootDir);
 
-  return { codeClones, codeCloneFamilies, mirroredDirectories };
+  return { duplicateBlocks, duplicateBlockClusters, shadowedDirectoryPairs };
 };
