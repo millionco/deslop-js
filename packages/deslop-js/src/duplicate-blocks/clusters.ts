@@ -67,7 +67,10 @@ const buildSuggestions = (
   totalDuplicatedLines: number,
 ): DuplicateBlockRefactoringHint[] => {
   const fileBaseNames = files.map((filePath) => baseName(filePath));
-  if (totalDuplicatedLines >= DUPLICATE_BLOCK_MODULE_EXTRACTION_THRESHOLD_LINES) {
+  const meetsModuleExtractionThreshold =
+    totalDuplicatedLines >= DUPLICATE_BLOCK_MODULE_EXTRACTION_THRESHOLD_LINES;
+  const spansMultipleFiles = files.length >= 2;
+  if (meetsModuleExtractionThreshold && spansMultipleFiles) {
     const estimatedSavings = duplicateBlocks.reduce(
       (runningSum, duplicateBlock) =>
         runningSum + duplicateBlock.lineCount * Math.max(0, duplicateBlock.instances.length - 1),
