@@ -307,6 +307,8 @@ describe("expo-config-plugins", () => {
       "plugins/android-secure-flag.plugin.ts",
       "plugins/with-directory-plugin/index.ts",
       "plugins/with-json-plugin.ts",
+      "plugins/with-root-json-plugin.ts",
+      "apps/mobile/plugins/with-nested-config-plugin.ts",
     ]) {
       assert.ok(
         !unusedFilePaths.includes(expectedReachableFile),
@@ -320,7 +322,7 @@ describe("expo-config-plugins", () => {
     );
     assert.ok(
       unusedFilePaths.includes("plugins/orphan.ts"),
-      `nested non-Expo plugin arrays and wildcard paths must not mark orphan.ts reachable, got: ${unusedFilePaths}`,
+      `nested non-Expo plugin arrays, dynamic tuple entries, absolute paths, and wildcard paths must not mark orphan.ts reachable, got: ${unusedFilePaths}`,
     );
   });
 });
