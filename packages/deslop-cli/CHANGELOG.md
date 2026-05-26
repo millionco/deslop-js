@@ -1,5 +1,13 @@
 # deslop-cli
 
+## 0.0.13
+
+### Patch Changes
+
+- fix
+- Updated dependencies
+  - deslop-js@0.0.13
+
 ## 0.0.12
 
 ### Patch Changes
