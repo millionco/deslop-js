@@ -11,10 +11,18 @@ import type {
   UnnecessaryAssertionKind,
 } from "../types.js";
 
+interface ParsedSourceComment {
+  type: "Line" | "Block";
+  value: string;
+  start: number;
+  end: number;
+}
+
 interface ParsedSource {
   programNode: unknown;
   sourceText: string;
   lineStarts: number[];
+  comments: ParsedSourceComment[];
 }
 
 const isAstNode = (candidate: unknown): candidate is { type: string } =>
@@ -55,11 +63,27 @@ const parseSource = (filePath: string): ParsedSource | undefined => {
   } catch {
     return undefined;
   }
+  const rawComments = (parseResult as unknown as { comments?: unknown }).comments;
+  const comments = Array.isArray(rawComments)
+    ? rawComments.filter(isParsedSourceComment)
+    : [];
   return {
     programNode: parseResult.program,
     sourceText,
     lineStarts: computeLineStarts(sourceText),
+    comments,
   };
+};
+
+const isParsedSourceComment = (candidate: unknown): candidate is ParsedSourceComment => {
+  if (typeof candidate !== "object" || candidate === null) return false;
+  const fields = candidate as Record<string, unknown>;
+  return (
+    (fields.type === "Line" || fields.type === "Block") &&
+    typeof fields.value === "string" &&
+    typeof fields.start === "number" &&
+    typeof fields.end === "number"
+  );
 };
 
 const sliceSnippet = (sourceText: string, start: number, end: number): string => {
@@ -544,77 +568,83 @@ const visitForCommonjs = (
  *   TypeScript escape-hatch comments (// @ts-ignore, // @ts-nocheck, etc.)
  * ────────────────────────────────────────────────────────────────────────── */
 
-const TS_IGNORE_PATTERN = /(\/\/|\/\*)\s*@ts-ignore\b/g;
-const TS_NOCHECK_PATTERN = /(\/\/|\/\*)\s*@ts-nocheck\b/g;
-const TS_EXPECT_ERROR_PATTERN = /(\/\/|\/\*)\s*@ts-expect-error\b([^\n*]*)/g;
+const TS_IGNORE_LEADING = /^\s*@ts-ignore\b/;
+const TS_NOCHECK_LEADING = /^\s*@ts-nocheck\b/;
+const TS_EXPECT_ERROR_LEADING = /^\s*@ts-expect-error\b(.*)$/;
 
 const collectTypeScriptEscapeHatches = (
+  comments: ParsedSourceComment[],
   filePath: string,
-  sourceText: string,
   lineStarts: number[],
   results: TypeScriptEscapeHatch[],
 ): void => {
-  const seenOffsets = new Set<number>();
-
-  const recordMatch = (
-    matchOffset: number,
-    kind: TypeScriptEscapeHatchKind,
-    reason: string,
-    suggestion: string,
-    confidence: TypeScriptEscapeHatch["confidence"],
-  ): void => {
-    if (seenOffsets.has(matchOffset)) return;
-    seenOffsets.add(matchOffset);
-    const { line, column } = offsetToLineColumn(matchOffset, lineStarts);
-    results.push({
-      path: filePath,
-      kind,
-      line,
-      column,
-      confidence,
-      reason,
-      suggestion,
-    });
-  };
-
-  TS_IGNORE_PATTERN.lastIndex = 0;
-  let ignoreMatch: RegExpExecArray | null;
-  while ((ignoreMatch = TS_IGNORE_PATTERN.exec(sourceText)) !== null) {
-    recordMatch(
-      ignoreMatch.index,
-      "ts-ignore",
-      "`@ts-ignore` silently swallows the next line's type errors forever — use `@ts-expect-error` so the suppression breaks if the underlying error gets fixed",
-      "rewrite as `@ts-expect-error <why this is okay>`",
-      "high",
-    );
-  }
-
-  TS_NOCHECK_PATTERN.lastIndex = 0;
-  let nocheckMatch: RegExpExecArray | null;
-  while ((nocheckMatch = TS_NOCHECK_PATTERN.exec(sourceText)) !== null) {
-    recordMatch(
-      nocheckMatch.index,
-      "ts-nocheck",
-      "`@ts-nocheck` disables type checking for the entire file — fix the underlying types or scope the suppression to a specific line",
-      "remove `@ts-nocheck` and address the underlying type errors, or use per-line `@ts-expect-error` with a justification",
-      "medium",
-    );
-  }
-
-  TS_EXPECT_ERROR_PATTERN.lastIndex = 0;
-  let expectErrorMatch: RegExpExecArray | null;
-  while ((expectErrorMatch = TS_EXPECT_ERROR_PATTERN.exec(sourceText)) !== null) {
-    const trailingExplanation = (expectErrorMatch[2] ?? "").trim();
-    if (trailingExplanation.length === 0) {
-      recordMatch(
-        expectErrorMatch.index,
-        "ts-expect-error-without-explanation",
-        "`@ts-expect-error` should be followed by a comment explaining why the next line legitimately produces a type error",
-        "add a short justification: `// @ts-expect-error: <why this is okay>`",
-        "low",
+  for (const comment of comments) {
+    const commentBody = comment.type === "Block" ? comment.value.split("\n")[0] : comment.value;
+    if (TS_IGNORE_LEADING.test(commentBody)) {
+      pushEscapeHatch(
+        comment.start,
+        "ts-ignore",
+        "`@ts-ignore` silently swallows the next line's type errors forever — use `@ts-expect-error` so the suppression breaks if the underlying error gets fixed",
+        "rewrite as `@ts-expect-error <why this is okay>`",
+        "high",
+        filePath,
+        lineStarts,
+        results,
       );
+      continue;
+    }
+    if (TS_NOCHECK_LEADING.test(commentBody)) {
+      pushEscapeHatch(
+        comment.start,
+        "ts-nocheck",
+        "`@ts-nocheck` disables type checking for the entire file — fix the underlying types or scope the suppression to a specific line",
+        "remove `@ts-nocheck` and address the underlying type errors, or use per-line `@ts-expect-error` with a justification",
+        "medium",
+        filePath,
+        lineStarts,
+        results,
+      );
+      continue;
+    }
+    const expectErrorMatch = commentBody.match(TS_EXPECT_ERROR_LEADING);
+    if (expectErrorMatch) {
+      const trailingExplanation = (expectErrorMatch[1] ?? "").trim();
+      if (trailingExplanation.length === 0) {
+        pushEscapeHatch(
+          comment.start,
+          "ts-expect-error-without-explanation",
+          "`@ts-expect-error` should be followed by a comment explaining why the next line legitimately produces a type error",
+          "add a short justification: `// @ts-expect-error: <why this is okay>`",
+          "low",
+          filePath,
+          lineStarts,
+          results,
+        );
+      }
     }
   }
+};
+
+const pushEscapeHatch = (
+  commentStartOffset: number,
+  kind: TypeScriptEscapeHatchKind,
+  reason: string,
+  suggestion: string,
+  confidence: TypeScriptEscapeHatch["confidence"],
+  filePath: string,
+  lineStarts: number[],
+  results: TypeScriptEscapeHatch[],
+): void => {
+  const { line, column } = offsetToLineColumn(commentStartOffset, lineStarts);
+  results.push({
+    path: filePath,
+    kind,
+    line,
+    column,
+    confidence,
+    reason,
+    suggestion,
+  });
 };
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -695,8 +725,8 @@ export const detectTypeScriptSmells = (graph: DependencyGraph): TypeScriptSmells
         unnecessaryAssertions,
       );
       collectTypeScriptEscapeHatches(
+        parsedSource.comments,
         filePath,
-        parsedSource.sourceText,
         parsedSource.lineStarts,
         typeScriptEscapeHatches,
       );
