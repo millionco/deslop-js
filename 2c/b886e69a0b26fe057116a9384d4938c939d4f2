@@ -1,0 +1,19 @@
+packages/deslop-js/src/duplicate-blocks/index.ts
+  s_a9e44c79b96108::t_7c366611ea3052 173-175,181-248
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "2cb886e69a0b26fe057116a9384d4938c939d4f2",
+  "prompts": {},
+  "sessions": {
+    "s_a9e44c79b96108": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88b1ca88-94eb-469e-bdc0-139681dd3f29",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Nisarg Patel <awesomenisarg@gmail.com>"
+    }
+  }
+}
