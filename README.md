@@ -74,6 +74,37 @@ deslop --fail-on-cycles
 deslop ./src --fail-on-issues --fail-on-cycles --ignore "**/*.test.ts"
 ```
 
+## Codebase as a DAG (`getProjectGraph`, `pruneUnusedFiles`)
+
+`deslop` builds an internal dependency graph for analysis; you can also consume it directly.
+
+```ts
+import {
+  condenseProjectGraph,
+  defineConfig,
+  getProjectGraph,
+  projectGraphToDot,
+  pruneUnusedFiles,
+} from "deslop-js";
+
+const config = defineConfig({ rootDir: "./my-app" });
+const { graph } = await getProjectGraph(config);
+
+graph.nodes; // typed nodes with classification: entry | leaf | barrel | hub | orphan | isolated
+graph.edges; // typed edges: import | re-export | side-effect
+
+const condensed = condenseProjectGraph(graph); // SCCs collapsed → true DAG
+const dot = projectGraphToDot(graph); // pipe into `dot -Tsvg`
+
+// dry-run prune (no disk writes): which files would deletion cascade through?
+const preview = await pruneUnusedFiles(config, { dryRun: true });
+
+// or actually delete unreachable nodes, re-running analysis between passes:
+await pruneUnusedFiles(config);
+```
+
+CLI counterparts: `deslop graph`, `deslop prune` (dry-run; pass `--apply` to write).
+
 ## Programmatic Usage
 
 ```ts

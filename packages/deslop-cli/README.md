@@ -45,6 +45,28 @@ Fail CI when circular imports are found:
 deslop ./my-app --fail-on-cycles
 ```
 
+## Graph view (`deslop graph`)
+
+View the codebase as a dependency DAG. Nodes are files; edges are imports / re-exports / side-effect imports. Each node carries a classification (`entry`, `leaf`, `barrel`, `hub`, `orphan`, `isolated`):
+
+```bash
+deslop graph ./my-app                  # summary with node counts and top orphans
+deslop graph ./my-app --format json    # full node + edge list (pipe into jq, your own viewer, etc.)
+deslop graph ./my-app --format dot     # Graphviz DOT (pipe into `dot -Tsvg`)
+```
+
+The condensation (strongly connected components collapsed into super-nodes) is reported as the cycle count in the summary view.
+
+## Prune (`deslop prune`)
+
+Iteratively delete orphan nodes from the DAG. `deslop prune` is dry-run by default; pass `--apply` to actually remove files. Each pass re-analyzes the smaller graph so cascade orphans — files only kept alive by re-exports inside files we just removed — get cleaned up too.
+
+```bash
+deslop prune ./my-app                  # preview the cascade
+deslop prune ./my-app --apply          # actually delete unreachable files
+deslop prune ./my-app --apply --max-iterations 4
+```
+
 ## What `deslop` reports
 
 The default scan emits the following finding categories (each grouped in human output, fully detailed in `--json`):
