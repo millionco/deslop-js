@@ -267,6 +267,24 @@ const collectLocalTypeNames = (programNode: unknown): { localTypeNames: Set<stri
 };
 
 /**
+ * Storybook CSF3 convention: a story file declares
+ *
+ *   const meta = { ... } satisfies Meta<...>;
+ *   export default meta;
+ *   type Story = StoryObj<typeof meta>;
+ *   export const Primary: Story = { ... };
+ *
+ * `Story` is intentionally a local alias — consumers don't import it; the
+ * Storybook runtime reads the default export. Flagging this as a leak
+ * produces near-100% false positives on Storybook codebases, so skip
+ * `*.stories.{ts,tsx,js,jsx,mts,mjs,cts,cjs}` files entirely.
+ */
+const STORYBOOK_STORY_FILE_PATTERN = /\.stories\.(?:[cm]?ts|[cm]?js|tsx|jsx)$/;
+
+const isStorybookStoryFile = (filePath: string): boolean =>
+  STORYBOOK_STORY_FILE_PATTERN.test(filePath);
+
+/**
  * Detect TypeScript "private type leak": an exported declaration's signature
  * references a type that was declared locally in the same module but is not
  * itself exported. Consumers of the export need that type to satisfy the
@@ -284,6 +302,7 @@ export const detectPrivateTypeLeaks = (graph: DependencyGraph): PrivateTypeLeak[
     if (module.isDeclarationFile) continue;
     if (module.isConfigFile) continue;
     if (!module.isReachable) continue;
+    if (isStorybookStoryFile(module.fileId.path)) continue;
 
     let sourceText: string;
     try {
