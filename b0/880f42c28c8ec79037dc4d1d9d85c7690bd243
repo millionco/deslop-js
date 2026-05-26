@@ -1,0 +1,29 @@
+packages/deslop-js/tests/fixtures/expo-config-plugins/apps/mobile/app.config.js
+  s_446db46cc5cc25::t_8362dc43381b03 2
+packages/deslop-js/tests/fixtures/expo-config-plugins/plugins/false-positive-target.ts
+  s_446db46cc5cc25::t_6e70d3b8707047 1
+packages/deslop-js/tests/fixtures/expo-config-plugins/app.json
+  s_446db46cc5cc25::t_631c8c9cc4ac86 3,5
+packages/deslop-js/tests/analyze.test.ts
+  s_446db46cc5cc25::t_302d5ef0d35ba4 330
+  s_446db46cc5cc25::t_df6d08ce333c1e 307,309,311,313,315
+  s_446db46cc5cc25::t_2d8b70aefabdab 308,310,312,314,316,325,329
+packages/deslop-js/tests/fixtures/expo-config-plugins/app.config.ts
+  s_446db46cc5cc25::t_ea2406f55bab7d 2,7-8,10-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b0880f42c28c8ec79037dc4d1d9d85c7690bd243",
+  "prompts": {},
+  "sessions": {
+    "s_446db46cc5cc25": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6708cf65-7dba-4e1e-b069-6ca9d8b3ed3f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
