@@ -1,0 +1,19 @@
+packages/deslop-js/src/duplicate-blocks/clusters.ts
+  s_a9e44c79b96108::t_b076a36ff8e1df 70-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "2f1c05477298a28196d79a5de8e06fc0ed619c12",
+  "prompts": {},
+  "sessions": {
+    "s_a9e44c79b96108": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88b1ca88-94eb-469e-bdc0-139681dd3f29",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Nisarg Patel <awesomenisarg@gmail.com>"
+    }
+  }
+}
