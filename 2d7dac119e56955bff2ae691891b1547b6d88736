@@ -1,0 +1,49 @@
+packages/deslop-js/tests/fixtures/expo-config-plugins/plugins/expo-camera.ts
+  s_446db46cc5cc25::t_a8b647c040632e 1
+packages/deslop-js/tests/fixtures/expo-config-plugins/src/index.ts
+  s_446db46cc5cc25::t_69b01ad6877d90 1
+packages/deslop-js/src/constants.ts
+  s_446db46cc5cc25::t_f8bf967c6c2f75 61-62
+packages/deslop-js/tests/fixtures/expo-config-plugins/plugins/android-day-night-theme.ts
+  s_446db46cc5cc25::t_99367e2af4fbd7 1
+packages/deslop-js/src/collect/entries.ts
+  s_446db46cc5cc25::t_9b95eccb9fc270 19,248-264,304,2488
+.changeset/swift-dragons-juggle.md
+  s_446db46cc5cc25::t_f3ce1881c0eb33 1-5
+packages/deslop-js/tests/analyze.test.ts
+  s_446db46cc5cc25::t_da9bb2c30c673e 300-328
+packages/deslop-js/tests/fixtures/expo-config-plugins/plugins/orphan.ts
+  s_446db46cc5cc25::t_f2379d73086839 1
+packages/deslop-js/tests/fixtures/expo-config-plugins/plugins/with-json-plugin.ts
+  s_446db46cc5cc25::t_f4f3aeb491d241 1
+packages/deslop-js/src/collect/expo-config-plugin-entries.ts
+  s_446db46cc5cc25::t_dd674d8ccae75b 1,3-38,40-179,181-211
+  s_446db46cc5cc25::t_b4542604800c93 2,180
+  s_446db46cc5cc25::t_dd18f305f3f1c4 39
+packages/deslop-js/tests/fixtures/expo-config-plugins/app.config.ts
+  s_446db46cc5cc25::t_79ea69dccb023e 1-8
+packages/deslop-js/tests/fixtures/expo-config-plugins/plugins/with-directory-plugin/index.ts
+  s_446db46cc5cc25::t_00a58a1bd4c27f 1
+packages/deslop-js/tests/fixtures/expo-config-plugins/package.json
+  s_446db46cc5cc25::t_a2450eb1701eee 1-8
+packages/deslop-js/tests/fixtures/expo-config-plugins/plugins/android-secure-flag.plugin.ts
+  s_446db46cc5cc25::t_3a7b3eb7d651da 1
+packages/deslop-js/tests/fixtures/expo-config-plugins/app.json
+  s_446db46cc5cc25::t_2316a483ced95f 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "2d7dac119e56955bff2ae691891b1547b6d88736",
+  "prompts": {},
+  "sessions": {
+    "s_446db46cc5cc25": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6708cf65-7dba-4e1e-b069-6ca9d8b3ed3f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
