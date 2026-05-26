@@ -297,6 +297,35 @@ describe("filename-registry-entries", () => {
   });
 });
 
+describe("expo-config-plugins", () => {
+  it("should treat local Expo config plugins as entry points", async () => {
+    const result = await scanFixture("expo-config-plugins");
+    const fixtureDir = resolve(FIXTURES_DIR, "expo-config-plugins");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+
+    for (const expectedReachableFile of [
+      "plugins/android-secure-flag.plugin.ts",
+      "plugins/android-day-night-theme.ts",
+      "plugins/with-directory-plugin/index.ts",
+      "plugins/with-json-plugin.ts",
+    ]) {
+      assert.ok(
+        !unusedFilePaths.includes(expectedReachableFile),
+        `${expectedReachableFile} is referenced by Expo config plugins and must not be flagged unused, got: ${unusedFilePaths}`,
+      );
+    }
+
+    assert.ok(
+      unusedFilePaths.includes("plugins/expo-camera.ts"),
+      `package-name lookalikes must not be treated as local plugin files, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("plugins/orphan.ts"),
+      `orphan.ts should still be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("nested-dist-non-workspace", () => {
   it("should exclude `dist/` directories at ANY depth, not just at workspace roots", async () => {
     const result = await scanFixture("nested-dist-non-workspace");

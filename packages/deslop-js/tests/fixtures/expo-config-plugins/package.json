@@ -1,0 +1,8 @@
+{
+  "name": "expo-config-plugins",
+  "type": "module",
+  "dependencies": {
+    "expo": "^56.0.0",
+    "react": "^19.0.0"
+  }
+}
