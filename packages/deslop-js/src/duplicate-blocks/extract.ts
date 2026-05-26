@@ -2,77 +2,18 @@ import { SENTINEL_FILE_MARKER } from "./concatenate.js";
 
 export interface RawDuplicateBlockOccurrence {
   fileIndex: number;
-  /** Token offset relative to the file's start. */
   tokenOffsetWithinFile: number;
 }
 
 export interface RawDuplicateBlock {
   instances: RawDuplicateBlockOccurrence[];
-  /** Clone length in tokens. */
   tokenLength: number;
 }
 
-interface StackEntry {
+interface MonotoneStackEntry {
   lcpValue: number;
   startIndex: number;
 }
-
-/**
- * Stack-based extraction of maximal duplicate blocks from a suffix-array+LCP pair.
- *
- * Iterates `lcp[]` and uses a monotone stack to find every maximal interval
- * `[i, j]` whose minimum LCP is >= `minTokens`. Each such interval is a
- * duplicate block whose instances are the suffix-array entries `sa[i .. j]`,
- * each of length equal to the interval's minimum LCP.
- *
- * Within-file overlapping instances are deduplicated (keeping the earliest
- * non-overlapping prefix), and we drop any group that ends up with fewer
- * than two instances after that pass.
- */
-export const extractRawDuplicateBlocks = (
-  suffixArray: number[],
-  lcpArray: number[],
-  fileOf: number[],
-  fileOffsets: number[],
-  filesTokenCounts: number[],
-  minTokens: number,
-): RawDuplicateBlock[] => {
-  const sequenceLength = suffixArray.length;
-  if (sequenceLength < 2) return [];
-
-  const rawBlocks: RawDuplicateBlock[] = [];
-  const stack: StackEntry[] = [];
-
-  for (let scanIndex = 1; scanIndex <= sequenceLength; scanIndex++) {
-    const currentLcp = scanIndex < sequenceLength ? lcpArray[scanIndex] : 0;
-    let intervalStart = scanIndex;
-
-    while (stack.length > 0 && stack[stack.length - 1].lcpValue > currentLcp) {
-      const popped = stack.pop()!;
-      intervalStart = popped.startIndex;
-      if (popped.lcpValue >= minTokens) {
-        const intervalBegin = intervalStart - 1;
-        const intervalEnd = scanIndex;
-        const candidate = buildRawBlock(
-          suffixArray,
-          fileOf,
-          fileOffsets,
-          filesTokenCounts,
-          intervalBegin,
-          intervalEnd,
-          popped.lcpValue,
-        );
-        if (candidate) rawBlocks.push(candidate);
-      }
-    }
-
-    if (scanIndex < sequenceLength) {
-      stack.push({ lcpValue: currentLcp, startIndex: intervalStart });
-    }
-  }
-
-  return rawBlocks;
-};
 
 const buildRawBlock = (
   suffixArray: number[],
@@ -95,26 +36,73 @@ const buildRawBlock = (
 
   if (candidateInstances.length < 2) return undefined;
 
-  candidateInstances.sort((firstInstance, secondInstance) => {
-    if (firstInstance.fileIndex !== secondInstance.fileIndex) {
-      return firstInstance.fileIndex - secondInstance.fileIndex;
+  candidateInstances.sort((leftInstance, rightInstance) => {
+    if (leftInstance.fileIndex !== rightInstance.fileIndex) {
+      return leftInstance.fileIndex - rightInstance.fileIndex;
     }
-    return firstInstance.tokenOffsetWithinFile - secondInstance.tokenOffsetWithinFile;
+    return leftInstance.tokenOffsetWithinFile - rightInstance.tokenOffsetWithinFile;
   });
 
   const dedupedInstances: RawDuplicateBlockOccurrence[] = [];
   for (const instance of candidateInstances) {
     const lastInstance = dedupedInstances[dedupedInstances.length - 1];
-    if (
-      lastInstance &&
+    const isOverlappingInSameFile =
+      lastInstance !== undefined &&
       lastInstance.fileIndex === instance.fileIndex &&
-      instance.tokenOffsetWithinFile < lastInstance.tokenOffsetWithinFile + tokenLength
-    ) {
-      continue;
-    }
+      instance.tokenOffsetWithinFile < lastInstance.tokenOffsetWithinFile + tokenLength;
+    if (isOverlappingInSameFile) continue;
     dedupedInstances.push(instance);
   }
 
   if (dedupedInstances.length < 2) return undefined;
   return { instances: dedupedInstances, tokenLength };
+};
+
+/**
+ * Walks `lcpArray` with a monotone stack to materialize every maximal
+ * interval `[i, j]` whose minimum LCP is >= `minTokens`. Within-file
+ * overlapping occurrences are dropped (keep the earliest non-overlapping
+ * prefix), and any block left with fewer than two occurrences is discarded.
+ */
+export const extractRawDuplicateBlocks = (
+  suffixArray: number[],
+  lcpArray: number[],
+  fileOf: number[],
+  fileOffsets: number[],
+  filesTokenCounts: number[],
+  minTokens: number,
+): RawDuplicateBlock[] => {
+  const sequenceLength = suffixArray.length;
+  if (sequenceLength < 2) return [];
+
+  const rawBlocks: RawDuplicateBlock[] = [];
+  const monotoneStack: MonotoneStackEntry[] = [];
+
+  for (let scanIndex = 1; scanIndex <= sequenceLength; scanIndex++) {
+    const currentLcp = scanIndex < sequenceLength ? lcpArray[scanIndex] : 0;
+    let intervalStart = scanIndex;
+
+    while (monotoneStack.length > 0 && monotoneStack[monotoneStack.length - 1].lcpValue > currentLcp) {
+      const popped = monotoneStack.pop()!;
+      intervalStart = popped.startIndex;
+      if (popped.lcpValue >= minTokens) {
+        const candidate = buildRawBlock(
+          suffixArray,
+          fileOf,
+          fileOffsets,
+          filesTokenCounts,
+          intervalStart - 1,
+          scanIndex,
+          popped.lcpValue,
+        );
+        if (candidate) rawBlocks.push(candidate);
+      }
+    }
+
+    if (scanIndex < sequenceLength) {
+      monotoneStack.push({ lcpValue: currentLcp, startIndex: intervalStart });
+    }
+  }
+
+  return rawBlocks;
 };

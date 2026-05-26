@@ -10,6 +10,9 @@ import type {
   UnnecessaryAssertion,
   UnnecessaryAssertionKind,
 } from "../types.js";
+import { computeLineStarts } from "../utils/compute-line-starts.js";
+import { offsetToLineColumn } from "../utils/offset-to-line-column.js";
+import { isAstNode } from "../utils/is-ast-node.js";
 
 interface ParsedSourceComment {
   type: "Line" | "Block";
@@ -24,31 +27,6 @@ interface ParsedSource {
   lineStarts: number[];
   comments: ParsedSourceComment[];
 }
-
-const isAstNode = (candidate: unknown): candidate is { type: string } =>
-  typeof candidate === "object" && candidate !== null && "type" in candidate;
-
-const computeLineStarts = (sourceText: string): number[] => {
-  const lineStarts: number[] = [0];
-  for (let charIndex = 0; charIndex < sourceText.length; charIndex++) {
-    if (sourceText.charCodeAt(charIndex) === 10) lineStarts.push(charIndex + 1);
-  }
-  return lineStarts;
-};
-
-const offsetToLineColumn = (
-  byteOffset: number,
-  lineStarts: number[],
-): { line: number; column: number } => {
-  let lowIndex = 0;
-  let highIndex = lineStarts.length - 1;
-  while (lowIndex < highIndex) {
-    const middleIndex = (lowIndex + highIndex + 1) >>> 1;
-    if (lineStarts[middleIndex] <= byteOffset) lowIndex = middleIndex;
-    else highIndex = middleIndex - 1;
-  }
-  return { line: lowIndex + 1, column: byteOffset - lineStarts[lowIndex] };
-};
 
 const parseSource = (filePath: string): ParsedSource | undefined => {
   let sourceText: string;
@@ -92,10 +70,6 @@ const sliceSnippet = (sourceText: string, start: number, end: number): string =>
   return end - start > SNIPPET_BUDGET_CHARS ? `${raw}…` : raw;
 };
 
-/* ──────────────────────────────────────────────────────────────────────────
- *   Unnecessary type assertions
- * ────────────────────────────────────────────────────────────────────────── */
-
 const isAnyOrUnknownTypeAnnotation = (typeAnnotation: unknown): "any" | "unknown" | undefined => {
   if (!isAstNode(typeAnnotation)) return undefined;
   if (typeAnnotation.type === "TSAnyKeyword") return "any";
@@ -106,7 +80,7 @@ const isAnyOrUnknownTypeAnnotation = (typeAnnotation: unknown): "any" | "unknown
 const isLiteralLikeNonNull = (expression: unknown): boolean => {
   if (!isAstNode(expression)) return false;
   if (expression.type === "Literal") {
-    const literalValue = (expression as Record<string, unknown>).value;
+    const literalValue = expression.value;
     return literalValue !== null;
   }
   if (
@@ -132,8 +106,8 @@ const collectUnnecessaryAssertionsInNode = (
   if (!isAstNode(node)) return;
 
   if (node.type === "TSAsExpression" || node.type === "TSSatisfiesExpression") {
-    const innerExpression = (node as Record<string, unknown>).expression;
-    const typeAnnotation = (node as Record<string, unknown>).typeAnnotation;
+    const innerExpression = node.expression;
+    const typeAnnotation = node.typeAnnotation;
 
     if (node.type === "TSAsExpression") {
       const outerKind = isAnyOrUnknownTypeAnnotation(typeAnnotation);
@@ -142,7 +116,7 @@ const collectUnnecessaryAssertionsInNode = (
         isAstNode(innerExpression) &&
         innerExpression.type === "TSAsExpression"
       ) {
-        const innerTypeAnnotation = (innerExpression as Record<string, unknown>).typeAnnotation;
+        const innerTypeAnnotation = innerExpression.typeAnnotation;
         const innerKind = isAnyOrUnknownTypeAnnotation(innerTypeAnnotation);
         if (innerKind !== undefined) {
           pushAssertion(
@@ -186,7 +160,7 @@ const collectUnnecessaryAssertionsInNode = (
   }
 
   if (node.type === "TSNonNullExpression") {
-    const innerExpression = (node as Record<string, unknown>).expression;
+    const innerExpression = node.expression;
     if (isAstNode(innerExpression) && innerExpression.type === "TSNonNullExpression") {
       pushAssertion(
         node,
@@ -224,8 +198,8 @@ const pushAssertion = (
   results: UnnecessaryAssertion[],
 ): void => {
   if (!isAstNode(node)) return;
-  const startOffset = (node as Record<string, unknown>).start;
-  const endOffset = (node as Record<string, unknown>).end;
+  const startOffset = node.start;
+  const endOffset = node.end;
   if (typeof startOffset !== "number" || typeof endOffset !== "number") return;
   const { line, column } = offsetToLineColumn(startOffset, lineStarts);
   const isHighConfidenceKind =
@@ -263,7 +237,7 @@ const visitForUnnecessaryAssertions = (
     ) {
       continue;
     }
-    const value = (node as Record<string, unknown>)[propertyKey];
+    const value = node[propertyKey];
     if (Array.isArray(value)) {
       for (const item of value) {
         visitForUnnecessaryAssertions(item, filePath, sourceText, lineStarts, results);
@@ -274,17 +248,13 @@ const visitForUnnecessaryAssertions = (
   }
 };
 
-/* ──────────────────────────────────────────────────────────────────────────
- *   Top-level dynamic imports that should be static
- * ────────────────────────────────────────────────────────────────────────── */
-
 const importExpressionSpecifier = (importExpression: unknown): string | undefined => {
   if (!isAstNode(importExpression)) return undefined;
   if (importExpression.type !== "ImportExpression") return undefined;
-  const sourceNode = (importExpression as Record<string, unknown>).source;
+  const sourceNode = importExpression.source;
   if (!isAstNode(sourceNode)) return undefined;
   if (sourceNode.type !== "Literal") return undefined;
-  const literalValue = (sourceNode as Record<string, unknown>).value;
+  const literalValue = sourceNode.value;
   return typeof literalValue === "string" ? literalValue : undefined;
 };
 
@@ -293,15 +263,15 @@ const findThenImportInExpressionStatement = (
 ): { importExpression: unknown; specifier: string } | undefined => {
   if (!isAstNode(expressionNode)) return undefined;
   if (expressionNode.type !== "CallExpression") return undefined;
-  const callee = (expressionNode as Record<string, unknown>).callee;
+  const callee = expressionNode.callee;
   if (!isAstNode(callee)) return undefined;
   if (callee.type !== "MemberExpression" && callee.type !== "StaticMemberExpression") return undefined;
-  const propertyNode = (callee as Record<string, unknown>).property;
+  const propertyNode = callee.property;
   const propertyName = isAstNode(propertyNode)
-    ? (propertyNode as Record<string, unknown>).name
+    ? propertyNode.name
     : undefined;
   if (propertyName !== "then" && propertyName !== "catch" && propertyName !== "finally") return undefined;
-  const objectNode = (callee as Record<string, unknown>).object;
+  const objectNode = callee.object;
   const specifier = importExpressionSpecifier(objectNode);
   if (specifier === undefined) return undefined;
   return { importExpression: objectNode, specifier };
@@ -312,7 +282,7 @@ const findAwaitImportInExpression = (
 ): { importExpression: unknown; specifier: string } | undefined => {
   if (!isAstNode(expressionNode)) return undefined;
   if (expressionNode.type !== "AwaitExpression") return undefined;
-  const argumentNode = (expressionNode as Record<string, unknown>).argument;
+  const argumentNode = expressionNode.argument;
   const specifier = importExpressionSpecifier(argumentNode);
   if (specifier === undefined) return undefined;
   return { importExpression: argumentNode, specifier };
@@ -325,18 +295,18 @@ const collectLazyImportsAtTopLevel = (
   results: LazyImportAtTopLevel[],
 ): void => {
   if (!isAstNode(programNode)) return;
-  const programBody = (programNode as Record<string, unknown>).body;
+  const programBody = programNode.body;
   if (!Array.isArray(programBody)) return;
 
   for (const topLevelStatement of programBody) {
     if (!isAstNode(topLevelStatement)) continue;
 
     if (topLevelStatement.type === "VariableDeclaration") {
-      const declarators = (topLevelStatement as Record<string, unknown>).declarations;
+      const declarators = topLevelStatement.declarations;
       if (!Array.isArray(declarators)) continue;
       for (const declarator of declarators) {
         if (!isAstNode(declarator)) continue;
-        const initializer = (declarator as Record<string, unknown>).init;
+        const initializer = declarator.init;
         const awaitImport = findAwaitImportInExpression(initializer);
         if (awaitImport) {
           recordLazyImport(awaitImport, "top-level-await-import", filePath, lineStarts, results);
@@ -346,7 +316,7 @@ const collectLazyImportsAtTopLevel = (
     }
 
     if (topLevelStatement.type === "ExpressionStatement") {
-      const innerExpression = (topLevelStatement as Record<string, unknown>).expression;
+      const innerExpression = topLevelStatement.expression;
       const awaitImport = findAwaitImportInExpression(innerExpression);
       if (awaitImport) {
         recordLazyImport(awaitImport, "top-level-await-import", filePath, lineStarts, results);
@@ -368,7 +338,7 @@ const recordLazyImport = (
   results: LazyImportAtTopLevel[],
 ): void => {
   if (!isAstNode(match.importExpression)) return;
-  const startOffset = (match.importExpression as Record<string, unknown>).start;
+  const startOffset = match.importExpression.start;
   if (typeof startOffset !== "number") return;
   const { line, column } = offsetToLineColumn(startOffset, lineStarts);
   results.push({
@@ -384,10 +354,6 @@ const recordLazyImport = (
         : `top-level \`import("${match.specifier}").then(...)\` runs at module evaluation — prefer a static \`import\` and a regular function call unless the dynamic-import contract is intentional`,
   });
 };
-
-/* ──────────────────────────────────────────────────────────────────────────
- *   CommonJS in ESM modules
- * ────────────────────────────────────────────────────────────────────────── */
 
 interface PackageJsonTypeCache {
   resolveModuleType: (filePath: string) => "module" | "commonjs" | undefined;
@@ -461,20 +427,20 @@ const visitForCommonjs = (
   if (!isAstNode(node)) return;
 
   if (node.type === "CallExpression") {
-    const callee = (node as Record<string, unknown>).callee;
+    const callee = node.callee;
     if (isAstNode(callee) && callee.type === "Identifier") {
-      const calleeName = (callee as Record<string, unknown>).name;
+      const calleeName = callee.name;
       if (calleeName === "require") {
-        const callArguments = (node as Record<string, unknown>).arguments;
+        const callArguments = node.arguments;
         if (Array.isArray(callArguments) && callArguments.length > 0) {
           const firstArgument = callArguments[0];
           if (
             isAstNode(firstArgument) &&
             firstArgument.type === "Literal" &&
-            typeof (firstArgument as Record<string, unknown>).value === "string"
+            typeof firstArgument.value === "string"
           ) {
-            const startOffset = (node as Record<string, unknown>).start;
-            const endOffset = (node as Record<string, unknown>).end;
+            const startOffset = node.start;
+            const endOffset = node.end;
             if (typeof startOffset === "number" && typeof endOffset === "number") {
               const { line, column } = offsetToLineColumn(startOffset, lineStarts);
               results.push({
@@ -495,22 +461,22 @@ const visitForCommonjs = (
   }
 
   if (node.type === "AssignmentExpression") {
-    const leftSide = (node as Record<string, unknown>).left;
+    const leftSide = node.left;
     if (isAstNode(leftSide)) {
       const isMemberExpr =
         leftSide.type === "MemberExpression" || leftSide.type === "StaticMemberExpression";
       if (isMemberExpr) {
-        const objectNode = (leftSide as Record<string, unknown>).object;
-        const propertyNode = (leftSide as Record<string, unknown>).property;
+        const objectNode = leftSide.object;
+        const propertyNode = leftSide.property;
         const objectName = isAstNode(objectNode)
-          ? (objectNode as Record<string, unknown>).name
+          ? objectNode.name
           : undefined;
         const propertyName = isAstNode(propertyNode)
-          ? (propertyNode as Record<string, unknown>).name
+          ? propertyNode.name
           : undefined;
         if (objectName === "module" && propertyName === "exports") {
-          const startOffset = (node as Record<string, unknown>).start;
-          const endOffset = (node as Record<string, unknown>).end;
+          const startOffset = node.start;
+          const endOffset = node.end;
           if (typeof startOffset === "number" && typeof endOffset === "number") {
             const { line, column } = offsetToLineColumn(startOffset, lineStarts);
             results.push({
@@ -525,8 +491,8 @@ const visitForCommonjs = (
             });
           }
         } else if (objectName === "exports") {
-          const startOffset = (node as Record<string, unknown>).start;
-          const endOffset = (node as Record<string, unknown>).end;
+          const startOffset = node.start;
+          const endOffset = node.end;
           if (typeof startOffset === "number" && typeof endOffset === "number") {
             const { line, column } = offsetToLineColumn(startOffset, lineStarts);
             results.push({
@@ -555,7 +521,7 @@ const visitForCommonjs = (
     ) {
       continue;
     }
-    const value = (node as Record<string, unknown>)[propertyKey];
+    const value = node[propertyKey];
     if (Array.isArray(value)) {
       for (const item of value) visitForCommonjs(item, filePath, sourceText, lineStarts, results);
     } else if (value !== null && typeof value === "object") {
@@ -563,10 +529,6 @@ const visitForCommonjs = (
     }
   }
 };
-
-/* ──────────────────────────────────────────────────────────────────────────
- *   TypeScript escape-hatch comments (// @ts-ignore, // @ts-nocheck, etc.)
- * ────────────────────────────────────────────────────────────────────────── */
 
 const TS_IGNORE_LEADING = /^\s*@ts-ignore\b/;
 const TS_NOCHECK_LEADING = /^\s*@ts-nocheck\b/;
@@ -647,10 +609,6 @@ const pushEscapeHatch = (
   });
 };
 
-/* ──────────────────────────────────────────────────────────────────────────
- *   Public entry
- * ────────────────────────────────────────────────────────────────────────── */
-
 export interface TypeScriptSmellsResult {
   unnecessaryAssertions: UnnecessaryAssertion[];
   lazyImportsAtTopLevel: LazyImportAtTopLevel[];
@@ -674,32 +632,6 @@ const isTypeScriptFileExtension = (filePath: string): boolean =>
   filePath.endsWith(".mts") ||
   filePath.endsWith(".cts");
 
-/**
- * Detects four families of TypeScript-specific code smells:
- *
- * 1. `unnecessaryAssertions` — pointless or harmful type assertions:
- *    - double assertions (`x as unknown as T`)
- *    - escapes to `any`
- *    - non-null on a literal/array/object/function expression
- *    - double non-null (`x!!`)
- *    - deprecated angle-bracket assertions (`<T>x`)
- *
- * 2. `lazyImportsAtTopLevel` — `await import("foo")` and
- *    `import("foo").then(...)` at the top of a module body. They run
- *    synchronously during module evaluation anyway, so there's no laziness
- *    benefit — a static `import` is shorter, type-checked, and bundler-
- *    friendly.
- *
- * 3. `commonjsInEsm` — `require()` calls and `module.exports = ...` /
- *    `exports.x = ...` assignments inside ESM modules. Either the file is
- *    `.mts`/`.mjs`, or the nearest `package.json` declares
- *    `"type": "module"`, both of which forbid the CommonJS forms at runtime.
- *
- * 4. `typeScriptEscapeHatches` — `// @ts-ignore`, `// @ts-nocheck`, and
- *    `// @ts-expect-error` without an explanation comment. These quietly
- *    accumulate in any long-lived TS codebase and are worth surfacing as
- *    code-review prompts.
- */
 export const detectTypeScriptSmells = (graph: DependencyGraph): TypeScriptSmellsResult => {
   const unnecessaryAssertions: UnnecessaryAssertion[] = [];
   const lazyImportsAtTopLevel: LazyImportAtTopLevel[] = [];

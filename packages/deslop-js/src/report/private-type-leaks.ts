@@ -1,36 +1,14 @@
 import { readFileSync } from "node:fs";
 import { parseSync } from "oxc-parser";
 import type { DependencyGraph, PrivateTypeLeak } from "../types.js";
-
-const isAstNode = (candidate: unknown): candidate is { type: string } =>
-  typeof candidate === "object" && candidate !== null && "type" in candidate;
-
-const computeLineStarts = (sourceText: string): number[] => {
-  const lineStarts: number[] = [0];
-  for (let charIndex = 0; charIndex < sourceText.length; charIndex++) {
-    if (sourceText.charCodeAt(charIndex) === 10) lineStarts.push(charIndex + 1);
-  }
-  return lineStarts;
-};
-
-const offsetToLineColumn = (
-  byteOffset: number,
-  lineStarts: number[],
-): { line: number; column: number } => {
-  let lowIndex = 0;
-  let highIndex = lineStarts.length - 1;
-  while (lowIndex < highIndex) {
-    const middleIndex = (lowIndex + highIndex + 1) >>> 1;
-    if (lineStarts[middleIndex] <= byteOffset) lowIndex = middleIndex;
-    else highIndex = middleIndex - 1;
-  }
-  return { line: lowIndex + 1, column: byteOffset - lineStarts[lowIndex] };
-};
+import { computeLineStarts } from "../utils/compute-line-starts.js";
+import { offsetToLineColumn } from "../utils/offset-to-line-column.js";
+import { isAstNode } from "../utils/is-ast-node.js";
 
 const extractIdentifierName = (node: unknown): string | undefined => {
   if (!isAstNode(node)) return undefined;
   if (node.type === "Identifier") {
-    const identifierName = (node as Record<string, unknown>).name;
+    const identifierName = node.name;
     return typeof identifierName === "string" ? identifierName : undefined;
   }
   return undefined;
@@ -40,16 +18,16 @@ const collectTypeReferenceNamesFromTypeNode = (typeNode: unknown, into: Set<stri
   if (!isAstNode(typeNode)) return;
 
   if (typeNode.type === "TSTypeReference") {
-    const referencedTypeName = (typeNode as Record<string, unknown>).typeName;
+    const referencedTypeName = typeNode.typeName;
     if (isAstNode(referencedTypeName) && referencedTypeName.type === "Identifier") {
-      const name = (referencedTypeName as Record<string, unknown>).name;
+      const name = referencedTypeName.name;
       if (typeof name === "string") into.add(name);
     }
   }
 
-  for (const key of Object.keys(typeNode as Record<string, unknown>)) {
+  for (const key of Object.keys(typeNode)) {
     if (key === "type" || key === "start" || key === "end") continue;
-    const value = (typeNode as Record<string, unknown>)[key];
+    const value = typeNode[key];
     if (Array.isArray(value)) {
       for (const item of value) collectTypeReferenceNamesFromTypeNode(item, into);
     } else if (value !== null && typeof value === "object") {
@@ -71,25 +49,25 @@ const isExportedDeclaration = (statement: unknown): boolean => {
 
 const declarationOf = (statement: unknown): unknown => {
   if (!isAstNode(statement)) return undefined;
-  return (statement as Record<string, unknown>).declaration;
+  return statement.declaration;
 };
 
 const exportedNameOfDeclaration = (declarationNode: unknown): string | undefined => {
   if (!isAstNode(declarationNode)) return undefined;
   if (declarationNode.type === "FunctionDeclaration" || declarationNode.type === "ClassDeclaration") {
-    return extractIdentifierName((declarationNode as Record<string, unknown>).id);
+    return extractIdentifierName(declarationNode.id);
   }
   if (declarationNode.type === "VariableDeclaration") {
-    const declarators = (declarationNode as Record<string, unknown>).declarations;
+    const declarators = declarationNode.declarations;
     if (Array.isArray(declarators) && declarators.length > 0) {
       const firstDeclarator = declarators[0];
       if (isAstNode(firstDeclarator)) {
-        return extractIdentifierName((firstDeclarator as Record<string, unknown>).id);
+        return extractIdentifierName(firstDeclarator.id);
       }
     }
   }
   if (declarationNode.type === "TSInterfaceDeclaration" || declarationNode.type === "TSTypeAliasDeclaration") {
-    return extractIdentifierName((declarationNode as Record<string, unknown>).id);
+    return extractIdentifierName(declarationNode.id);
   }
   return undefined;
 };
@@ -100,13 +78,13 @@ const collectFromFunctionLikeSignature = (
   collected: PublicSignatureReference[],
 ): void => {
   if (!isAstNode(functionLikeNode)) return;
-  const params = (functionLikeNode as Record<string, unknown>).params;
+  const params = functionLikeNode.params;
   if (Array.isArray(params)) {
     for (const param of params) collectFromParameter(param, exportName, collected);
   }
-  const returnTypeAnnotation = (functionLikeNode as Record<string, unknown>).returnType;
+  const returnTypeAnnotation = functionLikeNode.returnType;
   if (isAstNode(returnTypeAnnotation)) {
-    const annotation = (returnTypeAnnotation as Record<string, unknown>).typeAnnotation;
+    const annotation = returnTypeAnnotation.typeAnnotation;
     pushTypeReferences(annotation, exportName, collected, returnTypeAnnotation);
   }
 };
@@ -117,9 +95,9 @@ const collectFromParameter = (
   collected: PublicSignatureReference[],
 ): void => {
   if (!isAstNode(parameterNode)) return;
-  const annotation = (parameterNode as Record<string, unknown>).typeAnnotation;
+  const annotation = parameterNode.typeAnnotation;
   if (isAstNode(annotation)) {
-    const innerTypeNode = (annotation as Record<string, unknown>).typeAnnotation;
+    const innerTypeNode = annotation.typeAnnotation;
     pushTypeReferences(innerTypeNode, exportName, collected, annotation);
   }
 };
@@ -134,10 +112,10 @@ const pushTypeReferences = (
   const referencedTypeNames = new Set<string>();
   collectTypeReferenceNamesFromTypeNode(typeNode, referencedTypeNames);
   for (const referencedName of referencedTypeNames) {
-    const offset = (typeNode as Record<string, unknown>).start;
+    const offset = typeNode.start;
     const fallbackOffset =
-      isAstNode(spanFallbackNode) && typeof (spanFallbackNode as Record<string, unknown>).start === "number"
-        ? ((spanFallbackNode as Record<string, unknown>).start as number)
+      isAstNode(spanFallbackNode) && typeof spanFallbackNode.start === "number"
+        ? (spanFallbackNode.start as number)
         : 0;
     collected.push({
       exportName,
@@ -150,7 +128,7 @@ const pushTypeReferences = (
 const collectPublicSignatureReferences = (programNode: unknown): PublicSignatureReference[] => {
   const collected: PublicSignatureReference[] = [];
   if (!isAstNode(programNode)) return collected;
-  const programBody = (programNode as Record<string, unknown>).body;
+  const programBody = programNode.body;
   if (!Array.isArray(programBody)) return collected;
 
   for (const statement of programBody) {
@@ -171,19 +149,19 @@ const collectPublicSignatureReferences = (programNode: unknown): PublicSignature
         continue;
       }
       if (declarationNode.type === "VariableDeclaration") {
-        const declarators = (declarationNode as Record<string, unknown>).declarations;
+        const declarators = declarationNode.declarations;
         if (Array.isArray(declarators)) {
           for (const declarator of declarators) {
             if (!isAstNode(declarator)) continue;
-            const id = (declarator as Record<string, unknown>).id;
+            const id = declarator.id;
             if (isAstNode(id)) {
-              const annotation = (id as Record<string, unknown>).typeAnnotation;
+              const annotation = id.typeAnnotation;
               if (isAstNode(annotation)) {
-                const inner = (annotation as Record<string, unknown>).typeAnnotation;
+                const inner = annotation.typeAnnotation;
                 pushTypeReferences(inner, exportedName, collected, annotation);
               }
             }
-            const init = (declarator as Record<string, unknown>).init;
+            const init = declarator.init;
             if (
               isAstNode(init) &&
               (init.type === "ArrowFunctionExpression" || init.type === "FunctionExpression")
@@ -195,19 +173,19 @@ const collectPublicSignatureReferences = (programNode: unknown): PublicSignature
         continue;
       }
       if (declarationNode.type === "ClassDeclaration") {
-        const classBody = (declarationNode as Record<string, unknown>).body;
+        const classBody = declarationNode.body;
         if (isAstNode(classBody)) {
-          const members = (classBody as Record<string, unknown>).body;
+          const members = classBody.body;
           if (Array.isArray(members)) {
             for (const member of members) {
               if (!isAstNode(member)) continue;
               if (member.type === "MethodDefinition") {
-                const value = (member as Record<string, unknown>).value;
+                const value = member.value;
                 collectFromFunctionLikeSignature(value, exportedName, collected);
               } else if (member.type === "PropertyDefinition") {
-                const annotation = (member as Record<string, unknown>).typeAnnotation;
+                const annotation = member.typeAnnotation;
                 if (isAstNode(annotation)) {
-                  const inner = (annotation as Record<string, unknown>).typeAnnotation;
+                  const inner = annotation.typeAnnotation;
                   pushTypeReferences(inner, exportedName, collected, annotation);
                 }
               }
@@ -225,36 +203,36 @@ const collectLocalTypeNames = (programNode: unknown): { localTypeNames: Set<stri
   const localTypeNames = new Set<string>();
   const exportedNames = new Set<string>();
   if (!isAstNode(programNode)) return { localTypeNames, exportedNames };
-  const programBody = (programNode as Record<string, unknown>).body;
+  const programBody = programNode.body;
   if (!Array.isArray(programBody)) return { localTypeNames, exportedNames };
 
   for (const statement of programBody) {
     if (!isAstNode(statement)) continue;
     if (statement.type === "TSInterfaceDeclaration" || statement.type === "TSTypeAliasDeclaration") {
-      const name = extractIdentifierName((statement as Record<string, unknown>).id);
+      const name = extractIdentifierName(statement.id);
       if (name) localTypeNames.add(name);
       continue;
     }
     if (statement.type === "ExportNamedDeclaration") {
-      const declarationNode = (statement as Record<string, unknown>).declaration;
+      const declarationNode = statement.declaration;
       if (isAstNode(declarationNode)) {
         if (
           declarationNode.type === "TSInterfaceDeclaration" ||
           declarationNode.type === "TSTypeAliasDeclaration"
         ) {
-          const name = extractIdentifierName((declarationNode as Record<string, unknown>).id);
+          const name = extractIdentifierName(declarationNode.id);
           if (name) exportedNames.add(name);
           continue;
         }
         const declaredName = exportedNameOfDeclaration(declarationNode);
         if (declaredName) exportedNames.add(declaredName);
       }
-      const specifiers = (statement as Record<string, unknown>).specifiers;
+      const specifiers = statement.specifiers;
       if (Array.isArray(specifiers)) {
         for (const specifier of specifiers) {
           if (!isAstNode(specifier)) continue;
           if (specifier.type === "ExportSpecifier") {
-            const exported = (specifier as Record<string, unknown>).exported;
+            const exported = specifier.exported;
             const exportedNameValue = extractIdentifierName(exported);
             if (exportedNameValue) exportedNames.add(exportedNameValue);
           }

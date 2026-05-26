@@ -2,11 +2,9 @@ import type { DuplicateBlockDetectionMode } from "../types.js";
 import type { HashedToken, SourceToken } from "./token-types.js";
 
 /**
- * 32-bit FNV-1a — small, fast, and good enough for a token-hash space where we
- * only care about collisions over a few million tokens. The detector compares
- * tokens by hash equality only inside a single concatenated text, and ties are
- * broken back to the original (path, offset) tuples downstream, so a rare
- * collision inflates a duplicate block with one extra spurious instance at worst.
+ * 32-bit FNV-1a. Collisions are tolerable: ties are broken back to the
+ * original (path, offset) tuples downstream, so a rare collision inflates a
+ * duplicate block with one extra spurious instance at worst.
  */
 const FNV_OFFSET_BASIS = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;

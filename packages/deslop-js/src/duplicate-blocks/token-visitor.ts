@@ -1,4 +1,5 @@
 import type { SourceToken } from "./token-types.js";
+import { isAstNode } from "../utils/is-ast-node.js";
 
 const NODES_DROPPED_FROM_TOKEN_STREAM = new Set<string>([
   "ImportDeclaration",
@@ -40,17 +41,13 @@ const NODES_DROPPED_FROM_TOKEN_STREAM = new Set<string>([
   "TSConstructorType",
 ]);
 
-const isAstNode = (candidate: unknown): candidate is { type: string } => {
-  return typeof candidate === "object" && candidate !== null && "type" in candidate;
-};
-
 const visitChildrenRaw = (node: unknown, visit: (child: unknown) => void): void => {
   if (!isAstNode(node)) return;
   for (const key of Object.keys(node)) {
     if (key === "type" || key === "start" || key === "end" || key === "loc" || key === "range") {
       continue;
     }
-    const value = (node as Record<string, unknown>)[key];
+    const value = node[key];
     if (Array.isArray(value)) {
       for (const item of value) visit(item);
     } else if (value !== null && typeof value === "object") {
@@ -86,11 +83,11 @@ export const tokenizeAst = (program: unknown): SourceToken[] => {
     const nodeType = node.type;
     if (NODES_DROPPED_FROM_TOKEN_STREAM.has(nodeType)) return;
 
-    const start = safeNumberOrZero((node as Record<string, unknown>).start);
-    const end = safeNumberOrZero((node as Record<string, unknown>).end);
+    const start = safeNumberOrZero(node.start);
+    const end = safeNumberOrZero(node.end);
 
     if (nodeType === "Identifier" || nodeType === "PrivateIdentifier") {
-      const identifierName = (node as Record<string, unknown>).name;
+      const identifierName = node.name;
       tokens.push({
         kind: "identifier",
         payload: typeof identifierName === "string" ? identifierName : "",
@@ -101,7 +98,7 @@ export const tokenizeAst = (program: unknown): SourceToken[] => {
     }
 
     if (nodeType === "Literal") {
-      const literalValue = (node as Record<string, unknown>).value;
+      const literalValue = node.value;
       if (typeof literalValue === "string") {
         tokens.push({ kind: "string-literal", payload: literalValue, start, end });
       } else if (typeof literalValue === "number") {
@@ -110,7 +107,7 @@ export const tokenizeAst = (program: unknown): SourceToken[] => {
         tokens.push({ kind: "boolean-literal", payload: literalValue ? "true" : "false", start, end });
       } else if (literalValue === null) {
         tokens.push({ kind: "null-literal", payload: "null", start, end });
-      } else if ((node as Record<string, unknown>).regex) {
+      } else if (node.regex) {
         tokens.push({ kind: "regexp-literal", payload: "regex", start, end });
       } else {
         tokens.push({ kind: "node-enter", payload: nodeType, start, end });

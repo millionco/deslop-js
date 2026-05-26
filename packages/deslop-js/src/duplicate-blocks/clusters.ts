@@ -5,93 +5,88 @@ import type {
   DuplicateBlockRefactoringHint,
 } from "../types.js";
 
+interface ClusterBucket {
+  files: string[];
+  blocks: DuplicateBlock[];
+}
+
 const baseName = (filePath: string): string => {
   const trailingSlashIndex = filePath.lastIndexOf("/");
   return trailingSlashIndex === -1 ? filePath : filePath.slice(trailingSlashIndex + 1);
 };
 
-/**
- * Group clones into families by the set of files they span. When several
- * clones all live across exactly the same set of files, they form a family —
- * a strong hint that the right refactor is to extract a shared module rather
- * than fix each clone in isolation.
- */
-export const groupDuplicateBlocksIntoClusters = (duplicateBlocks: DuplicateBlock[]): DuplicateBlockCluster[] => {
-  if (duplicateBlocks.length === 0) return [];
-
-  type FamilyBucket = { files: string[]; groups: DuplicateBlock[] };
-  const fileSetKeyToBucket = new Map<string, FamilyBucket>();
-
-  for (const duplicateBlock of duplicateBlocks) {
-    const sortedFiles = [...new Set(duplicateBlock.instances.map((instance) => instance.path))].sort();
-    const fileSetKey = sortedFiles.join("|");
-    const existing = fileSetKeyToBucket.get(fileSetKey);
-    if (existing) {
-      existing.groups.push(duplicateBlock);
-    } else {
-      fileSetKeyToBucket.set(fileSetKey, { files: sortedFiles, groups: [duplicateBlock] });
-    }
-  }
-
-  const families: DuplicateBlockCluster[] = [];
-  for (const bucket of fileSetKeyToBucket.values()) {
-    const totalDuplicatedLines = bucket.groups.reduce(
-      (runningSum, duplicateBlock) => runningSum + duplicateBlock.lineCount,
-      0,
-    );
-    const totalDuplicatedTokens = bucket.groups.reduce(
-      (runningSum, duplicateBlock) => runningSum + duplicateBlock.tokenCount,
-      0,
-    );
-    families.push({
-      files: bucket.files,
-      groups: bucket.groups,
-      totalDuplicatedLines,
-      totalDuplicatedTokens,
-      suggestions: buildSuggestions(bucket.files, bucket.groups, totalDuplicatedLines),
-    });
-  }
-
-  families.sort((firstFamily, secondFamily) => {
-    if (firstFamily.totalDuplicatedLines !== secondFamily.totalDuplicatedLines) {
-      return secondFamily.totalDuplicatedLines - firstFamily.totalDuplicatedLines;
-    }
-    return secondFamily.groups.length - firstFamily.groups.length;
-  });
-  return families;
-};
-
 const buildSuggestions = (
   files: string[],
-  duplicateBlocks: DuplicateBlock[],
+  blocks: DuplicateBlock[],
   totalDuplicatedLines: number,
 ): DuplicateBlockRefactoringHint[] => {
   const fileBaseNames = files.map((filePath) => baseName(filePath));
-  const meetsModuleExtractionThreshold =
-    totalDuplicatedLines >= DUPLICATE_BLOCK_MODULE_EXTRACTION_THRESHOLD_LINES;
-  const spansMultipleFiles = files.length >= 2;
-  if (meetsModuleExtractionThreshold && spansMultipleFiles) {
-    const estimatedSavings = duplicateBlocks.reduce(
-      (runningSum, duplicateBlock) =>
-        runningSum + duplicateBlock.lineCount * Math.max(0, duplicateBlock.instances.length - 1),
+  const isCrossFile = files.length >= 2;
+
+  if (isCrossFile && totalDuplicatedLines >= DUPLICATE_BLOCK_MODULE_EXTRACTION_THRESHOLD_LINES) {
+    const estimatedSavings = blocks.reduce(
+      (runningSum, block) => runningSum + block.lineCount * Math.max(0, block.instances.length - 1),
       0,
     );
     return [
       {
         kind: "extract-module",
-        description: `Extract ${duplicateBlocks.length} shared duplicate block${
-          duplicateBlocks.length === 1 ? "" : "s"
+        description: `Extract ${blocks.length} shared duplicate block${
+          blocks.length === 1 ? "" : "s"
         } (${totalDuplicatedLines} lines) from ${fileBaseNames.join(", ")} into a shared module`,
         estimatedSavings,
       },
     ];
   }
 
-  return duplicateBlocks.map((duplicateBlock) => ({
+  return blocks.map((block) => ({
     kind: "extract-function",
-    description: `Extract shared function (${duplicateBlock.lineCount} lines) from ${fileBaseNames.join(
-      ", ",
-    )}`,
-    estimatedSavings: duplicateBlock.lineCount * Math.max(0, duplicateBlock.instances.length - 1),
+    description: `Extract shared function (${block.lineCount} lines) from ${fileBaseNames.join(", ")}`,
+    estimatedSavings: block.lineCount * Math.max(0, block.instances.length - 1),
   }));
+};
+
+export const groupDuplicateBlocksIntoClusters = (
+  duplicateBlocks: DuplicateBlock[],
+): DuplicateBlockCluster[] => {
+  if (duplicateBlocks.length === 0) return [];
+
+  const fileSetKeyToBucket = new Map<string, ClusterBucket>();
+  for (const block of duplicateBlocks) {
+    const sortedFiles = [...new Set(block.instances.map((instance) => instance.path))].sort();
+    const fileSetKey = sortedFiles.join("|");
+    const existing = fileSetKeyToBucket.get(fileSetKey);
+    if (existing) {
+      existing.blocks.push(block);
+    } else {
+      fileSetKeyToBucket.set(fileSetKey, { files: sortedFiles, blocks: [block] });
+    }
+  }
+
+  const clusters: DuplicateBlockCluster[] = [];
+  for (const bucket of fileSetKeyToBucket.values()) {
+    const totalDuplicatedLines = bucket.blocks.reduce(
+      (runningSum, block) => runningSum + block.lineCount,
+      0,
+    );
+    const totalDuplicatedTokens = bucket.blocks.reduce(
+      (runningSum, block) => runningSum + block.tokenCount,
+      0,
+    );
+    clusters.push({
+      files: bucket.files,
+      groups: bucket.blocks,
+      totalDuplicatedLines,
+      totalDuplicatedTokens,
+      suggestions: buildSuggestions(bucket.files, bucket.blocks, totalDuplicatedLines),
+    });
+  }
+
+  clusters.sort((leftCluster, rightCluster) => {
+    if (leftCluster.totalDuplicatedLines !== rightCluster.totalDuplicatedLines) {
+      return rightCluster.totalDuplicatedLines - leftCluster.totalDuplicatedLines;
+    }
+    return rightCluster.groups.length - leftCluster.groups.length;
+  });
+  return clusters;
 };

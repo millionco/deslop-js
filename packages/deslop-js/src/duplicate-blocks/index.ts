@@ -16,6 +16,8 @@ import type {
   DependencyGraph,
   ShadowedDirectoryPair,
 } from "../types.js";
+import { computeLineStarts } from "../utils/compute-line-starts.js";
+import { offsetToLineColumn } from "../utils/offset-to-line-column.js";
 import { rankReduceAndConcatenate } from "./concatenate.js";
 import { extractRawDuplicateBlocks, type RawDuplicateBlock } from "./extract.js";
 import { groupDuplicateBlocksIntoClusters } from "./clusters.js";
@@ -49,28 +51,6 @@ const isMinifiedSource = (sourceText: string): boolean => {
   if (sourceText.length < MINIFIED_DETECTION_MIN_BYTES) return false;
   const lineCount = (sourceText.match(/\n/g)?.length ?? 0) + 1;
   return sourceText.length / lineCount > MINIFIED_DETECTION_AVG_LINE_LENGTH_THRESHOLD;
-};
-
-const computeLineStarts = (sourceText: string): number[] => {
-  const lineStarts: number[] = [0];
-  for (let charIndex = 0; charIndex < sourceText.length; charIndex++) {
-    if (sourceText.charCodeAt(charIndex) === 10) lineStarts.push(charIndex + 1);
-  }
-  return lineStarts;
-};
-
-const offsetToLineColumn = (
-  byteOffset: number,
-  lineStarts: number[],
-): { line: number; column: number } => {
-  let lowIndex = 0;
-  let highIndex = lineStarts.length - 1;
-  while (lowIndex < highIndex) {
-    const middleIndex = (lowIndex + highIndex + 1) >>> 1;
-    if (lineStarts[middleIndex] <= byteOffset) lowIndex = middleIndex;
-    else highIndex = middleIndex - 1;
-  }
-  return { line: lowIndex + 1, column: byteOffset - lineStarts[lowIndex] };
 };
 
 const tokenizeFile = (filePath: string): TokenizedFile | undefined => {

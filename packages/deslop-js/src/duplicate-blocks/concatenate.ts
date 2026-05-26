@@ -1,26 +1,19 @@
 import type { HashedToken } from "./token-types.js";
 
 export interface ConcatenationResult {
-  /**
-   * Token sequence covering every file plus a unique negative sentinel between
-   * each. Sentinels are < 0 so suffix-array suffixes can never share a prefix
-   * across the file boundary.
-   */
   tokenSequence: number[];
-  /** `tokenSequence[i]` belongs to file `fileOf[i]`, or `Number.MAX_SAFE_INTEGER` for sentinels. */
   fileOf: number[];
-  /** Start offset of file `fileIndex` inside `tokenSequence`. */
   fileOffsets: number[];
 }
 
 const SENTINEL_FILE_INDEX = Number.MAX_SAFE_INTEGER;
 
 /**
- * Rank-reduce the token hashes (map u32 hashes to dense 0..K-1 integers) and
- * concatenate every file's reduced sequence with a unique negative sentinel
- * between files. Producing dense ranks shrinks the suffix-array's bucket
- * counters from ~4 billion to a few thousand and is the standard trick for
- * making prefix-doubling fast.
+ * Rank-reduce token hashes to dense 0..K-1 integers and concatenate every
+ * file's reduced sequence with a unique negative sentinel between files. Dense
+ * ranks shrink the suffix-array's bucket counters from ~4 billion to a few
+ * thousand (the standard prefix-doubling speedup), and negative sentinels
+ * guarantee no real-token suffix can match across a file boundary.
  */
 export const rankReduceAndConcatenate = (
   filesHashedTokens: HashedToken[][],

@@ -1,7 +1,17 @@
 import { SHADOWED_DIRECTORY_MIN_CLUSTERS } from "../constants.js";
 import type { DuplicateBlockCluster, ShadowedDirectoryPair } from "../types.js";
 
-const splitDirectoryAndFile = (filePath: string): { directory: string; baseName: string } => {
+interface DirectoryAndFile {
+  directory: string;
+  baseName: string;
+}
+
+interface PairEntry {
+  baseName: string;
+  duplicatedLines: number;
+}
+
+const splitDirectoryAndFile = (filePath: string): DirectoryAndFile => {
   const trailingSlashIndex = filePath.lastIndexOf("/");
   if (trailingSlashIndex === -1) return { directory: "", baseName: filePath };
   return {
@@ -10,27 +20,27 @@ const splitDirectoryAndFile = (filePath: string): { directory: string; baseName:
   };
 };
 
+const toRelative = (filePath: string, rootDir: string): string => {
+  if (filePath.startsWith(rootDir + "/")) return filePath.slice(rootDir.length + 1);
+  if (filePath === rootDir) return "";
+  return filePath;
+};
+
 /**
- * Detect shadowed directory pair pairs: when many distinct two-file duplicate-block clusters
- * all sit at the same `(dirA, dirB)` location with matching basenames, the
- * directories themselves are mirrors of each other (e.g. `src/` vs `deno/lib/`,
- * or a fork that drifted). One shadowed-directory-pair entry replaces N family
- * entries in the report and is much more actionable.
+ * Collapse N two-file duplicate-block clusters that share the same
+ * `(directoryA, directoryB)` and matching basenames into a single
+ * `ShadowedDirectoryPair` finding — the directories themselves drifted
+ * (e.g. `src/` vs `deno/lib/`, a fork, a copy-paste of a route tree).
  */
 export const detectShadowedDirectoryPairs = (
   duplicateBlockClusters: DuplicateBlockCluster[],
   rootDir: string,
 ): ShadowedDirectoryPair[] => {
-  type DirectoryPairKey = string;
-  interface PairEntry {
-    baseName: string;
-    duplicatedLines: number;
-  }
-  const directoryPairBuckets = new Map<DirectoryPairKey, PairEntry[]>();
+  const directoryPairBuckets = new Map<string, PairEntry[]>();
 
-  for (const family of duplicateBlockClusters) {
-    if (family.files.length !== 2) continue;
-    const [firstFile, secondFile] = family.files;
+  for (const cluster of duplicateBlockClusters) {
+    if (cluster.files.length !== 2) continue;
+    const [firstFile, secondFile] = cluster.files;
     const firstSplit = splitDirectoryAndFile(toRelative(firstFile, rootDir));
     const secondSplit = splitDirectoryAndFile(toRelative(secondFile, rootDir));
     if (firstSplit.baseName !== secondSplit.baseName) continue;
@@ -42,7 +52,7 @@ export const detectShadowedDirectoryPairs = (
     const pairKey = `${smallerDirectory}::${largerDirectory}`;
     const entry: PairEntry = {
       baseName: firstSplit.baseName,
-      duplicatedLines: family.totalDuplicatedLines,
+      duplicatedLines: cluster.totalDuplicatedLines,
     };
     const existing = directoryPairBuckets.get(pairKey);
     if (existing) existing.push(entry);
@@ -67,14 +77,7 @@ export const detectShadowedDirectoryPairs = (
   }
 
   shadowedDirectoryPairs.sort(
-    (firstDirectory, secondDirectory) =>
-      secondDirectory.totalDuplicatedLines - firstDirectory.totalDuplicatedLines,
+    (leftPair, rightPair) => rightPair.totalDuplicatedLines - leftPair.totalDuplicatedLines,
   );
   return shadowedDirectoryPairs;
-};
-
-const toRelative = (filePath: string, rootDir: string): string => {
-  if (filePath.startsWith(rootDir + "/")) return filePath.slice(rootDir.length + 1);
-  if (filePath === rootDir) return "";
-  return filePath;
 };

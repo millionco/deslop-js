@@ -1,13 +1,10 @@
 /**
- * O(N log N) prefix-doubling suffix array with two-pass radix sort.
+ * Prefix-doubling suffix array with two-pass radix sort, O(N log N).
  *
- * Returns `suffixArray` such that `suffixArray[index]` is the start position
- * of the index-th lexicographically-smallest suffix of `tokenSequence`.
- *
- * Sentinel handling: any negative values in `tokenSequence` (the per-file
- * separators emitted by `concatenate.rankReduceAndConcatenate`) are shifted up
- * so all ranks are >= 0. Negative sentinels naturally sort before all real
- * ranks, which is the property we need for cross-file suffix comparison.
+ * Negative values in `tokenSequence` (file-separator sentinels emitted by
+ * `rankReduceAndConcatenate`) are shifted up so all ranks are >= 0. The
+ * shift preserves the property that sentinels sort before all real ranks,
+ * which is what stops cross-file suffix matches.
  */
 export const buildSuffixArray = (tokenSequence: number[]): number[] => {
   const sequenceLength = tokenSequence.length;
@@ -101,12 +98,9 @@ export const buildSuffixArray = (tokenSequence: number[]): number[] => {
 };
 
 /**
- * Kasai's algorithm: O(N) longest-common-prefix array given a suffix array.
- *
- * `lcp[i]` is the LCP length of suffix `suffixArray[i]` and suffix
- * `suffixArray[i - 1]` (with `lcp[0] = 0` for the smallest suffix). We treat
- * negative sentinel positions as inequal so a real-token LCP can never span
- * a sentinel boundary.
+ * Kasai's O(N) longest-common-prefix array. The `>= 0` check inside the inner
+ * loop is the only non-textbook bit: it prevents a real-token LCP from
+ * accidentally crossing a sentinel boundary (sentinels are negative).
  */
 export const buildLcpArray = (tokenSequence: number[], suffixArray: number[]): number[] => {
   const sequenceLength = tokenSequence.length;

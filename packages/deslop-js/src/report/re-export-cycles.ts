@@ -1,25 +1,11 @@
 import type { DependencyGraph, ReExportCycle } from "../types.js";
 
 /**
- * Re-export-only cycle detector. Walks the subgraph induced by edges where
- * `isReExportEdge === true` (i.e. only `export { ... } from "..."` and
- * `export * from "..."` re-exports) and finds the cycles.
- *
- * Re-export cycles are a strict subset of general dependency cycles (already
- * surfaced as `circularDependencies`), but they are particularly worth
- * separating because:
- *
- * - they are the canonical "barrel imports its own root" anti-pattern that
- *   tanks bundler tree-shaking and triggers the TDZ "Cannot access X before
- *   initialization" runtime errors,
- * - they are mechanically refactorable: reach inside the barrel and import
- *   from the leaf, no behavior change,
- * - high-confidence: there is no idiomatic reason to re-export from a module
- *   that re-exports back to you. Every general cycle includes legitimate
- *   bidirectional collaboration; every re-export cycle does not.
- *
- * Distinguishes self-loops (`export * from "./a"` inside `a.ts`) from
- * multi-node cycles.
+ * Reports cycles in the subgraph of `isReExportEdge` edges only. These are
+ * a strict subset of `circularDependencies` but worth separating: every
+ * general cycle can have a legitimate bidirectional-collaboration reason,
+ * but a re-export cycle has none — it always tanks tree-shaking and risks
+ * the "Cannot access X before initialization" TDZ runtime error.
  */
 export const detectReExportCycles = (graph: DependencyGraph): ReExportCycle[] => {
   const adjacency: number[][] = Array.from({ length: graph.modules.length }, () => []);
@@ -72,9 +58,8 @@ export const detectReExportCycles = (graph: DependencyGraph): ReExportCycle[] =>
 };
 
 /**
- * Iterative Tarjan's SCC. Returns each strongly-connected component
- * (component-of-size-1 entries are included so the caller can decide whether
- * the lone node is a self-loop).
+ * Iterative Tarjan's SCC. Singleton components are returned too so the
+ * caller can distinguish a real self-loop from a node with no edges.
  */
 const computeStronglyConnectedComponents = (adjacency: number[][]): number[][] => {
   const nodeCount = adjacency.length;

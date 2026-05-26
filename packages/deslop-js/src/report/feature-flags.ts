@@ -6,6 +6,9 @@ import type {
   FeatureFlagsConfig,
   ScanResult,
 } from "../types.js";
+import { computeLineStarts } from "../utils/compute-line-starts.js";
+import { offsetToLineColumn } from "../utils/offset-to-line-column.js";
+import { isAstNode } from "../utils/is-ast-node.js";
 
 interface SdkPattern {
   functionName: string;
@@ -82,17 +85,14 @@ const CONFIG_OBJECT_KEYWORDS: ReadonlySet<string> = new Set([
   "toggles",
 ]);
 
-const isAstNode = (candidate: unknown): candidate is { type: string } =>
-  typeof candidate === "object" && candidate !== null && "type" in candidate;
-
 const getStaticName = (node: unknown): string | undefined => {
   if (!isAstNode(node)) return undefined;
   if (node.type === "Identifier" || node.type === "PrivateIdentifier") {
-    const identifierName = (node as Record<string, unknown>).name;
+    const identifierName = node.name;
     return typeof identifierName === "string" ? identifierName : undefined;
   }
   if (node.type === "Literal") {
-    const literalValue = (node as Record<string, unknown>).value;
+    const literalValue = node.value;
     return typeof literalValue === "string" ? literalValue : undefined;
   }
   return undefined;
@@ -103,18 +103,18 @@ const extractStringArgument = (callArguments: unknown, argumentIndex: number): s
   const argumentNode = callArguments[argumentIndex];
   if (!isAstNode(argumentNode)) return undefined;
   if (argumentNode.type === "Literal") {
-    const literalValue = (argumentNode as Record<string, unknown>).value;
+    const literalValue = argumentNode.value;
     return typeof literalValue === "string" ? literalValue : undefined;
   }
   if (argumentNode.type === "ObjectExpression") {
-    const properties = (argumentNode as Record<string, unknown>).properties;
+    const properties = argumentNode.properties;
     if (!Array.isArray(properties)) return undefined;
     for (const property of properties) {
       if (!isAstNode(property)) continue;
       if (property.type !== "Property") continue;
-      const propertyKey = getStaticName((property as Record<string, unknown>).key);
+      const propertyKey = getStaticName(property.key);
       if (propertyKey !== "key" && propertyKey !== "name") continue;
-      const propertyValueName = getStaticName((property as Record<string, unknown>).value);
+      const propertyValueName = getStaticName(property.value);
       if (propertyValueName !== undefined) return propertyValueName;
     }
   }
@@ -132,42 +132,20 @@ interface VisitContext {
   guard: { startLine: number; endLine: number } | undefined;
 }
 
-const computeLineStarts = (sourceText: string): number[] => {
-  const lineStarts: number[] = [0];
-  for (let charIndex = 0; charIndex < sourceText.length; charIndex++) {
-    if (sourceText.charCodeAt(charIndex) === 10) lineStarts.push(charIndex + 1);
-  }
-  return lineStarts;
-};
-
-const offsetToLineColumn = (
-  byteOffset: number,
-  lineStarts: number[],
-): { line: number; column: number } => {
-  let lowIndex = 0;
-  let highIndex = lineStarts.length - 1;
-  while (lowIndex < highIndex) {
-    const middleIndex = (lowIndex + highIndex + 1) >>> 1;
-    if (lineStarts[middleIndex] <= byteOffset) lowIndex = middleIndex;
-    else highIndex = middleIndex - 1;
-  }
-  return { line: lowIndex + 1, column: byteOffset - lineStarts[lowIndex] };
-};
-
 const extractProcessEnvName = (memberExpression: unknown): string | undefined => {
   if (!isAstNode(memberExpression)) return undefined;
   if (memberExpression.type !== "MemberExpression" && memberExpression.type !== "StaticMemberExpression") {
     return undefined;
   }
-  const propertyName = getStaticName((memberExpression as Record<string, unknown>).property);
+  const propertyName = getStaticName(memberExpression.property);
   if (propertyName === undefined) return undefined;
-  const objectNode = (memberExpression as Record<string, unknown>).object;
+  const objectNode = memberExpression.object;
   if (!isAstNode(objectNode)) return undefined;
   if (objectNode.type !== "MemberExpression" && objectNode.type !== "StaticMemberExpression") {
     return undefined;
   }
-  const innerObjectName = getStaticName((objectNode as Record<string, unknown>).object);
-  const innerPropertyName = getStaticName((objectNode as Record<string, unknown>).property);
+  const innerObjectName = getStaticName(objectNode.object);
+  const innerPropertyName = getStaticName(objectNode.property);
   if (innerObjectName === "process" && innerPropertyName === "env") return propertyName;
   return undefined;
 };
@@ -183,14 +161,14 @@ const collectVercelFlagsImports = (
 ): Set<string> => {
   const localNames = new Set<string>();
   if (!isAstNode(programNode)) return localNames;
-  const body = (programNode as Record<string, unknown>).body;
+  const body = programNode.body;
   if (!Array.isArray(body)) return localNames;
   for (const statement of body) {
     if (!isAstNode(statement)) continue;
     if (statement.type !== "ImportDeclaration") continue;
-    const sourceLiteral = (statement as Record<string, unknown>).source;
+    const sourceLiteral = statement.source;
     const sourceValue = isAstNode(sourceLiteral)
-      ? (sourceLiteral as Record<string, unknown>).value
+      ? sourceLiteral.value
       : undefined;
     if (typeof sourceValue !== "string") continue;
     const isVercelFlagsSource =
@@ -199,13 +177,13 @@ const collectVercelFlagsImports = (
       sourceValue === "@vercel/flags" ||
       sourceValue.startsWith("@vercel/flags/");
     if (!isVercelFlagsSource) continue;
-    const specifiers = (statement as Record<string, unknown>).specifiers;
+    const specifiers = statement.specifiers;
     if (!Array.isArray(specifiers)) continue;
     for (const specifier of specifiers) {
       if (!isAstNode(specifier)) continue;
       if (specifier.type === "ImportSpecifier") {
-        const imported = (specifier as Record<string, unknown>).imported;
-        const local = (specifier as Record<string, unknown>).local;
+        const imported = specifier.imported;
+        const local = specifier.local;
         const importedName = getStaticName(imported);
         const localName = getStaticName(local);
         if (importedName && VERCEL_FLAGS_FUNCTION_NAMES.has(importedName) && localName) {
@@ -226,7 +204,7 @@ const visitChildrenWithGuard = (
     if (key === "type" || key === "start" || key === "end" || key === "loc" || key === "range") {
       continue;
     }
-    const value = (node as Record<string, unknown>)[key];
+    const value = node[key];
     if (Array.isArray(value)) {
       for (const item of value) visitor(item);
     } else if (value !== null && typeof value === "object") {
@@ -260,8 +238,8 @@ const visitNode = (node: unknown, context: VisitContext): void => {
   if (!isAstNode(node)) return;
 
   if (node.type === "IfStatement") {
-    const start = (node as Record<string, unknown>).start;
-    const end = (node as Record<string, unknown>).end;
+    const start = node.start;
+    const end = node.end;
     const guard =
       typeof start === "number" && typeof end === "number"
         ? {
@@ -271,16 +249,16 @@ const visitNode = (node: unknown, context: VisitContext): void => {
         : undefined;
     const previousGuard = context.guard;
     context.guard = guard;
-    visitNode((node as Record<string, unknown>).test, context);
+    visitNode(node.test, context);
     context.guard = previousGuard;
-    visitNode((node as Record<string, unknown>).consequent, context);
-    visitNode((node as Record<string, unknown>).alternate, context);
+    visitNode(node.consequent, context);
+    visitNode(node.alternate, context);
     return;
   }
 
   if (node.type === "ConditionalExpression") {
-    const start = (node as Record<string, unknown>).start;
-    const end = (node as Record<string, unknown>).end;
+    const start = node.start;
+    const end = node.end;
     const guard =
       typeof start === "number" && typeof end === "number"
         ? {
@@ -290,10 +268,10 @@ const visitNode = (node: unknown, context: VisitContext): void => {
         : undefined;
     const previousGuard = context.guard;
     context.guard = guard;
-    visitNode((node as Record<string, unknown>).test, context);
+    visitNode(node.test, context);
     context.guard = previousGuard;
-    visitNode((node as Record<string, unknown>).consequent, context);
-    visitNode((node as Record<string, unknown>).alternate, context);
+    visitNode(node.consequent, context);
+    visitNode(node.alternate, context);
     return;
   }
 
@@ -307,17 +285,17 @@ const visitFlagPatternsInExpression = (node: unknown, context: VisitContext): vo
   if (node.type === "MemberExpression" || node.type === "StaticMemberExpression") {
     const envName = extractProcessEnvName(node);
     if (envName !== undefined && isFlagEnvName(envName, context.envPrefixes)) {
-      const start = (node as Record<string, unknown>).start;
+      const start = node.start;
       if (typeof start === "number") recordFlag(context, envName, "env-var", start, undefined);
     } else if (context.detectConfigObjects) {
-      const objectName = getStaticName((node as Record<string, unknown>).object);
-      const propertyName = getStaticName((node as Record<string, unknown>).property);
+      const objectName = getStaticName(node.object);
+      const propertyName = getStaticName(node.property);
       if (objectName && propertyName) {
         if (
           CONFIG_OBJECT_KEYWORDS.has(objectName.toLowerCase()) ||
           CONFIG_OBJECT_KEYWORDS.has(propertyName.toLowerCase())
         ) {
-          const start = (node as Record<string, unknown>).start;
+          const start = node.start;
           if (typeof start === "number") {
             recordFlag(context, `${objectName}.${propertyName}`, "config-object", start, undefined);
           }
@@ -327,12 +305,12 @@ const visitFlagPatternsInExpression = (node: unknown, context: VisitContext): vo
   }
 
   if (node.type === "CallExpression") {
-    const callee = (node as Record<string, unknown>).callee;
+    const callee = node.callee;
     let functionName: string | undefined;
     if (isAstNode(callee)) {
       if (callee.type === "Identifier") functionName = getStaticName(callee);
       else if (callee.type === "MemberExpression" || callee.type === "StaticMemberExpression") {
-        functionName = getStaticName((callee as Record<string, unknown>).property);
+        functionName = getStaticName(callee.property);
       }
     }
     if (functionName !== undefined) {
@@ -340,10 +318,10 @@ const visitFlagPatternsInExpression = (node: unknown, context: VisitContext): vo
         context.vercelFlagsLocalNames.has(functionName) ||
         VERCEL_FLAGS_FUNCTION_NAMES.has(functionName)
       ) {
-        const callArguments = (node as Record<string, unknown>).arguments;
+        const callArguments = node.arguments;
         const flagName = extractStringArgument(callArguments, 0);
         if (flagName !== undefined) {
-          const start = (node as Record<string, unknown>).start;
+          const start = node.start;
           if (typeof start === "number") {
             recordFlag(context, flagName, "sdk-call", start, "Vercel Flags");
           }
@@ -352,10 +330,10 @@ const visitFlagPatternsInExpression = (node: unknown, context: VisitContext): vo
       }
       for (const sdkPattern of context.sdkPatterns) {
         if (sdkPattern.functionName !== functionName) continue;
-        const callArguments = (node as Record<string, unknown>).arguments;
+        const callArguments = node.arguments;
         const flagName = extractStringArgument(callArguments, sdkPattern.nameArgIndex);
         if (flagName === undefined) continue;
-        const start = (node as Record<string, unknown>).start;
+        const start = node.start;
         if (typeof start === "number") {
           recordFlag(
             context,

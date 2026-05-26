@@ -1,4 +1,4 @@
-export type CloneTokenKind =
+export type SourceTokenKind =
   | "node-enter"
   | "identifier"
   | "string-literal"
@@ -9,16 +9,13 @@ export type CloneTokenKind =
   | "regexp-literal";
 
 export interface SourceToken {
-  kind: CloneTokenKind;
-  /** AST node type for `node-enter` tokens, raw value for literal/identifier tokens */
+  kind: SourceTokenKind;
   payload: string;
-  /** Byte offset of the source span the token represents */
   start: number;
   end: number;
 }
 
 export interface HashedToken {
   hash: number;
-  /** Index back into the originating SourceToken[] */
   originalIndex: number;
 }

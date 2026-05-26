@@ -6,6 +6,9 @@ import type {
   FunctionComplexity,
   SemanticConfidence,
 } from "../types.js";
+import { computeLineStarts } from "../utils/compute-line-starts.js";
+import { offsetToLineColumn } from "../utils/offset-to-line-column.js";
+import { isAstNode } from "../utils/is-ast-node.js";
 
 interface FunctionFrame {
   functionName: string;
@@ -25,31 +28,6 @@ interface VisitState {
   frameStack: FunctionFrame[];
   pendingFunctionName: string | undefined;
 }
-
-const isAstNode = (candidate: unknown): candidate is { type: string } =>
-  typeof candidate === "object" && candidate !== null && "type" in candidate;
-
-const computeLineStarts = (sourceText: string): number[] => {
-  const lineStarts: number[] = [0];
-  for (let charIndex = 0; charIndex < sourceText.length; charIndex++) {
-    if (sourceText.charCodeAt(charIndex) === 10) lineStarts.push(charIndex + 1);
-  }
-  return lineStarts;
-};
-
-const offsetToLineColumn = (
-  byteOffset: number,
-  lineStarts: number[],
-): { line: number; column: number } => {
-  let lowIndex = 0;
-  let highIndex = lineStarts.length - 1;
-  while (lowIndex < highIndex) {
-    const middleIndex = (lowIndex + highIndex + 1) >>> 1;
-    if (lineStarts[middleIndex] <= byteOffset) lowIndex = middleIndex;
-    else highIndex = middleIndex - 1;
-  }
-  return { line: lowIndex + 1, column: byteOffset - lineStarts[lowIndex] };
-};
 
 const incrementCyclomatic = (state: VisitState): void => {
   const topFrame = state.frameStack[state.frameStack.length - 1];
@@ -96,7 +74,7 @@ const decrementNesting = (state: VisitState): void => {
 
 const countParameters = (parametersNode: unknown): number => {
   if (!isAstNode(parametersNode)) return 0;
-  const params = (parametersNode as Record<string, unknown>);
+  const params = parametersNode;
   if (Array.isArray(params.params)) {
     return params.params.length;
   }
@@ -112,7 +90,7 @@ const visitChildrenGeneric = (node: unknown, visitor: (child: unknown) => void):
     if (key === "type" || key === "start" || key === "end" || key === "loc" || key === "range") {
       continue;
     }
-    const value = (node as Record<string, unknown>)[key];
+    const value = node[key];
     if (Array.isArray(value)) {
       for (const item of value) visitor(item);
     } else if (value !== null && typeof value === "object") {
@@ -164,8 +142,8 @@ const visitFunctionLike = (node: unknown, kind: "function" | "arrow", state: Vis
   const functionName =
     state.pendingFunctionName ??
     (() => {
-      const idNode = (node as Record<string, unknown>).id;
-      const idName = isAstNode(idNode) ? (idNode as Record<string, unknown>).name : undefined;
+      const idNode = node.id;
+      const idName = isAstNode(idNode) ? idNode.name : undefined;
       return typeof idName === "string"
         ? idName
         : kind === "arrow"
@@ -177,9 +155,9 @@ const visitFunctionLike = (node: unknown, kind: "function" | "arrow", state: Vis
   const isNested = state.frameStack.length > 0;
   if (isNested) incrementNesting(state);
 
-  const startOffset = (node as Record<string, unknown>).start;
-  const endOffset = (node as Record<string, unknown>).end;
-  const parameterCount = countParameters((node as Record<string, unknown>).params);
+  const startOffset = node.start;
+  const endOffset = node.end;
+  const parameterCount = countParameters(node.params);
   pushFunctionFrame(
     functionName,
     typeof startOffset === "number" ? startOffset : 0,
@@ -202,9 +180,9 @@ const visitNode = (node: unknown, state: VisitState): void => {
     case "FunctionExpression":
     case "MethodDefinition":
       if (node.type === "MethodDefinition") {
-        const keyNode = (node as Record<string, unknown>).key;
+        const keyNode = node.key;
         const keyName = isAstNode(keyNode)
-          ? ((keyNode as Record<string, unknown>).name ?? (keyNode as Record<string, unknown>).value)
+          ? (keyNode.name ?? keyNode.value)
           : undefined;
         if (typeof keyName === "string") state.pendingFunctionName = keyName;
         visitChildrenGeneric(node, (child) => visitNode(child, state));
@@ -219,9 +197,9 @@ const visitNode = (node: unknown, state: VisitState): void => {
       return;
 
     case "VariableDeclarator": {
-      const declaratorId = (node as Record<string, unknown>).id;
+      const declaratorId = node.id;
       const declaratorIdName = isAstNode(declaratorId)
-        ? (declaratorId as Record<string, unknown>).name
+        ? declaratorId.name
         : undefined;
       if (typeof declaratorIdName === "string") state.pendingFunctionName = declaratorIdName;
       visitChildrenGeneric(node, (child) => visitNode(child, state));
@@ -230,9 +208,9 @@ const visitNode = (node: unknown, state: VisitState): void => {
     }
 
     case "PropertyDefinition": {
-      const keyNode = (node as Record<string, unknown>).key;
+      const keyNode = node.key;
       const keyName = isAstNode(keyNode)
-        ? (keyNode as Record<string, unknown>).name
+        ? keyNode.name
         : undefined;
       if (typeof keyName === "string") state.pendingFunctionName = keyName;
       visitChildrenGeneric(node, (child) => visitNode(child, state));
@@ -262,7 +240,7 @@ const visitNode = (node: unknown, state: VisitState): void => {
       return;
 
     case "SwitchCase": {
-      const testNode = (node as Record<string, unknown>).test;
+      const testNode = node.test;
       if (testNode !== null && testNode !== undefined) {
         incrementCyclomatic(state);
         incrementCognitiveFlat(state);
@@ -286,7 +264,7 @@ const visitNode = (node: unknown, state: VisitState): void => {
       return;
 
     case "LogicalExpression": {
-      const operator = (node as Record<string, unknown>).operator;
+      const operator = node.operator;
       if (operator === "&&" || operator === "||" || operator === "??") {
         incrementCyclomatic(state);
         handleLogicalOperator(operator, state);
@@ -296,7 +274,7 @@ const visitNode = (node: unknown, state: VisitState): void => {
     }
 
     case "AssignmentExpression": {
-      const operator = (node as Record<string, unknown>).operator;
+      const operator = node.operator;
       if (operator === "&&=" || operator === "||=" || operator === "??=") {
         incrementCyclomatic(state);
       }
