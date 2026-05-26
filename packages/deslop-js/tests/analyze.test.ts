@@ -305,7 +305,6 @@ describe("expo-config-plugins", () => {
 
     for (const expectedReachableFile of [
       "plugins/android-secure-flag.plugin.ts",
-      "plugins/android-day-night-theme.ts",
       "plugins/with-directory-plugin/index.ts",
       "plugins/with-json-plugin.ts",
     ]) {
@@ -321,7 +320,7 @@ describe("expo-config-plugins", () => {
     );
     assert.ok(
       unusedFilePaths.includes("plugins/orphan.ts"),
-      `orphan.ts should still be unused, got: ${unusedFilePaths}`,
+      `nested non-Expo plugin arrays and wildcard paths must not mark orphan.ts reachable, got: ${unusedFilePaths}`,
     );
   });
 });

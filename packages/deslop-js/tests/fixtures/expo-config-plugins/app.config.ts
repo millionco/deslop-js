@@ -1,8 +1,13 @@
+const internalToolingConfig = {
+  plugins: ["./plugins/orphan.ts"],
+};
+
 export default () => ({
   plugins: [
     "./plugins/android-secure-flag.plugin.ts",
-    ["./plugins/android-day-night-theme", { enabled: true }],
-    "./plugins/with-directory-plugin",
+    ["./plugins/with-directory-plugin", { enabled: true }],
+    "./plugins/*.ts",
     "expo-camera",
   ],
+  extra: internalToolingConfig,
 });

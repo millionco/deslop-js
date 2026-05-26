@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import fg from "fast-glob";
 import ts from "typescript";
@@ -76,6 +76,14 @@ const getPropertyName = (name: ts.PropertyName): string | undefined => {
   return undefined;
 };
 
+const unwrapExpression = (expression: ts.Expression): ts.Expression => {
+  let currentExpression = expression;
+  while (ts.isParenthesizedExpression(currentExpression)) {
+    currentExpression = currentExpression.expression;
+  }
+  return currentExpression;
+};
+
 const collectExpoPluginPathsFromArray = (
   array: ts.ArrayLiteralExpression,
   entries: Set<string>,
@@ -100,6 +108,109 @@ const collectExpoPluginPathsFromArray = (
   }
 };
 
+const collectExpoPluginPathsFromConfigObject = (
+  objectLiteral: ts.ObjectLiteralExpression,
+  entries: Set<string>,
+  rootDirectory: string,
+  configDirectory: string,
+): void => {
+  for (const property of objectLiteral.properties) {
+    if (
+      ts.isPropertyAssignment(property) &&
+      getPropertyName(property.name) === "plugins" &&
+      ts.isArrayLiteralExpression(property.initializer)
+    ) {
+      collectExpoPluginPathsFromArray(
+        property.initializer,
+        entries,
+        rootDirectory,
+        configDirectory,
+      );
+    }
+  }
+};
+
+const collectReturnedExpoConfigPluginPaths = (
+  body: ts.ConciseBody,
+  entries: Set<string>,
+  rootDirectory: string,
+  configDirectory: string,
+): void => {
+  if (!ts.isBlock(body)) {
+    const expression = unwrapExpression(body);
+    if (ts.isObjectLiteralExpression(expression)) {
+      collectExpoPluginPathsFromConfigObject(expression, entries, rootDirectory, configDirectory);
+    }
+    return;
+  }
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node))
+      return;
+
+    if (ts.isReturnStatement(node) && node.expression) {
+      const expression = unwrapExpression(node.expression);
+      if (ts.isObjectLiteralExpression(expression)) {
+        collectExpoPluginPathsFromConfigObject(expression, entries, rootDirectory, configDirectory);
+      }
+      return;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(body);
+};
+
+const collectExpoPluginPathsFromConfigExpression = (
+  expression: ts.Expression,
+  entries: Set<string>,
+  rootDirectory: string,
+  configDirectory: string,
+): void => {
+  const configExpression = unwrapExpression(expression);
+  if (ts.isObjectLiteralExpression(configExpression)) {
+    collectExpoPluginPathsFromConfigObject(
+      configExpression,
+      entries,
+      rootDirectory,
+      configDirectory,
+    );
+    return;
+  }
+
+  if (ts.isArrowFunction(configExpression)) {
+    collectReturnedExpoConfigPluginPaths(
+      configExpression.body,
+      entries,
+      rootDirectory,
+      configDirectory,
+    );
+    return;
+  }
+
+  if (ts.isFunctionExpression(configExpression) && configExpression.body) {
+    collectReturnedExpoConfigPluginPaths(
+      configExpression.body,
+      entries,
+      rootDirectory,
+      configDirectory,
+    );
+  }
+};
+
+const hasDefaultExportModifier = (node: ts.Node): boolean =>
+  Boolean(
+    ts.canHaveModifiers(node) &&
+    ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword),
+  );
+
+const isModuleExportsAssignmentTarget = (node: ts.Node): boolean =>
+  ts.isPropertyAccessExpression(node) &&
+  ts.isIdentifier(node.expression) &&
+  node.expression.text === "module" &&
+  node.name.text === "exports";
+
 const collectExpoPluginPathsFromAppConfig = (
   configPath: string,
   entries: Set<string>,
@@ -118,12 +229,32 @@ const collectExpoPluginPathsFromAppConfig = (
   const configDirectory = dirname(configPath);
 
   const visit = (node: ts.Node): void => {
+    if (ts.isExportAssignment(node)) {
+      collectExpoPluginPathsFromConfigExpression(
+        node.expression,
+        entries,
+        rootDirectory,
+        configDirectory,
+      );
+      return;
+    }
+
+    if (ts.isFunctionDeclaration(node) && hasDefaultExportModifier(node) && node.body) {
+      collectReturnedExpoConfigPluginPaths(node.body, entries, rootDirectory, configDirectory);
+      return;
+    }
+
     if (
-      ts.isPropertyAssignment(node) &&
-      getPropertyName(node.name) === "plugins" &&
-      ts.isArrayLiteralExpression(node.initializer)
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      isModuleExportsAssignmentTarget(node.left)
     ) {
-      collectExpoPluginPathsFromArray(node.initializer, entries, rootDirectory, configDirectory);
+      collectExpoPluginPathsFromConfigExpression(
+        node.right,
+        entries,
+        rootDirectory,
+        configDirectory,
+      );
       return;
     }
 
@@ -202,9 +333,7 @@ export const extractExpoConfigPluginEntries = (
   });
 
   for (const configPath of configPaths) {
-    if (existsSync(configPath)) {
-      collectExpoPluginPathsFromConfig(configPath, entries, directory);
-    }
+    collectExpoPluginPathsFromConfig(configPath, entries, directory);
   }
 
   return [...entries];

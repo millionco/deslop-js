@@ -1,5 +1,5 @@
 import fg from "fast-glob";
-import { resolve, dirname } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { SourceFile, DeslopConfig, ResolvedEntries } from "../types.js";
@@ -25,7 +25,6 @@ import {
   resolveEntryPathWithExtensions,
   resolveEntryWithExtensions,
 } from "../utils/resolve-entry-with-extensions.js";
-import { join } from "node:path";
 
 export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFile[]> => {
   const extensions =
