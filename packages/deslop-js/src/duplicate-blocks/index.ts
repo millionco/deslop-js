@@ -170,13 +170,82 @@ const filterRawBlocksToReportableDuplicates = (
     });
   }
 
-  duplicateBlocks.sort((firstClone, secondClone) => {
+  const maximalBlocks = dropBlocksSubsumedByLongerSibling(duplicateBlocks);
+
+  maximalBlocks.sort((firstClone, secondClone) => {
     if (firstClone.lineCount !== secondClone.lineCount) {
       return secondClone.lineCount - firstClone.lineCount;
     }
     return secondClone.tokenCount - firstClone.tokenCount;
   });
-  return duplicateBlocks;
+  return maximalBlocks;
+};
+
+/**
+ * The suffix-array + LCP-interval scan emits one block per LCP interval, but
+ * nested intervals routinely yield the same set of source spans at multiple
+ * lengths (the same maximal repeat reported at L, L-1, L-2, …). Drop any
+ * block whose every instance is spatially contained inside some other block's
+ * matching instance — that other block is strictly more informative.
+ *
+ * O(N²) worst-case, but N here is post-filter blocks (typically <1000 even on
+ * large monorepos), and the early-exit on instance-count mismatch keeps it
+ * tight in practice.
+ */
+const dropBlocksSubsumedByLongerSibling = (blocks: DuplicateBlock[]): DuplicateBlock[] => {
+  const sorted = [...blocks].sort((firstBlock, secondBlock) => {
+    if (firstBlock.tokenCount !== secondBlock.tokenCount) {
+      return secondBlock.tokenCount - firstBlock.tokenCount;
+    }
+    return secondBlock.lineCount - firstBlock.lineCount;
+  });
+
+  const survivors: DuplicateBlock[] = [];
+  for (const candidate of sorted) {
+    let subsumed = false;
+    for (const survivor of survivors) {
+      if (survivor.instances.length !== candidate.instances.length) continue;
+      if (allInstancesContainedIn(candidate, survivor)) {
+        subsumed = true;
+        break;
+      }
+    }
+    if (!subsumed) survivors.push(candidate);
+  }
+  return survivors;
+};
+
+const allInstancesContainedIn = (
+  candidate: DuplicateBlock,
+  longer: DuplicateBlock,
+): boolean => {
+  for (const candidateInstance of candidate.instances) {
+    let matched = false;
+    for (const longerInstance of longer.instances) {
+      if (
+        candidateInstance.path === longerInstance.path &&
+        isSpanContained(candidateInstance, longerInstance)
+      ) {
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) return false;
+  }
+  return true;
+};
+
+const isSpanContained = (
+  inner: { startLine: number; startColumn: number; endLine: number; endColumn: number },
+  outer: { startLine: number; startColumn: number; endLine: number; endColumn: number },
+): boolean => {
+  const innerStartsAfterOuter =
+    inner.startLine > outer.startLine ||
+    (inner.startLine === outer.startLine && inner.startColumn >= outer.startColumn);
+  const innerEndsBeforeOuter =
+    inner.endLine < outer.endLine ||
+    (inner.endLine === outer.endLine && inner.endColumn <= outer.endColumn);
+  return innerStartsAfterOuter && innerEndsBeforeOuter;
 };
 
 export interface DuplicateBlocksResult {
