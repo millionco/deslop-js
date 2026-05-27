@@ -2,7 +2,7 @@ const internalToolingConfig = {
   plugins: ["./plugins/false-positive-target.ts"],
 };
 
-export default () => ({
+const expoAppConfig = () => ({
   plugins: [
     `./plugins/template-literal-plugin.ts`,
     ["./plugins/directory-index-plugin", { enabled: true }],
@@ -13,3 +13,5 @@ export default () => ({
   ],
   extra: internalToolingConfig,
 });
+
+export default expoAppConfig;

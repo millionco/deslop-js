@@ -248,16 +248,19 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
   const expoConfigPluginEntries = extractExpoConfigPluginEntries(
     absoluteRoot,
     rootPackageDependencies,
+    absoluteRoot,
+    false,
   );
   for (const workspacePackage of entryEligiblePackages) {
     const workspacePackageDependencies = readPackageJsonDependencies(
       join(workspacePackage.directory, "package.json"),
     );
     expoConfigPluginEntries.push(
-      ...extractExpoConfigPluginEntries(workspacePackage.directory, {
-        ...rootPackageDependencies,
-        ...workspacePackageDependencies,
-      }),
+      ...extractExpoConfigPluginEntries(
+        workspacePackage.directory,
+        workspacePackageDependencies,
+        absoluteRoot,
+      ),
     );
   }
 

@@ -312,8 +312,8 @@ describe("expo-config-plugins", () => {
       "plugins/expo-json-extensionless-plugin.ts",
       // A root-level plugins array in app.json.
       "plugins/root-json-plugin.ts",
-      // A nested app.config.js resolves paths from its own folder.
-      "apps/mobile/plugins/nested-config-relative-plugin.ts",
+      // A workspace app.config.js can point at a plugin outside its package.
+      "apps/shared/cross-workspace-plugin.ts",
     ]) {
       assert.ok(
         !unusedFilePaths.includes(expectedReachableFile),

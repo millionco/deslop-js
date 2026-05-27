@@ -1,3 +1,3 @@
 module.exports = () => ({
-  plugins: ["./plugins/nested-config-relative-plugin"],
+  plugins: ["../shared/cross-workspace-plugin"],
 });

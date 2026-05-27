@@ -4,9 +4,9 @@ import fg from "fast-glob";
 import ts from "typescript";
 import { EXPO_CONFIG_SCAN_MAX_DEPTH, SOURCE_EXTENSIONS } from "../constants.js";
 
-const EXPO_CONFIG_FILE_GLOBS = [
-  "app.config.{ts,mts,cts,js,mjs,cjs}",
-  "app.json",
+const EXPO_CONFIG_FILE_GLOBS = ["app.config.{ts,mts,cts,js,mjs,cjs}", "app.json"];
+const NESTED_EXPO_CONFIG_FILE_GLOBS = [
+  ...EXPO_CONFIG_FILE_GLOBS,
   "**/app.config.{ts,mts,cts,js,mjs,cjs}",
   "**/app.json",
 ];
@@ -16,6 +16,11 @@ const EXPO_REACT_NATIVE_DEPENDENCIES = new Set(["expo", "react-native"]);
 const EXPO_PLUGIN_RESOLVABLE_EXTENSIONS = SOURCE_EXTENSIONS.map(
   (sourceExtension) => `.${sourceExtension}`,
 );
+
+interface StaticConfigBindings {
+  readonly expressions: Map<string, ts.Expression>;
+  readonly functions: Map<string, ts.FunctionDeclaration>;
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -65,7 +70,7 @@ const addExpoPluginEntry = (
   if (!resolvedPath) return;
 
   const relativePath = relative(rootDirectory, resolvedPath);
-  if (relativePath.startsWith("../") || isAbsolute(relativePath)) return;
+  if (relativePath !== "" && (relativePath.startsWith("..") || isAbsolute(relativePath))) return;
 
   entries.add(resolvedPath);
 };
@@ -167,6 +172,8 @@ const collectExpoPluginPathsFromConfigExpression = (
   entries: Set<string>,
   rootDirectory: string,
   configDirectory: string,
+  bindings: StaticConfigBindings,
+  seenIdentifiers = new Set<string>(),
 ): void => {
   const configExpression = unwrapExpression(expression);
   if (ts.isObjectLiteralExpression(configExpression)) {
@@ -176,6 +183,35 @@ const collectExpoPluginPathsFromConfigExpression = (
       rootDirectory,
       configDirectory,
     );
+    return;
+  }
+
+  if (ts.isIdentifier(configExpression)) {
+    if (seenIdentifiers.has(configExpression.text)) return;
+
+    seenIdentifiers.add(configExpression.text);
+    const boundExpression = bindings.expressions.get(configExpression.text);
+    if (boundExpression) {
+      collectExpoPluginPathsFromConfigExpression(
+        boundExpression,
+        entries,
+        rootDirectory,
+        configDirectory,
+        bindings,
+        seenIdentifiers,
+      );
+      return;
+    }
+
+    const boundFunction = bindings.functions.get(configExpression.text);
+    if (boundFunction?.body) {
+      collectReturnedExpoConfigPluginPaths(
+        boundFunction.body,
+        entries,
+        rootDirectory,
+        configDirectory,
+      );
+    }
     return;
   }
 
@@ -211,6 +247,28 @@ const isModuleExportsAssignmentTarget = (node: ts.Node): boolean =>
   node.expression.text === "module" &&
   node.name.text === "exports";
 
+const collectStaticConfigBindings = (sourceFile: ts.SourceFile): StaticConfigBindings => {
+  const expressions = new Map<string, ts.Expression>();
+  const functions = new Map<string, ts.FunctionDeclaration>();
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.initializer) {
+          expressions.set(declaration.name.text, declaration.initializer);
+        }
+      }
+      continue;
+    }
+
+    if (ts.isFunctionDeclaration(statement) && statement.name) {
+      functions.set(statement.name.text, statement);
+    }
+  }
+
+  return { expressions, functions };
+};
+
 const collectExpoPluginPathsFromAppConfig = (
   configPath: string,
   entries: Set<string>,
@@ -227,6 +285,7 @@ const collectExpoPluginPathsFromAppConfig = (
       : ts.ScriptKind.JS,
   );
   const configDirectory = dirname(configPath);
+  const bindings = collectStaticConfigBindings(sourceFile);
 
   const visit = (node: ts.Node): void => {
     if (ts.isExportAssignment(node)) {
@@ -235,6 +294,7 @@ const collectExpoPluginPathsFromAppConfig = (
         entries,
         rootDirectory,
         configDirectory,
+        bindings,
       );
       return;
     }
@@ -254,6 +314,7 @@ const collectExpoPluginPathsFromAppConfig = (
         entries,
         rootDirectory,
         configDirectory,
+        bindings,
       );
       return;
     }
@@ -320,20 +381,25 @@ const collectExpoPluginPathsFromConfig = (
 export const extractExpoConfigPluginEntries = (
   directory: string,
   dependencies: Record<string, string>,
+  rootDirectory = directory,
+  includeNestedConfigs = true,
 ): string[] => {
   if (!isExpoOrReactNativeWorkspace(dependencies)) return [];
 
   const entries = new Set<string>();
-  const configPaths = fg.sync(EXPO_CONFIG_FILE_GLOBS, {
-    cwd: directory,
-    absolute: true,
-    onlyFiles: true,
-    ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
-    deep: EXPO_CONFIG_SCAN_MAX_DEPTH,
-  });
+  const configPaths = fg.sync(
+    includeNestedConfigs ? NESTED_EXPO_CONFIG_FILE_GLOBS : EXPO_CONFIG_FILE_GLOBS,
+    {
+      cwd: directory,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
+      deep: EXPO_CONFIG_SCAN_MAX_DEPTH,
+    },
+  );
 
   for (const configPath of configPaths) {
-    collectExpoPluginPathsFromConfig(configPath, entries, directory);
+    collectExpoPluginPathsFromConfig(configPath, entries, rootDirectory);
   }
 
   return [...entries];
