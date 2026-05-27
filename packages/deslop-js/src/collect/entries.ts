@@ -1,5 +1,5 @@
 import fg from "fast-glob";
-import { resolve, dirname } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import type { SourceFile, DeslopConfig, ResolvedEntries } from "../types.js";
@@ -16,6 +16,7 @@ import {
 } from "../constants.js";
 import { resolveWorkspaces, detectFrameworkEntries } from "./workspaces.js";
 import type { WorkspacePackage } from "./workspaces.js";
+import { extractExpoConfigPluginEntries } from "./expo-config-plugin-entries.js";
 import { resolveSourcePath } from "../resolver/source-path.js";
 import { findMonorepoRoot } from "../utils/find-monorepo-root.js";
 import { extractConfigStringReferencedEntries } from "./config-string-entries.js";
@@ -24,7 +25,6 @@ import {
   resolveEntryPathWithExtensions,
   resolveEntryWithExtensions,
 } from "../utils/resolve-entry-with-extensions.js";
-import { join } from "node:path";
 
 export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFile[]> => {
   const extensions =
@@ -244,6 +244,26 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
     configStringEntries.push(...extractConfigStringReferencedEntries(workspacePackage.directory));
   }
 
+  const rootPackageDependencies = readPackageJsonDependencies(join(absoluteRoot, "package.json"));
+  const expoConfigPluginEntries = extractExpoConfigPluginEntries(
+    absoluteRoot,
+    rootPackageDependencies,
+    absoluteRoot,
+    false,
+  );
+  for (const workspacePackage of entryEligiblePackages) {
+    const workspacePackageDependencies = readPackageJsonDependencies(
+      join(workspacePackage.directory, "package.json"),
+    );
+    expoConfigPluginEntries.push(
+      ...extractExpoConfigPluginEntries(
+        workspacePackage.directory,
+        workspacePackageDependencies,
+        absoluteRoot,
+      ),
+    );
+  }
+
   const sectionsModuleEntries = extractSectionsModuleEntries(absoluteRoot);
 
   const wranglerEntries = extractWranglerEntries(absoluteRoot);
@@ -283,6 +303,7 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
       ...webWorkerEntries,
       ...tsConfigIncludeEntries,
       ...configStringEntries,
+      ...expoConfigPluginEntries,
       ...sectionsModuleEntries,
       ...wranglerEntries,
       ...pluginFileEntries,
@@ -2466,7 +2487,7 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
       "app/_layout.{ts,tsx,js,jsx}",
       "app/index.{ts,tsx,js,jsx}",
     ],
-    alwaysUsed: ["app.json", "app.config.{ts,js}"],
+    alwaysUsed: ["app.json", "app.config.{ts,mts,cts,js,mjs,cjs}"],
   },
   {
     enablers: ["wrangler"],

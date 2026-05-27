@@ -297,6 +297,41 @@ describe("filename-registry-entries", () => {
   });
 });
 
+describe("expo-config-plugins", () => {
+  it("should treat local Expo config plugins as entry points", async () => {
+    const result = await scanFixture("expo-config-plugins");
+    const fixtureDir = resolve(FIXTURES_DIR, "expo-config-plugins");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+
+    for (const expectedReachableFile of [
+      // A plain template string in app.config.ts.
+      "plugins/template-literal-plugin.ts",
+      // A tuple entry that points at a directory with index.ts.
+      "plugins/directory-index-plugin/index.ts",
+      // An extensionless local path in expo.plugins.
+      "plugins/expo-json-extensionless-plugin.ts",
+      // A root-level plugins array in app.json.
+      "plugins/root-json-plugin.ts",
+      // A workspace app.config.js can point at a plugin outside its package.
+      "apps/shared/cross-workspace-plugin.ts",
+    ]) {
+      assert.ok(
+        !unusedFilePaths.includes(expectedReachableFile),
+        `${expectedReachableFile} is referenced by Expo config plugins and must not be flagged unused, got: ${unusedFilePaths}`,
+      );
+    }
+
+    assert.ok(
+      unusedFilePaths.includes("expo-camera.ts"),
+      `package-name lookalikes must not be treated as local plugin files, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("plugins/false-positive-target.ts"),
+      `nested non-Expo plugin arrays, dynamic tuple entries, absolute paths, and wildcard paths must not mark false-positive-target.ts reachable, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("nested-dist-non-workspace", () => {
   it("should exclude `dist/` directories at ANY depth, not just at workspace roots", async () => {
     const result = await scanFixture("nested-dist-non-workspace");

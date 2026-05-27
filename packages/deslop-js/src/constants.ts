@@ -58,6 +58,8 @@ export const DEFAULT_ENTRY_GLOBS = [
   "main.{ts,tsx,js,jsx}",
 ];
 
+export const EXPO_CONFIG_SCAN_MAX_DEPTH = 6;
+
 export const KNOWN_CONFIG_PREFIXES = [
   "babel.config.",
   "rollup.config.",
