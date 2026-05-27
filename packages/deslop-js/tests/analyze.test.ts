@@ -3451,7 +3451,11 @@ describe("astro-frontmatter-return", () => {
     );
     assert.ok(
       !unusedFilePaths.includes("src/scripts/analytics.ts"),
-      `analytics.ts should NOT be unused (referenced via <script src>), got: ${unusedFilePaths}`,
+      `analytics.ts should NOT be unused (referenced via self-closing <script src />), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/scripts/inline-helper.ts"),
+      `inline-helper.ts should NOT be unused (imported from inline <script> after self-closing <script />), got: ${unusedFilePaths}`,
     );
     assert.ok(
       unusedFilePaths.includes("src/components/orphan.ts"),

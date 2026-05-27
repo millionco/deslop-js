@@ -15,10 +15,11 @@ if (slug === "redirect") {
 <html>
   <body>
     <Greeting client:load name={slug} />
-    <script src="../scripts/analytics.ts"></script>
+    <script src="../scripts/analytics.ts" />
     <script>
+      import { recordEvent } from "../scripts/inline-helper.ts";
       window.addEventListener("load", () => {
-        console.log("loaded");
+        recordEvent("loaded");
       });
     </script>
   </body>

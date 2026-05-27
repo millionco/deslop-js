@@ -166,7 +166,8 @@ const extractMdxImportsExports = (sourceText: string): string => {
 };
 
 const ASTRO_FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---/;
-const ASTRO_SCRIPT_TAG_PATTERN = /<script\b([^>]*?)(\/?)>([\s\S]*?)(?:<\/script>|$)/gi;
+const ASTRO_SCRIPT_TAG_PATTERN =
+  /<script\b([^>]*?)\/>|<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
 const ASTRO_SCRIPT_SRC_ATTRIBUTE_PATTERN = /\bsrc\s*=\s*["']([^"']+)["']/i;
 
 const extractAstroSources = (sourceText: string): string => {
@@ -178,14 +179,15 @@ const extractAstroSources = (sourceText: string): string => {
   ASTRO_SCRIPT_TAG_PATTERN.lastIndex = 0;
   let scriptMatch: RegExpExecArray | null;
   while ((scriptMatch = ASTRO_SCRIPT_TAG_PATTERN.exec(sourceText)) !== null) {
-    const attributes = scriptMatch[1] ?? "";
-    const selfClosing = scriptMatch[2] === "/";
-    const body = scriptMatch[3] ?? "";
+    const selfClosingAttributes = scriptMatch[1];
+    const pairedAttributes = scriptMatch[2];
+    const attributes = selfClosingAttributes ?? pairedAttributes ?? "";
+    const body = selfClosingAttributes === undefined ? (scriptMatch[3] ?? "") : "";
     const srcMatch = attributes.match(ASTRO_SCRIPT_SRC_ATTRIBUTE_PATTERN);
     if (srcMatch) {
       sections.push(`import ${JSON.stringify(srcMatch[1])};`);
     }
-    if (!selfClosing && body) {
+    if (body) {
       sections.push(body);
     }
   }
