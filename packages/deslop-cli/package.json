@@ -1,6 +1,6 @@
 {
   "name": "deslop-cli",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "CLI for deslop-js — find unused files, exports, and dependencies",
   "keywords": [
     "cli",
