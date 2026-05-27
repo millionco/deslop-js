@@ -307,17 +307,30 @@ const visitFlagPatternsInExpression = (node: unknown, context: VisitContext): vo
   if (node.type === "CallExpression") {
     const callee = node.callee;
     let functionName: string | undefined;
+    let calleeIsMemberExpression = false;
+    let receiverIsItselfMemberExpression = false;
     if (isAstNode(callee)) {
       if (callee.type === "Identifier") functionName = getStaticName(callee);
       else if (callee.type === "MemberExpression" || callee.type === "StaticMemberExpression") {
+        calleeIsMemberExpression = true;
         functionName = getStaticName(callee.property);
+        const receiver = callee.object;
+        if (
+          isAstNode(receiver) &&
+          (receiver.type === "MemberExpression" || receiver.type === "StaticMemberExpression")
+        ) {
+          receiverIsItselfMemberExpression = true;
+        }
       }
     }
     if (functionName !== undefined) {
-      if (
-        context.vercelFlagsLocalNames.has(functionName) ||
-        VERCEL_FLAGS_FUNCTION_NAMES.has(functionName)
-      ) {
+      // Vercel Flags' `flag()` is only ever called as an identifier from a
+      // Vercel Flags import — there is no `someObject.flag(...)` form. Without
+      // this restriction we catch `runtime.evaluate('Uint8Array')`,
+      // `page.evaluate('...')`, and anything else that happens to share a name.
+      const isVercelFlagsCandidate =
+        !calleeIsMemberExpression && context.vercelFlagsLocalNames.has(functionName);
+      if (isVercelFlagsCandidate) {
         const callArguments = node.arguments;
         const flagName = extractStringArgument(callArguments, 0);
         if (flagName !== undefined) {
@@ -328,6 +341,11 @@ const visitFlagPatternsInExpression = (node: unknown, context: VisitContext): vo
         }
         return;
       }
+      // Other SDK patterns: skip chained member calls like
+      // `document.implementation.hasFeature(...)` — the immediate receiver is
+      // itself a member expression, so the call is plainly not an SDK client
+      // method invocation.
+      if (calleeIsMemberExpression && receiverIsItselfMemberExpression) return;
       for (const sdkPattern of context.sdkPatterns) {
         if (sdkPattern.functionName !== functionName) continue;
         const callArguments = node.arguments;

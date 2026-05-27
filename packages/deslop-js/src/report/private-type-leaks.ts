@@ -254,13 +254,18 @@ const collectLocalTypeNames = (programNode: unknown): { localTypeNames: Set<stri
  *
  * `Story` is intentionally a local alias — consumers don't import it; the
  * Storybook runtime reads the default export. Flagging this as a leak
- * produces near-100% false positives on Storybook codebases, so skip
- * `*.stories.{ts,tsx,js,jsx,mts,mjs,cts,cjs}` files entirely.
+ * produces near-100% false positives on Storybook codebases, so skip story
+ * files entirely. Storybook supports both common glob conventions — match
+ * the `*.stories.{ext}` style as well as a bare `stories.{ext}` basename.
  */
-const STORYBOOK_STORY_FILE_PATTERN = /\.stories\.(?:[cm]?ts|[cm]?js|tsx|jsx)$/;
+const STORYBOOK_STORY_BASENAME_PATTERN =
+  /^(?:.*\.)?stories\.(?:[cm]?ts|[cm]?js|tsx|jsx)$/i;
 
-const isStorybookStoryFile = (filePath: string): boolean =>
-  STORYBOOK_STORY_FILE_PATTERN.test(filePath);
+const isStorybookStoryFile = (filePath: string): boolean => {
+  const lastSlash = filePath.lastIndexOf("/");
+  const basename = lastSlash === -1 ? filePath : filePath.slice(lastSlash + 1);
+  return STORYBOOK_STORY_BASENAME_PATTERN.test(basename);
+};
 
 /**
  * Detect TypeScript "private type leak": an exported declaration's signature
