@@ -1,0 +1,29 @@
+packages/deslop-js/tests/fixtures/expo-config-plugins/apps/mobile/plugins/with-nested-config-plugin.ts
+  s_446db46cc5cc25::t_efb5c6aa809cbc 1
+packages/deslop-js/tests/fixtures/expo-config-plugins/plugins/with-root-json-plugin.ts
+  s_446db46cc5cc25::t_218cb95dd46cd4 1
+packages/deslop-js/tests/fixtures/expo-config-plugins/apps/mobile/app.config.js
+  s_446db46cc5cc25::t_c4312787dd88ae 1-3
+packages/deslop-js/tests/fixtures/expo-config-plugins/app.config.ts
+  s_446db46cc5cc25::t_39c467399e788a 7,10-11
+packages/deslop-js/tests/fixtures/expo-config-plugins/app.json
+  s_446db46cc5cc25::t_7786e563c81884 4-5
+packages/deslop-js/tests/analyze.test.ts
+  s_446db46cc5cc25::t_0c04b11dd43316 310-311,325
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "755eed62cf371fe55b4c59c4edaf10a9006468dc",
+  "prompts": {},
+  "sessions": {
+    "s_446db46cc5cc25": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6708cf65-7dba-4e1e-b069-6ca9d8b3ed3f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}

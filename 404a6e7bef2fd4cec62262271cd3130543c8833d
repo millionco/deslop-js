@@ -1,0 +1,34 @@
+packages/deslop-js/src/collect/expo-config-plugin-entries.ts
+  s_446db46cc5cc25::t_dd82f73e166ab8 20-24,73,175-176,189-217,250-271,288,297,317,384,402
+  s_446db46cc5cc25::t_084ddb36446cf7 393-397
+  s_446db46cc5cc25::t_8ca3163a3c8b30 7-9,385,390-392,398-399
+packages/deslop-js/tests/analyze.test.ts
+  s_446db46cc5cc25::t_b7f200f634e9e6 315-316
+packages/deslop-js/tests/fixtures/expo-config-plugins/app.config.ts
+  s_446db46cc5cc25::t_68003ba4dd0104 5,16-17
+packages/deslop-js/tests/fixtures/expo-config-plugins/apps/mobile/app.config.js
+  s_446db46cc5cc25::t_0399c983d608c6 2
+packages/deslop-js/tests/fixtures/expo-config-plugins/apps/mobile/package.json
+  s_446db46cc5cc25::t_fe06090ddef257 1-6
+packages/deslop-js/src/collect/entries.ts
+  s_446db46cc5cc25::t_a45d199424872c 251-252
+  s_446db46cc5cc25::t_2a4fd020e23224 259-263
+packages/deslop-js/tests/fixtures/expo-config-plugins/package.json
+  s_446db46cc5cc25::t_084ddb36446cf7 3-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "404a6e7bef2fd4cec62262271cd3130543c8833d",
+  "prompts": {},
+  "sessions": {
+    "s_446db46cc5cc25": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6708cf65-7dba-4e1e-b069-6ca9d8b3ed3f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}

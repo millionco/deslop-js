@@ -1,0 +1,21 @@
+packages/deslop-js/src/collect/entries.ts
+  s_446db46cc5cc25::t_2af75b7db386c8 2
+packages/deslop-js/src/collect/expo-config-plugin-entries.ts
+  s_446db46cc5cc25::t_813c4c78ee9b8e 1,79-86,111-213,232-246,248-250,252-257,336
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8a9d984b899394801e10485e79ecabd4453357a3",
+  "prompts": {},
+  "sessions": {
+    "s_446db46cc5cc25": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6708cf65-7dba-4e1e-b069-6ca9d8b3ed3f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
