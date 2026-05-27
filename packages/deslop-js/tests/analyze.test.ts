@@ -3440,6 +3440,26 @@ describe("astro-mw", () => {
   });
 });
 
+describe("astro-frontmatter-return", () => {
+  it("collects frontmatter imports even when frontmatter uses top-level return", async () => {
+    const result = await scanFixture("astro-frontmatter-return");
+    const fixtureDir = resolve(FIXTURES_DIR, "astro-frontmatter-return");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/components/Greeting.tsx"),
+      `Greeting.tsx should NOT be unused (imported from .astro frontmatter), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/scripts/analytics.ts"),
+      `analytics.ts should NOT be unused (referenced via <script src>), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/components/orphan.ts"),
+      `orphan.ts should be unused (never imported), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("next-middleware", () => {
   it("should treat middleware, proxy, and instrumentation as Next.js entry points", async () => {
     const result = await scanFixture("next-middleware");
@@ -4290,7 +4310,9 @@ describe("code-clones", () => {
     assert.ok(
       ordersInvoicesClone,
       `expected a clone spanning orders.ts and invoices.ts, got files: ${result.duplicateBlocks
-        .map((duplicateBlock) => duplicateBlock.instances.map((instance) => instance.path).join(","))
+        .map((duplicateBlock) =>
+          duplicateBlock.instances.map((instance) => instance.path).join(","),
+        )
         .join("|")}`,
     );
   });
@@ -4370,7 +4392,10 @@ describe("feature-flags", () => {
       featureFlags: { enabled: true },
     });
     const envVarFlag = result.featureFlags.find((flag) => flag.kind === "env-var");
-    assert.ok(envVarFlag, `expected an env-var flag finding, got: ${JSON.stringify(result.featureFlags)}`);
+    assert.ok(
+      envVarFlag,
+      `expected an env-var flag finding, got: ${JSON.stringify(result.featureFlags)}`,
+    );
     assert.equal(envVarFlag.name, "FEATURE_NEW_CHECKOUT");
 
     const statsigFlag = result.featureFlags.find((flag) => flag.sdkProvider === "Statsig");
@@ -4445,7 +4470,9 @@ describe("typescript-smells", () => {
 
   it("flags `as any`", async () => {
     const result = await scanFixture("typescript-smells");
-    const asAny = result.unnecessaryAssertions.find((finding) => finding.kind === "assertion-to-any");
+    const asAny = result.unnecessaryAssertions.find(
+      (finding) => finding.kind === "assertion-to-any",
+    );
     assert.ok(asAny, "expected an assertion-to-any finding");
   });
 
