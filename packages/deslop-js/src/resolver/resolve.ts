@@ -11,6 +11,7 @@ import {
 } from "../constants.js";
 import { resolveSourcePath } from "./source-path.js";
 import { isPlatformBuiltinOrVirtualSpecifier } from "../utils/is-platform-builtin-or-virtual.js";
+import { toPosixPath } from "../utils/to-posix-path.js";
 
 const fileExistsCache = new Map<string, boolean>();
 const pathExistsCache = new Map<string, boolean>();
@@ -918,9 +919,10 @@ export const createResolver = (
       try {
         const resolverResult = activeResolver.sync(fromDir, cleanedSpecifier);
         if (resolverResult.path) {
-          const isInsideNodeModules = resolverResult.path.includes("/node_modules/");
+          const normalizedResolvedPath = toPosixPath(resolverResult.path);
+          const isInsideNodeModules = normalizedResolvedPath.includes("/node_modules/");
           return {
-            resolvedPath: isInsideNodeModules ? undefined : resolverResult.path,
+            resolvedPath: isInsideNodeModules ? undefined : normalizedResolvedPath,
             isExternal: isInsideNodeModules,
             packageName: isInsideNodeModules
               ? extractPackageNameFromSpecifier(cleanedSpecifier)
@@ -1052,7 +1054,14 @@ export const createResolver = (
     return unresolvedResult;
   };
 
-  return { resolveModule };
+  const resolveModuleWithPosixPath = (specifier: string, fromFile: string): ResolvedImport => {
+    const resolved = resolveModule(specifier, fromFile);
+    return resolved.resolvedPath
+      ? { ...resolved, resolvedPath: toPosixPath(resolved.resolvedPath) }
+      : resolved;
+  };
+
+  return { resolveModule: resolveModuleWithPosixPath };
 };
 
 const stripJsonComments = (content: string): string => {

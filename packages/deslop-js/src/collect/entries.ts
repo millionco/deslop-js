@@ -25,6 +25,7 @@ import {
   resolveEntryPathWithExtensions,
   resolveEntryWithExtensions,
 } from "../utils/resolve-entry-with-extensions.js";
+import { toPosixPath } from "../utils/to-posix-path.js";
 
 export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFile[]> => {
   const extensions =
@@ -285,34 +286,42 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
   const toolingDiscovery = discoverToolingEntryPoints(absoluteRoot, entryEligiblePackages);
   const ciEntries = extractCiWorkflowEntries(absoluteRoot);
 
-  const testEntries = [...new Set([...testRunnerDiscovery.entryFiles, ...testSetupEntries])];
+  const testEntries = [
+    ...new Set([...testRunnerDiscovery.entryFiles, ...testSetupEntries].map(toPosixPath)),
+  ];
   const testEntryPathSet = new Set(testEntries);
   const productionEntries = [
-    ...new Set([
-      ...entryFiles,
-      ...packageJsonEntries,
-      ...workspaceEntries,
-      ...frameworkEntries,
-      ...scriptEntries,
-      ...webpackEntries,
-      ...viteEntries,
-      ...bundlerConfigEntries,
-      ...htmlScriptEntries,
-      ...angularEntries,
-      ...browserExtensionEntries,
-      ...webWorkerEntries,
-      ...tsConfigIncludeEntries,
-      ...configStringEntries,
-      ...expoConfigPluginEntries,
-      ...sectionsModuleEntries,
-      ...wranglerEntries,
-      ...pluginFileEntries,
-      ...toolingDiscovery.entryFiles,
-      ...ciEntries,
-    ]),
+    ...new Set(
+      [
+        ...entryFiles,
+        ...packageJsonEntries,
+        ...workspaceEntries,
+        ...frameworkEntries,
+        ...scriptEntries,
+        ...webpackEntries,
+        ...viteEntries,
+        ...bundlerConfigEntries,
+        ...htmlScriptEntries,
+        ...angularEntries,
+        ...browserExtensionEntries,
+        ...webWorkerEntries,
+        ...tsConfigIncludeEntries,
+        ...configStringEntries,
+        ...expoConfigPluginEntries,
+        ...sectionsModuleEntries,
+        ...wranglerEntries,
+        ...pluginFileEntries,
+        ...toolingDiscovery.entryFiles,
+        ...ciEntries,
+      ].map(toPosixPath),
+    ),
   ].filter((entryPath) => !testEntryPathSet.has(entryPath));
   const alwaysUsedFiles = [
-    ...new Set([...toolingDiscovery.alwaysUsedFiles, ...testRunnerDiscovery.alwaysUsedFiles]),
+    ...new Set(
+      [...toolingDiscovery.alwaysUsedFiles, ...testRunnerDiscovery.alwaysUsedFiles].map(
+        toPosixPath,
+      ),
+    ),
   ];
 
   return { productionEntries, testEntries, alwaysUsedFiles };

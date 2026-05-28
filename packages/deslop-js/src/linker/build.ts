@@ -11,6 +11,7 @@ import type {
 import type { ParsedSource } from "../collect/parse.js";
 import type { ResolvedImport } from "../resolver/resolve.js";
 import { isConfigFile } from "../utils/is-config-file.js";
+import { toPosixPath } from "../utils/to-posix-path.js";
 
 export interface ModuleLinkInput {
   fileId: SourceFile;
@@ -23,7 +24,7 @@ export interface ModuleLinkInput {
 export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph => {
   const fileIdMap = new Map<string, number>();
   for (const input of inputs) {
-    fileIdMap.set(input.fileId.path, input.fileId.index);
+    fileIdMap.set(toPosixPath(input.fileId.path), input.fileId.index);
   }
 
   const modules: SourceModule[] = inputs.map((input) => ({
@@ -90,7 +91,7 @@ export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph
         const sourceDir = path.dirname(input.fileId.path);
         const globPattern = importInfo.specifier;
         for (const [filePath] of fileIdMap) {
-          const relativePath = path.relative(sourceDir, filePath);
+          const relativePath = toPosixPath(path.relative(sourceDir, filePath));
           const normalizedRelative = relativePath.startsWith(".")
             ? relativePath
             : `./${relativePath}`;
@@ -107,7 +108,7 @@ export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph
       const resolved = input.resolvedImports.get(importInfo.specifier);
       if (!resolved?.resolvedPath) continue;
 
-      const targetIndex = fileIdMap.get(resolved.resolvedPath);
+      const targetIndex = fileIdMap.get(toPosixPath(resolved.resolvedPath));
       if (targetIndex === undefined) continue;
 
       const importedSymbols: LinkedSymbol[] = importInfo.importedNames.map((importedName) => ({
@@ -128,7 +129,7 @@ export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph
       const resolved = input.resolvedImports.get(exportInfo.reExportSource);
       if (!resolved?.resolvedPath) continue;
 
-      const targetIndex = fileIdMap.get(resolved.resolvedPath);
+      const targetIndex = fileIdMap.get(toPosixPath(resolved.resolvedPath));
       if (targetIndex === undefined) continue;
 
       const exportedName = exportInfo.isNamespaceReExport ? "*" : exportInfo.name;
