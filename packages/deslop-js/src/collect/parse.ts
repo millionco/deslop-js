@@ -166,11 +166,32 @@ const extractMdxImportsExports = (sourceText: string): string => {
 };
 
 const ASTRO_FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---/;
+const ASTRO_SCRIPT_TAG_PATTERN =
+  /<script\b([^>]*?)\/>|<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+const ASTRO_SCRIPT_SRC_ATTRIBUTE_PATTERN = /\bsrc\s*=\s*["']([^"']+)["']/i;
 
-const extractAstroFrontmatter = (sourceText: string): string => {
+const extractAstroSources = (sourceText: string): string => {
+  const sections: string[] = [];
   const frontmatterMatch = sourceText.match(ASTRO_FRONTMATTER_PATTERN);
-  if (!frontmatterMatch) return "";
-  return frontmatterMatch[1];
+  if (frontmatterMatch) {
+    sections.push(frontmatterMatch[1]);
+  }
+  ASTRO_SCRIPT_TAG_PATTERN.lastIndex = 0;
+  let scriptMatch: RegExpExecArray | null;
+  while ((scriptMatch = ASTRO_SCRIPT_TAG_PATTERN.exec(sourceText)) !== null) {
+    const selfClosingAttributes = scriptMatch[1];
+    const pairedAttributes = scriptMatch[2];
+    const attributes = selfClosingAttributes ?? pairedAttributes ?? "";
+    const body = selfClosingAttributes === undefined ? (scriptMatch[3] ?? "") : "";
+    const srcMatch = attributes.match(ASTRO_SCRIPT_SRC_ATTRIBUTE_PATTERN);
+    if (srcMatch) {
+      sections.push(`import ${JSON.stringify(srcMatch[1])};`);
+    }
+    if (body) {
+      sections.push(body);
+    }
+  }
+  return sections.join("\n");
 };
 
 const VUE_SCRIPT_PATTERN = /<script[^>]*(?:lang=["'](?:ts|tsx)["'][^>]*)?>([\s\S]*?)<\/script>/gi;
@@ -454,10 +475,11 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
   const isAstro = filePath.endsWith(".astro");
   const isVue = filePath.endsWith(".vue");
   const isSvelte = filePath.endsWith(".svelte");
+  const isPreprocessed = isMdx || isAstro || isVue || isSvelte;
   const textToParse = isMdx
     ? extractMdxImportsExports(sourceText)
     : isAstro
-      ? extractAstroFrontmatter(sourceText)
+      ? extractAstroSources(sourceText)
       : isVue
         ? extractVueScriptContent(sourceText)
         : isSvelte
@@ -509,7 +531,7 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
     }
   }
 
-  if (result.errors.length > 0) {
+  if (result.errors.length > 0 && !isPreprocessed) {
     return {
       ...createEmptyParsedSource(),
       imports,
@@ -525,6 +547,17 @@ export const parseSourceFile = (filePath: string): ParsedSource => {
         }),
       ],
     };
+  }
+
+  if (result.errors.length > 0) {
+    earlyErrors.push(
+      new ParseError({
+        code: "parse-recovered-partial",
+        severity: "info",
+        message: `oxc-parser reported ${result.errors.length} syntax issue(s) in extracted ${isAstro ? "Astro" : isVue ? "Vue" : isSvelte ? "Svelte" : "MDX"} sources; continuing with partial AST`,
+        path: filePath,
+      }),
+    );
   }
 
   const program = result.program;

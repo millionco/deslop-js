@@ -6,6 +6,7 @@ export type DeslopErrorCode =
   | "file-minified"
   | "parse-failed"
   | "parse-recovered"
+  | "parse-recovered-partial"
   | "ast-walk-failed"
   | "ast-walk-depth-exceeded"
   | "tsconfig-not-found"
@@ -148,7 +149,12 @@ export class FileReadError extends DeslopError {
 export class ParseError extends DeslopError {
   constructor(
     input: Omit<DeslopErrorInput, "module" | "code"> & {
-      code: "parse-failed" | "parse-recovered" | "ast-walk-failed" | "ast-walk-depth-exceeded";
+      code:
+        | "parse-failed"
+        | "parse-recovered"
+        | "parse-recovered-partial"
+        | "ast-walk-failed"
+        | "ast-walk-depth-exceeded";
     },
   ) {
     super({ ...input, module: "parse" });
