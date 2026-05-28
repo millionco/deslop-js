@@ -1,7 +1,5 @@
-// The dependency graph keys every file by its absolute path, but the two
-// subsystems that produce those paths disagree on Windows: fast-glob always
-// emits forward slashes while oxc-resolver and node:path emit backslashes.
-// Lookups then silently miss and every file looks unreachable. Forward slashes
-// are the canonical internal form, so collapse separators before any path is
-// stored in or compared against the graph.
+// fast-glob returns and expects forward-slash (Unix-style) paths on every
+// platform and recommends converting Windows-style paths to match, so collapse
+// the backslashes that oxc-resolver and node:path emit on Windows.
+// See fast-glob: "How to write patterns on Windows?"
 export const toPosixPath = (filePath: string): string => filePath.replace(/\\/g, "/");
