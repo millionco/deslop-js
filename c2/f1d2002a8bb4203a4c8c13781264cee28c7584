@@ -1,0 +1,36 @@
+packages/deslop-js/src/linker/build.ts
+  s_a21f95d0e0cbe3::t_639357fec51449 14
+  s_a21f95d0e0cbe3::t_2a49a7de2b491d 94
+  s_a21f95d0e0cbe3::t_c4d52359c1a693 27
+  s_a21f95d0e0cbe3::t_4a6e10d65df0b2 111,132
+packages/deslop-js/src/utils/to-posix-path.ts
+  s_a21f95d0e0cbe3::t_4506f300a39cd8 1-7
+.changeset/windows-path-separator.md
+  s_a21f95d0e0cbe3::t_74d18b8754be53 1-5
+packages/deslop-js/src/collect/entries.ts
+  s_a21f95d0e0cbe3::t_e253d5c78e206d 289-291,294-317,320-324
+  s_a21f95d0e0cbe3::t_2b54c49d2248bb 28
+packages/deslop-js/tests/path-normalization.test.ts
+  s_a21f95d0e0cbe3::t_ab522708bbebcb 31-37
+  s_a21f95d0e0cbe3::t_aed7cce1dd8aec 1-30,38-97
+packages/deslop-js/src/resolver/resolve.ts
+  s_a21f95d0e0cbe3::t_e1863ff2bbf9eb 14
+  s_a21f95d0e0cbe3::t_576a8d7b65df71 1057-1064
+  s_a21f95d0e0cbe3::t_93de47ec6522a1 922-923,925
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c2f1d2002a8bb4203a4c8c13781264cee28c7584",
+  "prompts": {},
+  "sessions": {
+    "s_a21f95d0e0cbe3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e5d9f501-24fd-4ab9-bb7d-7a37db26900d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
