@@ -1,0 +1,40 @@
+packages/deslop-js/tests/semantic.test.ts
+  s_8ab0003f25be44::t_e9c5e169f2a297 539-605
+packages/deslop-js/src/types.ts
+  s_8ab0003f25be44::t_5f767314d96f90 364-365
+packages/deslop-js/src/semantic/single-use-inlineable-functions.ts
+  s_8ab0003f25be44::t_51f2215936d329 56
+  s_8ab0003f25be44::t_6253526d65a578 57
+  s_8ab0003f25be44::t_871a8b6ef56bda 1-32,37-55,58-69,72-287,289-356
+  s_8ab0003f25be44::t_ad4867290ce866 33-36,70-71,288
+packages/deslop-js/src/report/generate.ts
+  s_8ab0003f25be44::t_1ecd10b4d1dc2a 148,239,253-255
+packages/deslop-js/tests/fixtures/single-use-inlineable-functions/src/index.ts
+  s_8ab0003f25be44::t_d9c6e949b47c3f 1-62
+README.md
+  s_8ab0003f25be44::t_88c02d42d6431e 91,99
+packages/deslop-js/tests/fixtures/single-use-inlineable-functions/package.json
+  s_8ab0003f25be44::t_d01d8e60874d41 1-4
+packages/deslop-js/tests/fixtures/single-use-inlineable-functions/tsconfig.json
+  s_8ab0003f25be44::t_e8cfd7b81f297b 1-12
+packages/deslop-js/src/semantic/index.ts
+  s_8ab0003f25be44::t_ac3ae69cd14743 7,22,30,50,91-92,100,116,136,190-196,204
+packages/deslop-js/src/constants.ts
+  s_8ab0003f25be44::t_b43df4fc6e3840 284-285
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a1330459dc4222f32cb37b50854218862d9bb533",
+  "prompts": {},
+  "sessions": {
+    "s_8ab0003f25be44": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "64164d9b-76af-475a-9d78-ba3e0ce4edc0",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
