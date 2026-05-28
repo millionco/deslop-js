@@ -1,0 +1,19 @@
+packages/deslop-js/src/utils/to-posix-path.ts
+  s_a21f95d0e0cbe3::t_3220436548f381 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8e0bed8a171b97e814f6b2704e21f39e82fed7b4",
+  "prompts": {},
+  "sessions": {
+    "s_a21f95d0e0cbe3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e5d9f501-24fd-4ab9-bb7d-7a37db26900d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
