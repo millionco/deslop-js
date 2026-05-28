@@ -773,6 +773,7 @@ const EXPO_ENTRY_PATTERNS = [
 
 const EXPO_ROUTER_ENTRY_PATTERNS = [
   "app/**/*.{ts,tsx,js,jsx}",
+  "src/app/**/*.{ts,tsx,js,jsx}",
   "app.config.{ts,js,mjs,cjs}",
   "metro.config.{ts,js,mjs,cjs}",
   "babel.config.{ts,js,mjs,cjs}",

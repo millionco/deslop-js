@@ -3855,6 +3855,41 @@ describe("rn-app", () => {
   });
 });
 
+describe("expo-router", () => {
+  it("should treat src/app filesystem routes as entry points (no false-positive unused files)", async () => {
+    const result = await scanFixture("expo-router-src-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "expo-router-src-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.deepStrictEqual(
+      unusedFilePaths,
+      [],
+      `Expo Router src/app routes are filesystem-discovered entries and must not be flagged unused, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should still report genuinely orphaned modules outside the src/app routes directory", async () => {
+    const result = await scanFixture("expo-router-src-app-orphan");
+    const fixtureDir = resolve(FIXTURES_DIR, "expo-router-src-app-orphan");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.deepStrictEqual(
+      unusedFilePaths,
+      ["src/utils/orphan.ts"],
+      `only src/utils/orphan.ts (outside src/app) should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should keep treating non-src app/ filesystem routes as entry points", async () => {
+    const result = await scanFixture("expo-router-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "expo-router-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.deepStrictEqual(
+      unusedFilePaths,
+      [],
+      `Expo Router app/ routes must remain entry points (regression guard), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 it("should detect webpack.config.js entry points and mark imported files reachable", async () => {
   const result = await scanFixture("webpack-entries");
   const fixtureDir = resolve(FIXTURES_DIR, "webpack-entries");
