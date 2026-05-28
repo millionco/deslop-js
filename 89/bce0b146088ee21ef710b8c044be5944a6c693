@@ -1,0 +1,53 @@
+packages/deslop-js/tests/fixtures/expo-router-app/package.json
+  s_1cb49e45c11c04::t_3592a7754cd3a8 1-8
+packages/deslop-js/tests/fixtures/expo-router-app/app/_layout.tsx
+  s_1cb49e45c11c04::t_81d4dccfd72268 1-3
+packages/deslop-js/tests/fixtures/expo-router-src-app/src/app/_layout.tsx
+  s_1cb49e45c11c04::t_29065156f980dd 1-3
+.changeset/expo-router-src-app-entries.md
+  s_1cb49e45c11c04::t_4df60c5fc2131e 1-5
+packages/deslop-js/tests/fixtures/expo-router-src-app-orphan/src/app/(tabs)/_layout.tsx
+  s_1cb49e45c11c04::t_d611d352b6e039 1-3
+packages/deslop-js/tests/fixtures/expo-router-src-app-orphan/package.json
+  s_1cb49e45c11c04::t_5678022060697d 1-8
+packages/deslop-js/tests/fixtures/expo-router-app/app/(tabs)/index.tsx
+  s_1cb49e45c11c04::t_8619f4a45e8a2c 1-3
+packages/deslop-js/tests/fixtures/expo-router-app/app/(tabs)/settings.tsx
+  s_1cb49e45c11c04::t_247776e0e52a2f 1-3
+packages/deslop-js/tests/fixtures/expo-router-src-app/package.json
+  s_1cb49e45c11c04::t_20d3103e8c1e73 1-8
+packages/deslop-js/src/collect/workspaces.ts
+  s_1cb49e45c11c04::t_fff2f8d0afb2fd 776
+packages/deslop-js/tests/fixtures/expo-router-src-app/src/app/(tabs)/index.tsx
+  s_1cb49e45c11c04::t_06f2dc9ad7167f 1-3
+packages/deslop-js/tests/fixtures/expo-router-src-app-orphan/src/utils/orphan.ts
+  s_1cb49e45c11c04::t_60ab2abc1070ca 1
+packages/deslop-js/tests/fixtures/expo-router-src-app-orphan/src/app/(tabs)/index.tsx
+  s_1cb49e45c11c04::t_f0a8305b981fce 1-3
+packages/deslop-js/tests/fixtures/expo-router-src-app-orphan/src/app/_layout.tsx
+  s_1cb49e45c11c04::t_4cc05cde7bd9f8 1-3
+packages/deslop-js/tests/analyze.test.ts
+  s_1cb49e45c11c04::t_74d859d5746c9d 3858-3892
+packages/deslop-js/tests/fixtures/expo-router-src-app/src/app/(tabs)/_layout.tsx
+  s_1cb49e45c11c04::t_19552b319d451f 1-3
+packages/deslop-js/tests/fixtures/expo-router-app/app/(tabs)/_layout.tsx
+  s_1cb49e45c11c04::t_c9eb95c29dd070 1-3
+packages/deslop-js/tests/fixtures/expo-router-src-app/src/app/(tabs)/settings.tsx
+  s_1cb49e45c11c04::t_e152538d2d27f6 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "89bce0b146088ee21ef710b8c044be5944a6c693",
+  "prompts": {},
+  "sessions": {
+    "s_1cb49e45c11c04": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7b145291-7f20-4162-a197-2828bf13680e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
