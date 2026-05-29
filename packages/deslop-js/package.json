@@ -12,10 +12,19 @@
     "typescript",
     "unused"
   ],
+  "homepage": "https://github.com/millionco/deslop-js#readme",
+  "bugs": {
+    "url": "https://github.com/millionco/deslop-js/issues"
+  },
   "license": "MIT",
   "author": {
     "name": "Aiden Bai",
     "email": "aiden@million.dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/millionco/deslop-js.git",
+    "directory": "packages/deslop-js"
   },
   "files": [
     "dist",
