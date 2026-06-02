@@ -1,0 +1,10 @@
+{
+  "name": "test-with-additional-framework-pages",
+  "dependencies": {
+    "@module-federation/vite": "^1.0.0",
+    "@redwoodjs/router": "^8.0.0",
+    "rakkasjs": "^0.7.0",
+    "vike": "^0.4.0",
+    "waku": "^0.20.0"
+  }
+}
