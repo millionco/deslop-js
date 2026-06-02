@@ -2859,6 +2859,16 @@ test("should treat Inertia app and pages as entry points when Inertia is a depen
   );
 });
 
+test("should not activate Redwood page entries for non-router Redwood packages", async () => {
+  const result = await scanFixture("framework-gate/with-redwood-non-router-package");
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-gate/with-redwood-non-router-package");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath === "web/src/pages/home.tsx"),
+    `web/src/pages/home.tsx should be unused without @redwoodjs/router or @redwoodjs/web, got: ${unusedFilePaths}`,
+  );
+});
+
 test("should treat additional dependency-gated framework page conventions as entry points", async () => {
   const result = await scanFixture("framework-gate/with-additional-framework-pages");
   const fixtureDir = resolve(FIXTURES_DIR, "framework-gate/with-additional-framework-pages");

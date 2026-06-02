@@ -2120,7 +2120,7 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
   },
   {
     enablers: ["@redwoodjs/router", "@redwoodjs/web"],
-    enablerPrefixes: ["@redwoodjs/"],
+    enablerPrefixes: [],
     entryPatterns: [
       `web/src/App.${JS_TS_COMPONENT_EXTENSIONS}`,
       `web/src/Routes.${JS_TS_COMPONENT_EXTENSIONS}`,
