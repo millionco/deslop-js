@@ -1,0 +1,19 @@
+.changeset/add-detectors-and-fixes.md
+  s_a4d42b71a0e687::t_a956eb169c13fb 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "19bc22c7623e12f86f5efa7383b5942afa096476",
+  "prompts": {},
+  "sessions": {
+    "s_a4d42b71a0e687": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6738790d-9e1c-42b1-9542-837ea8afe6b7",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
