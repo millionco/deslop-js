@@ -2837,6 +2837,47 @@ test("should treat app/routes as entry points when @react-router/dev is a depend
   );
 });
 
+test("should activate hoisted framework dependencies from package-local scripts when scanning a package directly", async () => {
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-hoisted-script-entry/packages/app");
+  const result = await analyze(defineConfig({ rootDir: fixtureDir }));
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath === "orphan.tsx"),
+    `orphan.tsx should be unused, got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath === "pages/index.tsx"),
+    `pages/index.tsx should NOT be unused (Next script with hoisted dependency), got: ${unusedFilePaths}`,
+  );
+});
+
+test("should activate React Router and Remix entries from hoisted script dependencies", async () => {
+  for (const frameworkApp of [
+    { fixtureName: "react-router-app", frameworkName: "React Router" },
+    { fixtureName: "remix-app", frameworkName: "Remix" },
+  ]) {
+    const fixtureDir = resolve(
+      FIXTURES_DIR,
+      "framework-hoisted-router-scripts/packages",
+      frameworkApp.fixtureName,
+    );
+    const result = await analyze(defineConfig({ rootDir: fixtureDir }));
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.some((filePath) => filePath === "orphan.tsx"),
+      `orphan.tsx should be unused for ${frameworkApp.frameworkName}, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.some((filePath) => filePath === "app/root.tsx"),
+      `app/root.tsx should NOT be unused (${frameworkApp.frameworkName} script with hoisted dependency), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.some((filePath) => filePath === "app/routes/home.tsx"),
+      `app/routes/home.tsx should NOT be unused (${frameworkApp.frameworkName} script with hoisted dependency), got: ${unusedFilePaths}`,
+    );
+  }
+});
+
 test("should treat Inertia app and pages as entry points when Inertia is a dependency", async () => {
   const result = await scanFixture("framework-gate/with-inertia");
   const fixtureDir = resolve(FIXTURES_DIR, "framework-gate/with-inertia");

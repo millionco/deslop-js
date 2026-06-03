@@ -2881,7 +2881,8 @@ const FRAMEWORK_SCRIPT_BINARIES: Record<string, string[]> = {
   nuxt: ["nuxt"],
   astro: ["astro"],
   gatsby: ["gatsby"],
-  remix: ["remix"],
+  "@remix-run/dev": ["remix"],
+  "@react-router/dev": ["react-router"],
   "@sveltejs/kit": ["svelte-kit", "vite-svelte-kit"],
   "@docusaurus/core": ["docusaurus"],
   "@angular/core": ["ng"],
@@ -2973,11 +2974,15 @@ const discoverToolingEntryPoints = (
     };
     if (directory === rootDir) {
       Object.assign(mergedDependencies, rootDependencies);
-    } else {
-      for (const enabler of scriptDetectedEnablers) {
-        if (enabler in monorepoRootDeps || enabler in rootDependencies) {
-          mergedDependencies[enabler] = "*";
-        }
+    }
+
+    for (const enabler of scriptDetectedEnablers) {
+      if (
+        enabler in workspaceDependencies ||
+        enabler in rootDependencies ||
+        enabler in monorepoRootDeps
+      ) {
+        mergedDependencies[enabler] = "*";
       }
     }
 
