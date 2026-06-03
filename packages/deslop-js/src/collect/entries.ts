@@ -34,7 +34,7 @@ export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFi
   const extensionGlob =
     extensions.length === 1 ? `**/*${extensions[0]}` : `**/*{${extensions.join(",")}}`;
 
-  const ignorePatterns = [...DEFAULT_EXCLUSIONS, ...config.ignorePatterns];
+  const ignorePatterns = [...DEFAULT_EXCLUSIONS, ...config.ignorePatterns].map(toPosixPath);
   const absoluteRoot = resolve(config.rootDir);
 
   const mainFiles = await fg(extensionGlob, {
