@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { toPosixPath } from "../src/utils/to-posix-path.js";
 import { buildDependencyGraph, type ModuleLinkInput } from "../src/linker/build.js";
 import { traceReachability } from "../src/linker/reachability.js";
+import { detectDeadExports } from "../src/report/exports.js";
 import type { ParsedSource } from "../src/collect/parse.js";
 import type { ResolvedImport } from "../src/resolver/resolve.js";
-import type { ImportReference } from "../src/types.js";
+import type { DeslopConfig, ExportReference, ImportReference } from "../src/types.js";
 
 const emptyParsed = (overrides: Partial<ParsedSource> = {}): ParsedSource => ({
   imports: [],
@@ -43,6 +44,35 @@ const namedImport = (specifier: string, importedName: string): ImportReference =
   line: 1,
   column: 1,
 });
+
+const namedExport = (name: string, overrides: Partial<ExportReference> = {}): ExportReference => ({
+  name,
+  isDefault: false,
+  isTypeOnly: false,
+  isReExport: false,
+  isSynthetic: false,
+  reExportSource: undefined,
+  reExportOriginalName: undefined,
+  isNamespaceReExport: false,
+  line: 1,
+  column: 1,
+  ...overrides,
+});
+
+const deadExportConfig: DeslopConfig = {
+  rootDir: "C:/project",
+  entryPatterns: [],
+  ignorePatterns: [],
+  includeExtensions: [],
+  tsConfigPath: undefined,
+  reportTypes: false,
+  includeEntryExports: false,
+  reportRedundancy: true,
+  semantic: undefined,
+  duplicateBlocks: undefined,
+  featureFlags: undefined,
+  complexity: undefined,
+};
 
 describe("toPosixPath", () => {
   it("converts windows separators to forward slashes", () => {
@@ -92,6 +122,75 @@ describe("buildDependencyGraph cross-platform path keying", () => {
       graph.modules[1].isReachable,
       true,
       "app.ts must be reachable from the entry point and not reported as an unused file",
+    );
+  });
+
+  it("keeps module paths normalized for re-export chain lookup", () => {
+    const entry: ModuleLinkInput = {
+      fileId: { index: 0, path: "C:\\project\\src\\index.ts" },
+      parsed: emptyParsed({
+        exports: [
+          namedExport("foo", {
+            isReExport: true,
+            reExportSource: "./barrel",
+            reExportOriginalName: "foo",
+          }),
+        ],
+      }),
+      resolvedImports: new Map<string, ResolvedImport>([
+        [
+          "./barrel",
+          {
+            resolvedPath: "C:\\project\\src\\barrel.ts",
+            isExternal: false,
+            packageName: undefined,
+          },
+        ],
+      ]),
+      isEntryPoint: true,
+      isTestEntry: false,
+    };
+    const barrel: ModuleLinkInput = {
+      fileId: { index: 1, path: "C:\\project\\src\\barrel.ts" },
+      parsed: emptyParsed({
+        exports: [
+          namedExport("foo", {
+            isReExport: true,
+            reExportSource: "./foo",
+            reExportOriginalName: "foo",
+          }),
+        ],
+      }),
+      resolvedImports: new Map<string, ResolvedImport>([
+        [
+          "./foo",
+          { resolvedPath: "C:\\project\\src\\foo.ts", isExternal: false, packageName: undefined },
+        ],
+      ]),
+      isEntryPoint: false,
+      isTestEntry: false,
+    };
+    const target: ModuleLinkInput = {
+      fileId: { index: 2, path: "C:\\project\\src\\foo.ts" },
+      parsed: emptyParsed({ exports: [namedExport("foo")] }),
+      resolvedImports: new Map<string, ResolvedImport>(),
+      isEntryPoint: false,
+      isTestEntry: false,
+    };
+
+    const graph = buildDependencyGraph([entry, barrel, target]);
+
+    assert.equal(graph.modules[0].fileId.path, "C:/project/src/index.ts");
+    assert.equal(graph.modules[1].fileId.path, "C:/project/src/barrel.ts");
+    assert.equal(graph.modules[2].fileId.path, "C:/project/src/foo.ts");
+
+    traceReachability(graph);
+    const unusedExports = detectDeadExports(graph, deadExportConfig);
+
+    assert.deepEqual(
+      unusedExports.map((unusedExport) => unusedExport.path),
+      [],
+      "re-export chains must resolve through normalized graph file paths",
     );
   });
 });

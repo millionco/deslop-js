@@ -60,7 +60,7 @@ export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFi
         })
       : [];
 
-  const files = [...mainFiles, ...hiddenFiles];
+  const files = [...new Set([...mainFiles, ...hiddenFiles].map(toPosixPath))];
 
   const sortedFiles = files.sort();
 

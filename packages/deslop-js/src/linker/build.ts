@@ -22,12 +22,20 @@ export interface ModuleLinkInput {
 }
 
 export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph => {
+  const normalizedInputs = inputs.map((input) => ({
+    ...input,
+    fileId: {
+      ...input.fileId,
+      path: toPosixPath(input.fileId.path),
+    },
+  }));
+
   const fileIdMap = new Map<string, number>();
-  for (const input of inputs) {
-    fileIdMap.set(toPosixPath(input.fileId.path), input.fileId.index);
+  for (const input of normalizedInputs) {
+    fileIdMap.set(input.fileId.path, input.fileId.index);
   }
 
-  const modules: SourceModule[] = inputs.map((input) => ({
+  const modules: SourceModule[] = normalizedInputs.map((input) => ({
     fileId: input.fileId,
     imports: input.parsed.imports,
     exports: input.parsed.exports,
@@ -83,7 +91,7 @@ export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph
     }
   };
 
-  for (const input of inputs) {
+  for (const input of normalizedInputs) {
     const sourceIndex = input.fileId.index;
 
     for (const importInfo of input.parsed.imports) {

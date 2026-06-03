@@ -31,6 +31,7 @@ import { traceReachability } from "./linker/reachability.js";
 import { resolveReExportChains } from "./linker/re-exports.js";
 import { generateReport } from "./report/generate.js";
 import { findMonorepoRoot } from "./utils/find-monorepo-root.js";
+import { toPosixPath } from "./utils/to-posix-path.js";
 
 const STYLE_EXTENSIONS = [".css", ".scss"];
 
@@ -40,6 +41,8 @@ const basenameFromPath = (filePath: string): string => {
   const lastSlashIndex = filePath.lastIndexOf("/");
   return lastSlashIndex === -1 ? filePath : filePath.slice(lastSlashIndex + 1);
 };
+
+const pathSet = (filePaths: string[]): Set<string> => new Set(filePaths.map(toPosixPath));
 
 /**
  * Dynamic registry pattern: many codebases use a central "schema/registry"
@@ -406,17 +409,17 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
     );
   }
 
-  const absoluteRoot = resolve(config.rootDir);
+  const absoluteRoot = toPosixPath(resolve(config.rootDir));
   const outputDirectoryExclusions = OUTPUT_DIRECTORIES.flatMap((outputDirectory) => [
     `${absoluteRoot}/${outputDirectory}/**`,
     `${absoluteRoot}/**/${outputDirectory}/**`,
   ]);
 
   const allExclusionPatterns = [
-    ...workspaceDiscovery.excludedDirectories.map((directory) => `${directory}/**`),
+    ...workspaceDiscovery.excludedDirectories.map((directory) => `${toPosixPath(directory)}/**`),
     ...frameworkIgnorePatterns,
     ...outputDirectoryExclusions,
-  ];
+  ].map(toPosixPath);
 
   const configWithExclusions =
     allExclusionPatterns.length > 0
@@ -456,9 +459,9 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
     );
     discoveredEntries = { productionEntries: [], testEntries: [], alwaysUsedFiles: [] };
   }
-  const productionEntrySet = new Set(discoveredEntries.productionEntries);
-  const testEntrySet = new Set(discoveredEntries.testEntries);
-  const alwaysUsedFileSet = new Set(discoveredEntries.alwaysUsedFiles);
+  const productionEntrySet = pathSet(discoveredEntries.productionEntries);
+  const testEntrySet = pathSet(discoveredEntries.testEntries);
+  const alwaysUsedFileSet = pathSet(discoveredEntries.alwaysUsedFiles);
 
   let hasReactNative = false;
   try {
@@ -533,8 +536,9 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
           );
         }
         for (const expandedFile of expandedFiles) {
-          resolvedImportMap.set(expandedFile, {
-            resolvedPath: expandedFile,
+          const normalizedExpandedFile = toPosixPath(expandedFile);
+          resolvedImportMap.set(normalizedExpandedFile, {
+            resolvedPath: normalizedExpandedFile,
             isExternal: false,
             packageName: undefined,
           });
@@ -571,18 +575,19 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
     });
   }
 
-  const discoveredFilePaths = new Set(files.map((file) => file.path));
+  const discoveredFilePaths = pathSet(files.map((file) => file.path));
   const styleFilesToAdd = new Set<string>();
 
   for (const input of graphInputs) {
     for (const [, resolvedImport] of input.resolvedImports) {
       if (!resolvedImport.resolvedPath || resolvedImport.isExternal) continue;
-      if (discoveredFilePaths.has(resolvedImport.resolvedPath)) continue;
+      const resolvedPath = toPosixPath(resolvedImport.resolvedPath);
+      if (discoveredFilePaths.has(resolvedPath)) continue;
       const isStyleFile = STYLE_EXTENSIONS.some((ext) =>
-        resolvedImport.resolvedPath!.endsWith(ext),
+        resolvedPath.endsWith(ext),
       );
-      if (isStyleFile && existsSync(resolvedImport.resolvedPath)) {
-        styleFilesToAdd.add(resolvedImport.resolvedPath);
+      if (isStyleFile && existsSync(resolvedPath)) {
+        styleFilesToAdd.add(resolvedPath);
       }
     }
   }
@@ -613,12 +618,14 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
         resolvedImport = { resolvedPath: undefined, isExternal: false, packageName: undefined };
       }
       resolvedStyleImportMap.set(importInfo.specifier, resolvedImport);
-      if (resolvedImport.resolvedPath && !discoveredFilePaths.has(resolvedImport.resolvedPath)) {
+      if (resolvedImport.resolvedPath) {
+        const nestedResolvedPath = toPosixPath(resolvedImport.resolvedPath);
+        if (discoveredFilePaths.has(nestedResolvedPath)) continue;
         const isNestedStyle = STYLE_EXTENSIONS.some((ext) =>
-          resolvedImport.resolvedPath!.endsWith(ext),
+          nestedResolvedPath.endsWith(ext),
         );
-        if (isNestedStyle && existsSync(resolvedImport.resolvedPath)) {
-          styleFilesToAdd.add(resolvedImport.resolvedPath);
+        if (isNestedStyle && existsSync(nestedResolvedPath)) {
+          styleFilesToAdd.add(nestedResolvedPath);
         }
       }
     }
