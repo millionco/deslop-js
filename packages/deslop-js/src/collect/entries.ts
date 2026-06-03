@@ -1967,6 +1967,10 @@ interface ToolingPluginDefinition {
   contentIgnorePatterns?: string[];
 }
 
+const JS_TS_COMPONENT_EXTENSIONS = "{ts,tsx,js,jsx}";
+const INERTIA_COMPONENT_EXTENSIONS = "{ts,tsx,js,jsx,vue,svelte}";
+const VIKE_ROUTE_EXTENSIONS = "{ts,tsx,js,jsx,md,mdx}";
+
 const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
   {
     enablers: ["storybook"],
@@ -2081,6 +2085,50 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
       "src/test.ts",
     ],
     alwaysUsed: ["angular.json", "**/karma.conf.js"],
+  },
+  {
+    enablers: [
+      "@inertiajs/react",
+      "@inertiajs/inertia-react",
+      "@inertiajs/vue3",
+      "@inertiajs/inertia-vue3",
+      "@inertiajs/svelte",
+      "@inertiajs/inertia-svelte",
+      "@inertiajs/inertia",
+    ],
+    enablerPrefixes: [],
+    entryPatterns: [
+      `resources/js/app.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `resources/js/App.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `resources/js/Pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `resources/js/pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `app/frontend/Pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `app/frontend/pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `app/frontend/entrypoints/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `app/javascript/Pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `app/javascript/pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `frontend/src/Pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `frontend/src/pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `inertia/Pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `inertia/pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `src/app.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `src/App.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `src/Pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+      `src/pages/**/*.${INERTIA_COMPONENT_EXTENSIONS}`,
+    ],
+    alwaysUsed: [],
+  },
+  {
+    enablers: ["@redwoodjs/router", "@redwoodjs/web"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      `web/src/App.${JS_TS_COMPONENT_EXTENSIONS}`,
+      `web/src/Routes.${JS_TS_COMPONENT_EXTENSIONS}`,
+      `web/src/index.${JS_TS_COMPONENT_EXTENSIONS}`,
+      `web/src/layouts/**/*.${JS_TS_COMPONENT_EXTENSIONS}`,
+      `web/src/pages/**/*.${JS_TS_COMPONENT_EXTENSIONS}`,
+    ],
+    alwaysUsed: [],
   },
   {
     enablers: ["react-scripts", "react-app-rewired"],
@@ -2310,6 +2358,51 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
       "src/routeTree.gen.{ts,js}",
     ],
     alwaysUsed: ["tsr.config.json", "app.config.{ts,js}"],
+  },
+  {
+    enablers: ["waku"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      `src/pages/**/*.${JS_TS_COMPONENT_EXTENSIONS}`,
+      `src/waku.client.${JS_TS_COMPONENT_EXTENSIONS}`,
+      `src/waku.server.${JS_TS_COMPONENT_EXTENSIONS}`,
+    ],
+    alwaysUsed: [],
+  },
+  {
+    enablers: ["vike", "vite-plugin-ssr"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      `pages/**/*.${VIKE_ROUTE_EXTENSIONS}`,
+      `renderer/**/*.${JS_TS_COMPONENT_EXTENSIONS}`,
+      `src/pages/**/*.${VIKE_ROUTE_EXTENSIONS}`,
+      `src/renderer/**/*.${JS_TS_COMPONENT_EXTENSIONS}`,
+    ],
+    alwaysUsed: [],
+  },
+  {
+    enablers: ["rakkasjs"],
+    enablerPrefixes: [],
+    entryPatterns: [
+      `src/client.${JS_TS_COMPONENT_EXTENSIONS}`,
+      `src/server.${JS_TS_COMPONENT_EXTENSIONS}`,
+      `src/routes/**/*.${JS_TS_COMPONENT_EXTENSIONS}`,
+    ],
+    alwaysUsed: [],
+  },
+  {
+    enablers: [
+      "@module-federation/enhanced",
+      "@module-federation/node",
+      "@module-federation/vite",
+      "@originjs/vite-plugin-federation",
+    ],
+    enablerPrefixes: [],
+    entryPatterns: [
+      "federation.config.{ts,js,mjs,cjs,mts,cts}",
+      "module-federation.config.{ts,js,mjs,cjs,mts,cts}",
+    ],
+    alwaysUsed: [],
   },
   {
     enablers: [
@@ -2788,7 +2881,8 @@ const FRAMEWORK_SCRIPT_BINARIES: Record<string, string[]> = {
   nuxt: ["nuxt"],
   astro: ["astro"],
   gatsby: ["gatsby"],
-  remix: ["remix"],
+  "@remix-run/dev": ["remix"],
+  "@react-router/dev": ["react-router"],
   "@sveltejs/kit": ["svelte-kit", "vite-svelte-kit"],
   "@docusaurus/core": ["docusaurus"],
   "@angular/core": ["ng"],
@@ -2880,11 +2974,15 @@ const discoverToolingEntryPoints = (
     };
     if (directory === rootDir) {
       Object.assign(mergedDependencies, rootDependencies);
-    } else {
-      for (const enabler of scriptDetectedEnablers) {
-        if (enabler in monorepoRootDeps || enabler in rootDependencies) {
-          mergedDependencies[enabler] = "*";
-        }
+    }
+
+    for (const enabler of scriptDetectedEnablers) {
+      if (
+        enabler in workspaceDependencies ||
+        enabler in rootDependencies ||
+        enabler in monorepoRootDeps
+      ) {
+        mergedDependencies[enabler] = "*";
       }
     }
 

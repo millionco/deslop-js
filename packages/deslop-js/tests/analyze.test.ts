@@ -2792,6 +2792,10 @@ test("should not treat pages/app directories as entry points without framework d
     `src/routes/index.tsx should be unused without router dependency, got: ${unusedFilePaths}`,
   );
   assert.ok(
+    unusedFilePaths.some((filePath) => filePath === "resources/js/Pages/dashboard.tsx"),
+    `resources/js/Pages/dashboard.tsx should be unused without inertia dependency, got: ${unusedFilePaths}`,
+  );
+  assert.ok(
     !unusedFilePaths.some((filePath) => filePath === "pages/index.tsx"),
     `pages/index.tsx should NOT be unused (imported by index.ts), got: ${unusedFilePaths}`,
   );
@@ -2831,6 +2835,106 @@ test("should treat app/routes as entry points when @react-router/dev is a depend
     !unusedFilePaths.some((filePath) => filePath === "src/routes/home.tsx"),
     `src/routes/home.tsx should NOT be unused (React Router route with appDirectory=src), got: ${unusedFilePaths}`,
   );
+});
+
+test("should activate hoisted framework dependencies from package-local scripts when scanning a package directly", async () => {
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-hoisted-script-entry/packages/app");
+  const result = await analyze(defineConfig({ rootDir: fixtureDir }));
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath === "orphan.tsx"),
+    `orphan.tsx should be unused, got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath === "pages/index.tsx"),
+    `pages/index.tsx should NOT be unused (Next script with hoisted dependency), got: ${unusedFilePaths}`,
+  );
+});
+
+test("should activate React Router and Remix entries from hoisted script dependencies", async () => {
+  for (const frameworkApp of [
+    { fixtureName: "react-router-app", frameworkName: "React Router" },
+    { fixtureName: "remix-app", frameworkName: "Remix" },
+  ]) {
+    const fixtureDir = resolve(
+      FIXTURES_DIR,
+      "framework-hoisted-router-scripts/packages",
+      frameworkApp.fixtureName,
+    );
+    const result = await analyze(defineConfig({ rootDir: fixtureDir }));
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.some((filePath) => filePath === "orphan.tsx"),
+      `orphan.tsx should be unused for ${frameworkApp.frameworkName}, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.some((filePath) => filePath === "app/root.tsx"),
+      `app/root.tsx should NOT be unused (${frameworkApp.frameworkName} script with hoisted dependency), got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.some((filePath) => filePath === "app/routes/home.tsx"),
+      `app/routes/home.tsx should NOT be unused (${frameworkApp.frameworkName} script with hoisted dependency), got: ${unusedFilePaths}`,
+    );
+  }
+});
+
+test("should treat Inertia app and pages as entry points when Inertia is a dependency", async () => {
+  const result = await scanFixture("framework-gate/with-inertia");
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-gate/with-inertia");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath === "resources/js/orphan.tsx"),
+    `resources/js/orphan.tsx should be unused, got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath === "resources/js/app.tsx"),
+    `resources/js/app.tsx should NOT be unused (Inertia app entry), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath === "resources/js/Pages/Admin/index.tsx"),
+    `resources/js/Pages/Admin/index.tsx should NOT be unused (Inertia page entry), got: ${unusedFilePaths}`,
+  );
+  assert.ok(
+    !unusedFilePaths.some((filePath) => filePath === "resources/js/components/page-title.tsx"),
+    `resources/js/components/page-title.tsx should NOT be unused (imported by Inertia page), got: ${unusedFilePaths}`,
+  );
+});
+
+test("should not activate Redwood page entries for non-router Redwood packages", async () => {
+  const result = await scanFixture("framework-gate/with-redwood-non-router-package");
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-gate/with-redwood-non-router-package");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath === "web/src/pages/home.tsx"),
+    `web/src/pages/home.tsx should be unused without @redwoodjs/router or @redwoodjs/web, got: ${unusedFilePaths}`,
+  );
+});
+
+test("should treat additional dependency-gated framework page conventions as entry points", async () => {
+  const result = await scanFixture("framework-gate/with-additional-framework-pages");
+  const fixtureDir = resolve(FIXTURES_DIR, "framework-gate/with-additional-framework-pages");
+  const unusedFilePaths = orphanPaths(result, fixtureDir);
+  assert.ok(
+    unusedFilePaths.some((filePath) => filePath === "src/orphan.ts"),
+    `src/orphan.ts should be unused, got: ${unusedFilePaths}`,
+  );
+
+  for (const expectedReachableFile of [
+    "web/src/pages/home.tsx",
+    "web/src/layouts/main.tsx",
+    "web/src/Routes.tsx",
+    "src/pages/blog/index.page.tsx",
+    "src/renderer/on-render-client.tsx",
+    "src/routes/dashboard/index.tsx",
+    "src/waku.client.tsx",
+    "module-federation.config.ts",
+    "src/remote-entry.ts",
+  ]) {
+    assert.ok(
+      !unusedFilePaths.some((filePath) => filePath === expectedReachableFile),
+      `${expectedReachableFile} should NOT be unused (framework entry convention), got: ${unusedFilePaths}`,
+    );
+  }
 });
 
 describe("subproject-workspace", () => {
