@@ -1,5 +1,14 @@
 # deslop-cli
 
+## 0.0.16
+
+### Patch Changes
+
+- [#21](https://github.com/millionco/deslop-js/pull/21) [`696b690`](https://github.com/millionco/deslop-js/commit/696b690408a392cdbf3f76daf50949710e4c2ed6) Thanks [@aidenybai](https://github.com/aidenybai)! - Normalize collected source paths, analyzer path sets, and graph module paths to POSIX separators so Windows resolver and glob paths remain in the same import graph key space. This prevents reachable files and re-exported symbols from being dropped during dead-code analysis on Windows.
+
+- Updated dependencies [[`696b690`](https://github.com/millionco/deslop-js/commit/696b690408a392cdbf3f76daf50949710e4c2ed6)]:
+  - deslop-js@0.0.16
+
 ## 0.0.15
 
 ### Patch Changes
