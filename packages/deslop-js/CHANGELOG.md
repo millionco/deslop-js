@@ -1,5 +1,11 @@
 # deslop-js
 
+## 0.0.18
+
+### Patch Changes
+
+- [#26](https://github.com/millionco/deslop-js/pull/26) [`18dbfa8`](https://github.com/millionco/deslop-js/commit/18dbfa8ff174858a4f85c82397126ec24b05cf0f) Thanks [@devin-ai-integration](https://github.com/apps/devin-ai-integration)! - Parallelize file parsing with worker threads for projects with 50+ files, using greedy load-balanced concurrency (auto-detected CPU cores, clamped to [1, 16]). Falls back to sequential parsing on small projects or worker failure.
+
 ## 0.0.17
 
 ### Patch Changes
