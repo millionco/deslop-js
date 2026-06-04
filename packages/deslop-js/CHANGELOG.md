@@ -1,5 +1,11 @@
 # deslop-js
 
+## 0.0.19
+
+### Patch Changes
+
+- [#25](https://github.com/millionco/deslop-js/pull/25) [`96a2311`](https://github.com/millionco/deslop-js/commit/96a23119bcaf6aa36b18ef155991514159bd5c8b) Thanks [@barclayd](https://github.com/barclayd)! - Astro's live content collections config (`src/live.config.ts`) is now recognized as an always-used entry point, matching the existing `src/content.config.ts` handling. Previously the file — and every module reachable only through it (live collection loaders, schemas, CMS clients) — was reported as `unused-file`, since Astro loads it by filename convention with no import statement anywhere in the project.
+
 ## 0.0.18
 
 ### Patch Changes
