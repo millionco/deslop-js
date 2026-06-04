@@ -40,6 +40,16 @@ jobs:
 
       - name: Build
         run: pnpm build
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Build (cross-platform)
+        if: matrix.os != 'ubuntu-latest'
+        run: pnpm turbo run build --filter=deslop-js --filter=deslop-cli
+
+      - name: Test
+        run: pnpm turbo run test --filter=deslop-js
+        if: matrix.os != 'ubuntu-latest'
 
       - name: Test
         run: pnpm test
+        if: matrix.os == 'ubuntu-latest'
