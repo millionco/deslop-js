@@ -7,6 +7,7 @@ import { extractPackageName } from "../utils/package-name.js";
 import { collectOverrideMappingsFromRecord } from "../utils/collect-override-mappings-from-record.js";
 import { collectPnpmWorkspaceOverrideMappings } from "../utils/parse-pnpm-workspace-overrides.js";
 import { matchesPackageImportReference } from "../utils/matches-package-import-reference.js";
+import { matchesPackageTokenReference } from "../utils/matches-package-token-reference.js";
 import { findMonorepoRoot } from "../utils/find-monorepo-root.js";
 
 interface OverrideMapping {
@@ -462,6 +463,17 @@ const collectScriptReferencedPackages = (
         binToPackage,
       );
       for (const packageName of commandReferenced) referenced.add(packageName);
+
+      // A dep can appear in a script as a flag argument rather than the
+      // leading binary (`jest --testResultsProcessor jest-sonar-reporter`),
+      // which the binary matcher above skips. Treat any declared package named
+      // as a standalone token anywhere in the command as referenced.
+      for (const declaredName of declaredNames) {
+        if (referenced.has(declaredName)) continue;
+        if (matchesPackageTokenReference(scriptCommand, declaredName)) {
+          referenced.add(declaredName);
+        }
+      }
     }
   } catch {
     return referenced;

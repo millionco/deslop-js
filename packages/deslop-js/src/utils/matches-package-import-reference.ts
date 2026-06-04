@@ -1,4 +1,4 @@
-const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+import { escapeRegExp } from "./escape-reg-exp.js";
 
 export const matchesPackageImportReference = (content: string, packageName: string): boolean => {
   const escapedPackageName = escapeRegExp(packageName);

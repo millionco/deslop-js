@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { collectOverrideMappingsFromRecord } from "../src/utils/collect-override-mappings-from-record.js";
 import { collectPnpmWorkspaceOverrideMappings } from "../src/utils/parse-pnpm-workspace-overrides.js";
 import { matchesPackageImportReference } from "../src/utils/matches-package-import-reference.js";
+import { matchesPackageTokenReference } from "../src/utils/matches-package-token-reference.js";
 import { resolve } from "node:path";
 
 describe("collectOverrideMappingsFromRecord", () => {
@@ -57,6 +58,37 @@ describe("matchesPackageImportReference", () => {
         "flag-icons",
       ),
       true,
+    );
+  });
+});
+
+describe("matchesPackageTokenReference", () => {
+  it("should match a dep passed as a flag argument", () => {
+    assert.equal(
+      matchesPackageTokenReference(
+        "jest --coverage --testResultsProcessor jest-sonar-reporter",
+        "jest-sonar-reporter",
+      ),
+      true,
+    );
+  });
+
+  it("should match a dep passed as an `=`-joined flag value", () => {
+    assert.equal(
+      matchesPackageTokenReference("jest --reporters=jest-junit", "jest-junit"),
+      true,
+    );
+  });
+
+  it("should match a scoped dep and a dep with a /subpath", () => {
+    assert.equal(matchesPackageTokenReference("node @org/cli build", "@org/cli"), true);
+    assert.equal(matchesPackageTokenReference("node some-pkg/register app.js", "some-pkg"), true);
+  });
+
+  it("should not match a token that merely contains the name", () => {
+    assert.equal(
+      matchesPackageTokenReference("run my-jest-sonar-reporter-extra", "jest-sonar-reporter"),
+      false,
     );
   });
 });
