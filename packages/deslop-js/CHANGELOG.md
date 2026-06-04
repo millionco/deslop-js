@@ -1,5 +1,11 @@
 # deslop-js
 
+## 0.0.17
+
+### Patch Changes
+
+- [#23](https://github.com/millionco/deslop-js/pull/23) [`d83dc37`](https://github.com/millionco/deslop-js/commit/d83dc373a8ef2f8d22ffbb430ff9234cfef23e2a) Thanks [@aidenybai](https://github.com/aidenybai)! - `detectStalePackages` no longer reports a devDependency as unused when it's referenced in a `package.json` script as a flag argument rather than the leading command — e.g. `jest --testResultsProcessor jest-sonar-reporter` or `--reporters=jest-junit`. The script scan previously matched a package only as the command/binary token; it now also treats any declared package named as a standalone token anywhere in the command (including `@scope/pkg` and `pkg/subpath`) as referenced, while still ignoring tokens that merely contain the name as a substring.
+
 ## 0.0.16
 
 ### Patch Changes
