@@ -25,6 +25,7 @@ import {
 import { collectSourceFiles, resolveEntries, getFrameworkExclusions } from "./collect/entries.js";
 import { resolveWorkspaces } from "./collect/workspaces.js";
 import { parseSourceFile } from "./collect/parse.js";
+import { parseFilesInParallel } from "./collect/parallel-parse.js";
 import { createResolver } from "./resolver/resolve.js";
 import { buildDependencyGraph, type ModuleLinkInput } from "./linker/build.js";
 import { traceReachability } from "./linker/reachability.js";
@@ -427,8 +428,24 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
       : config;
 
   let files: Awaited<ReturnType<typeof collectSourceFiles>>;
+  let discoveredEntries: Awaited<ReturnType<typeof resolveEntries>>;
   try {
-    files = await collectSourceFiles(configWithExclusions);
+    const [collectedFiles, resolvedEntries] = await Promise.all([
+      collectSourceFiles(configWithExclusions),
+      resolveEntries(configWithExclusions).catch((entriesError: unknown) => {
+        setupErrors.push(
+          new WorkspaceError({
+            code: "workspace-discovery-failed",
+            message: "resolveEntries failed — defaulting to empty entry set",
+            path: config.rootDir,
+            detail: describeUnknownError(entriesError),
+          }),
+        );
+        return { productionEntries: [] as string[], testEntries: [] as string[], alwaysUsedFiles: [] as string[] };
+      }),
+    ]);
+    files = collectedFiles;
+    discoveredEntries = resolvedEntries;
   } catch (collectError) {
     setupErrors.push(
       new WorkspaceError({
@@ -440,21 +457,6 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
       }),
     );
     return buildEmptyScanResult(setupErrors, performance.now() - pipelineStartTime);
-  }
-
-  let discoveredEntries: Awaited<ReturnType<typeof resolveEntries>>;
-  try {
-    discoveredEntries = await resolveEntries(configWithExclusions);
-  } catch (entriesError) {
-    setupErrors.push(
-      new WorkspaceError({
-        code: "workspace-discovery-failed",
-        message: "resolveEntries failed — defaulting to empty entry set",
-        path: config.rootDir,
-        detail: describeUnknownError(entriesError),
-      }),
-    );
-    discoveredEntries = { productionEntries: [], testEntries: [], alwaysUsedFiles: [] };
   }
   const productionEntrySet = new Set(discoveredEntries.productionEntries);
   const testEntrySet = new Set(discoveredEntries.testEntries);
@@ -487,10 +489,13 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
     );
     return buildEmptyScanResult(setupErrors, performance.now() - pipelineStartTime);
   }
+  const parsedModules = await parseFilesInParallel(files);
+
   const graphInputs: ModuleLinkInput[] = [];
 
-  for (const file of files) {
-    const parsedModule = parseSourceFile(file.path);
+  for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+    const file = files[fileIndex];
+    const parsedModule = parsedModules[fileIndex];
     const resolvedImportMap = new Map<string, ReturnType<typeof moduleResolver.resolveModule>>();
 
     const safeResolveImport = (
