@@ -2524,6 +2524,7 @@ const FRAMEWORK_PATTERNS: ToolingPluginDefinition[] = [
       "astro.config.{ts,js,mjs,cjs}",
       "src/content/config.{js,ts,mjs,mts,cjs,cts}",
       "src/content.config.{js,ts,mjs,mts,cjs,cts}",
+      "src/live.config.{js,ts,mjs,mts,cjs,cts}",
     ],
   },
   {
