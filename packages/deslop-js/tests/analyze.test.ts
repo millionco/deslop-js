@@ -3922,6 +3922,29 @@ describe("astro-content", () => {
   });
 });
 
+describe("astro-live-config", () => {
+  it("should treat astro live collections config as always-used and trace its imports", async () => {
+    const result = await scanFixture("astro-live-config");
+    const fixtureDir = resolve(FIXTURES_DIR, "astro-live-config");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+
+    assert.ok(
+      !unusedFilePaths.includes("src/live.config.ts"),
+      `src/live.config.ts should be always-used (astro live collections config), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      !unusedFilePaths.includes("src/loaders/wordpress-loader.ts"),
+      `src/loaders/wordpress-loader.ts should be reachable (imported by live.config.ts), got unused: ${unusedFilePaths}`,
+    );
+
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts should be unused (astro-live-config), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("gatsby-app", () => {
   it("should flag unused components but not pages, templates, or api routes", async () => {
     const result = await scanFixture("gatsby-app");
