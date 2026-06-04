@@ -8,11 +8,7 @@ interface ParseTaskMessage {
   readonly fileIndex: number;
 }
 
-interface ShutdownMessage {
-  readonly type: "shutdown";
-}
-
-type WorkerMessage = ParseTaskMessage | ShutdownMessage;
+type WorkerMessage = ParseTaskMessage;
 
 interface SerializedParsedSource {
   readonly imports: ReturnType<typeof parseSourceFile>["imports"];
@@ -48,10 +44,6 @@ interface ParseErrorMessage {
 const port = parentPort!;
 
 port.on("message", (message: WorkerMessage) => {
-  if (message.type === "shutdown") {
-    process.exit(0);
-  }
-
   if (message.type === "parse") {
     try {
       const parsed = parseSourceFile(message.filePath);

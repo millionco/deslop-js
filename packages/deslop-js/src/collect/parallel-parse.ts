@@ -5,7 +5,7 @@ import type { ParsedSource } from "./parse.js";
 import { parseSourceFile } from "./parse.js";
 import { DeslopError, type DeslopErrorJson, ParseError } from "../errors.js";
 import { PARALLEL_PARSE_FILE_THRESHOLD } from "../constants.js";
-import { resolveAvailableConcurrency } from "../utils/map-with-concurrency.js";
+import { resolveAvailableConcurrency } from "../utils/resolve-available-concurrency.js";
 
 interface ParseResultMessage {
   readonly type: "result";
@@ -181,7 +181,7 @@ const parseFilesWithWorkerPool = async (
 
     const cleanup = (): void => {
       for (const worker of workers) {
-        worker.postMessage({ type: "shutdown" });
+        worker.terminate();
       }
     };
 
