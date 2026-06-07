@@ -104,6 +104,13 @@ export interface ResolvedImport {
   packageName: string | undefined;
 }
 
+interface CompiledPathMapping {
+  prefix: string;
+  suffix: string;
+  isWildcard: boolean;
+  targets: string[];
+}
+
 const EXTENSION_ALIAS = {
   ".js": [".ts", ".tsx", ".js", ".jsx"],
   ".jsx": [".tsx", ".jsx"],
@@ -728,6 +735,80 @@ export const createResolver = (
     return undefined;
   };
 
+  const compiledConfigPaths: CompiledPathMapping[] = [];
+  if (config.paths) {
+    const absoluteRootDir = resolve(config.rootDir);
+    for (const [pattern, targets] of Object.entries(config.paths)) {
+      if (!Array.isArray(targets)) continue;
+      const wildcardIndex = pattern.indexOf("*");
+      if (wildcardIndex === -1) {
+        compiledConfigPaths.push({
+          prefix: pattern,
+          suffix: "",
+          isWildcard: false,
+          targets: targets.map((target) => resolve(absoluteRootDir, target)),
+        });
+      } else {
+        compiledConfigPaths.push({
+          prefix: pattern.slice(0, wildcardIndex),
+          suffix: pattern.slice(wildcardIndex + 1),
+          isWildcard: true,
+          targets: targets.map((target) => resolve(absoluteRootDir, target)),
+        });
+      }
+    }
+  }
+
+  const tryResolveViaConfigPaths = (specifier: string): string | undefined => {
+    if (compiledConfigPaths.length === 0) return undefined;
+
+    for (const mapping of compiledConfigPaths) {
+      if (!mapping.isWildcard) {
+        if (specifier !== mapping.prefix) continue;
+        for (const target of mapping.targets) {
+          const withoutWildcard = target.replace("*", "");
+          if (existsAsFile(withoutWildcard)) return withoutWildcard;
+          for (const extension of RESOLVER_EXTENSIONS) {
+            if (cachedExistsSync(withoutWildcard + extension)) return withoutWildcard + extension;
+          }
+          const indexCandidate = join(withoutWildcard, "index");
+          for (const extension of RESOLVER_EXTENSIONS) {
+            if (cachedExistsSync(indexCandidate + extension)) return indexCandidate + extension;
+          }
+        }
+        continue;
+      }
+
+      if (!specifier.startsWith(mapping.prefix)) continue;
+      if (mapping.suffix && !specifier.endsWith(mapping.suffix)) continue;
+
+      const matchedWildcard = specifier.slice(
+        mapping.prefix.length,
+        mapping.suffix ? specifier.length - mapping.suffix.length : undefined,
+      );
+
+      for (const target of mapping.targets) {
+        const resolvedTarget = target.replace("*", matchedWildcard);
+        if (existsAsFile(resolvedTarget)) return resolvedTarget;
+        for (const extension of RESOLVER_EXTENSIONS) {
+          if (cachedExistsSync(resolvedTarget + extension)) return resolvedTarget + extension;
+        }
+        const strippedTarget = resolvedTarget.replace(/\.[cm]?js$/, "");
+        if (strippedTarget !== resolvedTarget) {
+          for (const extension of RESOLVER_EXTENSIONS) {
+            if (cachedExistsSync(strippedTarget + extension)) return strippedTarget + extension;
+          }
+        }
+        const indexCandidate = join(resolvedTarget, "index");
+        for (const extension of RESOLVER_EXTENSIONS) {
+          if (cachedExistsSync(indexCandidate + extension)) return indexCandidate + extension;
+        }
+      }
+    }
+
+    return undefined;
+  };
+
   const resolveModule = (specifier: string, fromFile: string): ResolvedImport => {
     const queryIndex = specifier.indexOf("?");
     const cleanedSpecifier = queryIndex !== -1 ? specifier.slice(0, queryIndex) : specifier;
@@ -955,6 +1036,17 @@ export const createResolver = (
     if (pathAliasResolved) {
       const resolvedResult: ResolvedImport = {
         resolvedPath: pathAliasResolved,
+        isExternal: false,
+        packageName: undefined,
+      };
+      resolveResultCache.set(cacheKey, resolvedResult);
+      return resolvedResult;
+    }
+
+    const configPathResolved = tryResolveViaConfigPaths(cleanedSpecifier);
+    if (configPathResolved) {
+      const resolvedResult: ResolvedImport = {
+        resolvedPath: configPathResolved,
         isExternal: false,
         packageName: undefined,
       };

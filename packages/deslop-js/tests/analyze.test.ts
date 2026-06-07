@@ -2372,6 +2372,43 @@ test("should resolve @/ imports via Next.js default path alias when tsconfig is 
   );
 });
 
+describe("workspace-path-alias", () => {
+  it("should resolve imports via config paths when tsconfig has matching aliases", async () => {
+    const result = await scanFixture("workspace-path-alias");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-path-alias");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/core/utils.ts"),
+      `utils.ts should NOT be unused (imported via @project/core/utils), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should resolve imports via config paths option without tsconfig", async () => {
+    const result = await scanFixture("workspace-path-alias", {
+      paths: { "@project/core/*": ["packages/core/*"] },
+      tsConfigPath: "__nonexistent__",
+    });
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-path-alias");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/core/utils.ts"),
+      `utils.ts should NOT be unused (resolved via config paths), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan files even with config paths", async () => {
+    const result = await scanFixture("workspace-path-alias", {
+      paths: { "@project/core/*": ["packages/core/*"] },
+    });
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-path-alias");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("packages/core/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("docusaurus-docs", () => {
   it("should exclude docs/ and blog/ content directories from file discovery", async () => {
     const result = await scanFixture("docusaurus-docs");
