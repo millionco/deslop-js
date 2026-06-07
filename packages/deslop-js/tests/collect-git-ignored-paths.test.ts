@@ -5,8 +5,12 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { collectGitIgnoredPaths } from "../src/utils/collect-git-ignored-paths.js";
+import { toPosixPath } from "../src/utils/to-posix-path.js";
 
 const createTempProject = (): string => mkdtempSync(join(tmpdir(), "deslop-gitignore-"));
+
+const candidatePath = (projectDir: string, relativePath: string): string =>
+  toPosixPath(resolve(projectDir, relativePath));
 
 describe("collectGitIgnoredPaths", () => {
   it("returns only the gitignored subset of the given paths inside a git work tree", () => {
@@ -18,8 +22,8 @@ describe("collectGitIgnoredPaths", () => {
       writeFileSync(join(projectDir, "generated", "output.ts"), "export const generated = 1;\n");
       writeFileSync(join(projectDir, "index.ts"), "export const entry = 2;\n");
 
-      const ignoredPath = resolve(projectDir, "generated/output.ts");
-      const keptPath = resolve(projectDir, "index.ts");
+      const ignoredPath = candidatePath(projectDir, "generated/output.ts");
+      const keptPath = candidatePath(projectDir, "index.ts");
       const result = collectGitIgnoredPaths(projectDir, [ignoredPath, keptPath]);
 
       assert.equal(result.gitUnavailable, false);
@@ -34,7 +38,7 @@ describe("collectGitIgnoredPaths", () => {
     const projectDir = createTempProject();
     try {
       writeFileSync(join(projectDir, "index.ts"), "export const entry = 2;\n");
-      const result = collectGitIgnoredPaths(projectDir, [resolve(projectDir, "index.ts")]);
+      const result = collectGitIgnoredPaths(projectDir, [candidatePath(projectDir, "index.ts")]);
 
       assert.equal(result.gitUnavailable, false);
       assert.equal(result.ignoredPaths.size, 0);
