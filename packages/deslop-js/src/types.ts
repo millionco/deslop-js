@@ -132,6 +132,7 @@ export interface SourceModule {
   isReachable: boolean;
   isDeclarationFile: boolean;
   isConfigFile: boolean;
+  isGitIgnored: boolean;
 }
 
 export interface ReExportMapping {

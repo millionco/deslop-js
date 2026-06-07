@@ -101,6 +101,7 @@ describe("buildDependencyGraph cross-platform path keying", () => {
       ]),
       isEntryPoint: true,
       isTestEntry: false,
+      isGitIgnored: false,
     };
     const target: ModuleLinkInput = {
       fileId: { index: 1, path: "C:/project/src/app.ts" },
@@ -108,6 +109,7 @@ describe("buildDependencyGraph cross-platform path keying", () => {
       resolvedImports: new Map<string, ResolvedImport>(),
       isEntryPoint: false,
       isTestEntry: false,
+      isGitIgnored: false,
     };
 
     const graph = buildDependencyGraph([entry, target]);
@@ -149,6 +151,7 @@ describe("buildDependencyGraph cross-platform path keying", () => {
       ]),
       isEntryPoint: true,
       isTestEntry: false,
+      isGitIgnored: false,
     };
     const barrel: ModuleLinkInput = {
       fileId: { index: 1, path: "C:\\project\\src\\barrel.ts" },
@@ -169,6 +172,7 @@ describe("buildDependencyGraph cross-platform path keying", () => {
       ]),
       isEntryPoint: false,
       isTestEntry: false,
+      isGitIgnored: false,
     };
     const target: ModuleLinkInput = {
       fileId: { index: 2, path: "C:\\project\\src\\foo.ts" },
@@ -176,6 +180,7 @@ describe("buildDependencyGraph cross-platform path keying", () => {
       resolvedImports: new Map<string, ResolvedImport>(),
       isEntryPoint: false,
       isTestEntry: false,
+      isGitIgnored: false,
     };
 
     const graph = buildDependencyGraph([entry, barrel, target]);

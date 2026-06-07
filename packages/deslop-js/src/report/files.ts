@@ -55,6 +55,7 @@ export const detectOrphanFiles = (graph: DependencyGraph): UnusedFile[] => {
     if (module.isEntryPoint) continue;
     if (module.isDeclarationFile) continue;
     if (module.isConfigFile) continue;
+    if (module.isGitIgnored) continue;
     if (hasExcludedExtension(module.fileId.path)) continue;
     if (isExcludedByPattern(module.fileId.path)) continue;
     if (isOpaqueToAnalysis(module)) continue;
