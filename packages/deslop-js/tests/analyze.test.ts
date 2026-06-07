@@ -2384,11 +2384,13 @@ describe("workspace-path-alias", () => {
   });
 
   it("should resolve imports via config paths option without tsconfig", async () => {
-    const result = await scanFixture("workspace-path-alias", {
+    const result = await scanFixture("workspace-path-alias-no-tsconfig", {
       paths: { "@project/core/*": ["packages/core/*"] },
-      tsConfigPath: "__nonexistent__",
     });
-    const fixtureDir = resolve(FIXTURES_DIR, "workspace-path-alias");
+    const fixtureDir = resolve(
+      FIXTURES_DIR,
+      "workspace-path-alias-no-tsconfig",
+    );
     const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("packages/core/utils.ts"),
