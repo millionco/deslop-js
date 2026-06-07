@@ -1,5 +1,18 @@
 # deslop-cli
 
+## 0.0.21
+
+### Patch Changes
+
+- [#32](https://github.com/millionco/deslop-js/pull/32) [`c666dbf`](https://github.com/millionco/deslop-js/commit/c666dbfcfc985dd23d4d2718a3a9480b300d543b) Thanks [@devin-ai-integration](https://github.com/apps/devin-ai-integration)! - Auto-resolve path aliases by default and add a `paths` config option.
+
+  `deslop` now infers cross-workspace `@scope/<dir>` imports from the monorepo layout (so files imported via an alias whose package name or tsconfig didn't cover it are no longer reported as unused), and reads alias mappings from Vite (`resolve.alias`), Jest (`moduleNameMapper`), and Babel (`module-resolver`) configs in addition to the existing tsconfig `paths` and webpack aliases. For anything not auto-detected, the new `paths` option (`--paths "@app/*=src/*"` on the CLI) declares explicit mappings.
+
+- [#32](https://github.com/millionco/deslop-js/pull/32) [`c666dbf`](https://github.com/millionco/deslop-js/commit/c666dbfcfc985dd23d4d2718a3a9480b300d543b) Thanks [@devin-ai-integration](https://github.com/apps/devin-ai-integration)! - Improve path-alias resolution accuracy. When multiple `paths` patterns match an import, the most specific one now wins (e.g. `@/components/*` is preferred over `@/*`), matching TypeScript's own resolution. Import specifiers are also sanitized before resolution — webpack inline-loader prefixes (`raw-loader!./x`), `?query` strings, and `#fragment` hashes are stripped (while Node.js `#subpath` imports are preserved) so their targets are no longer mis-reported as unused.
+
+- Updated dependencies [[`c666dbf`](https://github.com/millionco/deslop-js/commit/c666dbfcfc985dd23d4d2718a3a9480b300d543b), [`c666dbf`](https://github.com/millionco/deslop-js/commit/c666dbfcfc985dd23d4d2718a3a9480b300d543b)]:
+  - deslop-js@0.0.21
+
 ## 0.0.20
 
 ### Patch Changes
