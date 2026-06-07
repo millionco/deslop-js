@@ -1,6 +1,6 @@
 ---
-"deslop-js": minor
-"deslop-cli": minor
+"deslop-js": patch
+"deslop-cli": patch
 ---
 
 Auto-resolve path aliases by default and add a `paths` config option.
