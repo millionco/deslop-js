@@ -20,11 +20,12 @@ export interface GitIgnoredPathsResult {
  * files deslop reports, otherwise the same project yields different findings on
  * different machines.
  *
- * `gitUnavailable` is true only when the `git` binary itself could not be run
- * (missing, or output past `maxBuffer`). Every failure still degrades to an empty
- * set so callers never crash; a non-git directory (status 128) is normal and is
- * reported as available-but-empty rather than a failure. Exit status 1 means
- * "no matches", not an error.
+ * `gitUnavailable` is true only when the `git` binary could not be launched
+ * (e.g. not installed → `ENOENT`). A non-git directory is normal: git exits 128
+ * and often closes stdin before reading it, which surfaces as an `EPIPE` on the
+ * input write — that is reported as available-but-empty, not a failure. Every
+ * failure still degrades to an empty set so callers never crash. Exit status 1
+ * means "no matches", not an error.
  */
 export const collectGitIgnoredPaths = (
   rootDirectory: string,
@@ -44,7 +45,8 @@ export const collectGitIgnoredPaths = (
   );
 
   if (result.error) {
-    return { ignoredPaths: new Set(), gitUnavailable: true };
+    const gitBinaryMissing = "code" in result.error && result.error.code === "ENOENT";
+    return { ignoredPaths: new Set(), gitUnavailable: gitBinaryMissing };
   }
 
   if (result.status === null || result.status > 1) {
