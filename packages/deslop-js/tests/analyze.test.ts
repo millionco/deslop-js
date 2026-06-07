@@ -80,6 +80,22 @@ describe("simple-app", () => {
   });
 });
 
+describe("gitignore-app", () => {
+  it("should exclude gitignored files from unused-file results", async () => {
+    const result = await scanFixture("gitignore-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "gitignore-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.some((filePath) => filePath.includes("generated")),
+      `generated/ files should be excluded by .gitignore, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("dependency-tooling", () => {
   it("should keep peer dependencies, script binaries, overrides, and Nx project refs used", async () => {
     const result = await scanFixture("dependency-tooling");

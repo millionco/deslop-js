@@ -26,6 +26,7 @@ import {
   resolveEntryWithExtensions,
 } from "../utils/resolve-entry-with-extensions.js";
 import { toPosixPath } from "../utils/to-posix-path.js";
+import { collectGitIgnoredPaths } from "../utils/collect-git-ignored-paths.js";
 
 export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFile[]> => {
   const extensions =
@@ -62,7 +63,11 @@ export const collectSourceFiles = async (config: DeslopConfig): Promise<SourceFi
 
   const files = [...new Set([...mainFiles, ...hiddenFiles].map(toPosixPath))];
 
-  const sortedFiles = files.sort();
+  const gitIgnoredPaths = collectGitIgnoredPaths(absoluteRoot, files);
+  const filteredFiles =
+    gitIgnoredPaths.size > 0 ? files.filter((filePath) => !gitIgnoredPaths.has(filePath)) : files;
+
+  const sortedFiles = filteredFiles.sort();
 
   return sortedFiles.map((filePath, fileIndex) => ({
     index: fileIndex,
