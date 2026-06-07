@@ -81,17 +81,30 @@ describe("simple-app", () => {
 });
 
 describe("gitignore-app", () => {
-  it("should exclude gitignored files from unused-file results", async () => {
+  it("suppresses reports for gitignored files without dropping their import edges", async () => {
     const result = await scanFixture("gitignore-app");
     const fixtureDir = resolve(FIXTURES_DIR, "gitignore-app");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
+
     assert.ok(
       unusedFilePaths.includes("src/orphan.ts"),
-      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+      `genuine orphan should still be reported, got: ${unusedFilePaths}`,
     );
     assert.ok(
       !unusedFilePaths.some((filePath) => filePath.includes("generated")),
-      `generated/ files should be excluded by .gitignore, got: ${unusedFilePaths}`,
+      `gitignored files must not be reported as unused, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/home-route.ts"),
+      `a file reachable only through a gitignored importer must stay used (no cascade), got: ${unusedFilePaths}`,
+    );
+
+    const unusedExportPaths = result.unusedExports.map((unusedExport) =>
+      relative(fixtureDir, unusedExport.path),
+    );
+    assert.ok(
+      !unusedExportPaths.some((filePath) => filePath.includes("generated")),
+      `exports inside gitignored files must not be reported, got: ${unusedExportPaths}`,
     );
   });
 });

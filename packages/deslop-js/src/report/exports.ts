@@ -14,6 +14,7 @@ export const detectDeadExports = (graph: DependencyGraph, config: DeslopConfig):
   for (const module of graph.modules) {
     if (!module.isReachable) continue;
     if (module.isDeclarationFile) continue;
+    if (module.isGitIgnored) continue;
     if (module.isEntryPoint && !config.includeEntryExports) continue;
 
     const defaultExportLinkedNames = new Set<string>();

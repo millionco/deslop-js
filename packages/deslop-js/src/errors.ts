@@ -17,6 +17,7 @@ export type DeslopErrorCode =
   | "package-json-not-found"
   | "package-json-parse-failed"
   | "workspace-discovery-failed"
+  | "gitignore-check-failed"
   | "resolver-init-failed"
   | "monorepo-discovery-failed"
   | "detector-failed"
@@ -185,7 +186,8 @@ export class WorkspaceError extends DeslopError {
         | "workspace-discovery-failed"
         | "monorepo-discovery-failed"
         | "package-json-not-found"
-        | "package-json-parse-failed";
+        | "package-json-parse-failed"
+        | "gitignore-check-failed";
     },
   ) {
     super({ ...input, module: "collect" });

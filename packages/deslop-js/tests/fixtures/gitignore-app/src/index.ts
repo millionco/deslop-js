@@ -1,1 +1,3 @@
-export const main = "entry";
+import { routeTree } from "../generated/routes";
+
+export const main = routeTree;

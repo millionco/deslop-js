@@ -19,6 +19,7 @@ export interface ModuleLinkInput {
   resolvedImports: Map<string, ResolvedImport>;
   isEntryPoint: boolean;
   isTestEntry: boolean;
+  isGitIgnored: boolean;
 }
 
 export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph => {
@@ -59,6 +60,7 @@ export const buildDependencyGraph = (inputs: ModuleLinkInput[]): DependencyGraph
       input.fileId.path.endsWith(".d.mts") ||
       input.fileId.path.endsWith(".d.cts"),
     isConfigFile: isConfigFile(input.fileId.path),
+    isGitIgnored: input.isGitIgnored,
   }));
 
   const edges: Edge[] = [];

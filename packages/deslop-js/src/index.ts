@@ -32,6 +32,7 @@ import { traceReachability } from "./linker/reachability.js";
 import { resolveReExportChains } from "./linker/re-exports.js";
 import { generateReport } from "./report/generate.js";
 import { findMonorepoRoot } from "./utils/find-monorepo-root.js";
+import { collectGitIgnoredPaths } from "./utils/collect-git-ignored-paths.js";
 
 const STYLE_EXTENSIONS = [".css", ".scss"];
 
@@ -461,6 +462,21 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
   const productionEntrySet = new Set(discoveredEntries.productionEntries);
   const testEntrySet = new Set(discoveredEntries.testEntries);
   const alwaysUsedFileSet = new Set(discoveredEntries.alwaysUsedFiles);
+  const gitIgnoreResult = collectGitIgnoredPaths(
+    resolve(config.rootDir),
+    files.map((file) => file.path),
+  );
+  const gitIgnoredFileSet = gitIgnoreResult.ignoredPaths;
+  if (gitIgnoreResult.gitUnavailable) {
+    setupErrors.push(
+      new WorkspaceError({
+        code: "gitignore-check-failed",
+        severity: "info",
+        message: "git unavailable — .gitignore filtering skipped",
+        path: config.rootDir,
+      }),
+    );
+  }
 
   let hasReactNative = false;
   try {
@@ -573,6 +589,7 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
       isEntryPoint:
         isAlwaysUsed || productionEntrySet.has(file.path) || testEntrySet.has(file.path),
       isTestEntry: testEntrySet.has(file.path),
+      isGitIgnored: gitIgnoredFileSet.has(file.path),
     });
   }
 
@@ -634,6 +651,7 @@ export const analyze = async (config: DeslopConfig): Promise<ScanResult> => {
       resolvedImports: resolvedStyleImportMap,
       isEntryPoint: false,
       isTestEntry: false,
+      isGitIgnored: gitIgnoredFileSet.has(styleFilePath),
     });
     discoveredFilePaths.add(styleFilePath);
     nextFileIndex++;
