@@ -12,6 +12,7 @@ import {
 import { resolveSourcePath } from "./source-path.js";
 import { isPlatformBuiltinOrVirtualSpecifier } from "../utils/is-platform-builtin-or-virtual.js";
 import { toPosixPath } from "../utils/to-posix-path.js";
+import { sanitizeImportSpecifier } from "../utils/sanitize-import-specifier.js";
 
 const fileExistsCache = new Map<string, boolean>();
 const pathExistsCache = new Map<string, boolean>();
@@ -98,11 +99,81 @@ const resolvePathWithExtensionFallback = (candidatePath: string): string => {
   return candidatePath;
 };
 
+const resolveAliasTarget = (target: string): string | undefined => {
+  if (existsAsFile(target)) return target;
+  for (const extension of RESOLVER_EXTENSIONS) {
+    if (cachedExistsSync(target + extension)) return target + extension;
+  }
+  const sourceTarget = target.replace(/\.[cm]?js$/, "");
+  if (sourceTarget !== target) {
+    for (const extension of RESOLVER_EXTENSIONS) {
+      if (cachedExistsSync(sourceTarget + extension)) return sourceTarget + extension;
+    }
+  }
+  const indexCandidate = join(target, "index");
+  for (const extension of RESOLVER_EXTENSIONS) {
+    if (cachedExistsSync(indexCandidate + extension)) return indexCandidate + extension;
+  }
+  return undefined;
+};
+
 export interface ResolvedImport {
   resolvedPath: string | undefined;
   isExternal: boolean;
   packageName: string | undefined;
 }
+
+interface CompiledPathMapping {
+  prefix: string;
+  suffix: string;
+  isWildcard: boolean;
+  targets: string[];
+}
+
+const pathMappingSpecificity = (mapping: CompiledPathMapping): number =>
+  mapping.isWildcard ? mapping.prefix.length + mapping.suffix.length : Number.MAX_SAFE_INTEGER;
+
+const compilePathMappings = (entries: Iterable<[string, string[]]>): CompiledPathMapping[] => {
+  const compiled: CompiledPathMapping[] = [];
+  for (const [pattern, targets] of entries) {
+    const wildcardIndex = pattern.indexOf("*");
+    if (wildcardIndex === -1) {
+      compiled.push({ prefix: pattern, suffix: "", isWildcard: false, targets });
+    } else {
+      compiled.push({
+        prefix: pattern.slice(0, wildcardIndex),
+        suffix: pattern.slice(wildcardIndex + 1),
+        isWildcard: true,
+        targets,
+      });
+    }
+  }
+  compiled.sort((left, right) => pathMappingSpecificity(right) - pathMappingSpecificity(left));
+  return compiled;
+};
+
+const matchCompiledMapping = (
+  specifier: string,
+  mappings: CompiledPathMapping[],
+): string | undefined => {
+  for (const mapping of mappings) {
+    let matchedWildcard = "";
+    if (mapping.isWildcard) {
+      if (!specifier.startsWith(mapping.prefix) || !specifier.endsWith(mapping.suffix)) continue;
+      matchedWildcard = specifier.slice(
+        mapping.prefix.length,
+        specifier.length - mapping.suffix.length,
+      );
+    } else if (specifier !== mapping.prefix) {
+      continue;
+    }
+    for (const target of mapping.targets) {
+      const resolved = resolveAliasTarget(target.replace("*", matchedWildcard));
+      if (resolved) return resolved;
+    }
+  }
+  return undefined;
+};
 
 const EXTENSION_ALIAS = {
   ".js": [".ts", ".tsx", ".js", ".jsx"],
@@ -118,15 +189,15 @@ const COMMON_RESOLVER_OPTIONS = {
   extensionAlias: EXTENSION_ALIAS,
 };
 
-interface WebpackAlias {
+interface BundlerAlias {
   name: string;
   targetDirectory: string;
   isExact: boolean;
 }
 
-interface WebpackResolverConfig {
+interface BundlerAliasConfig {
   scopeDirectory: string;
-  aliases: WebpackAlias[];
+  aliases: BundlerAlias[];
   moduleDirectories: string[];
 }
 
@@ -137,13 +208,34 @@ const WEBPACK_CONFIG_GLOBS = [
   "**/webpack*.config*.babel.{js,ts}",
 ];
 
-const WEBPACK_ALIAS_BLOCK_PATTERN = /alias\s*:\s*\{([\s\S]*?)\}/g;
-const WEBPACK_ALIAS_ENTRY_PATTERN =
-  /["']?([@\w$./-]+)["']?\s*:\s*(?:path\.(?:resolve|join)\(\s*__dirname\s*,\s*((?:["'][^"']+["']\s*,?\s*)+)\)|["']([^"']+)["'])/g;
+const VITE_CONFIG_GLOBS = [
+  "vite.config.{js,ts,mjs,cjs,mts,cts}",
+  "vitest.config.{js,ts,mjs,cjs,mts,cts}",
+  "**/vite.config.{js,ts,mjs,cjs,mts,cts}",
+  "**/vitest.config.{js,ts,mjs,cjs,mts,cts}",
+];
+
+const BABEL_CONFIG_GLOBS = [
+  "babel.config.{js,cjs,mjs,json}",
+  ".babelrc",
+  ".babelrc.{js,cjs,mjs,json}",
+  "**/babel.config.{js,cjs,mjs,json}",
+];
+
+const JEST_CONFIG_GLOBS = [
+  "jest.config.{js,ts,mjs,cjs,json}",
+  "**/jest.config.{js,ts,mjs,cjs,json}",
+];
+
+const ALIAS_BLOCK_PATTERN = /alias\s*:\s*\{([\s\S]*?)\}/g;
+const ALIAS_ENTRY_PATTERN =
+  /["']?([@\w$./-]+)["']?\s*:\s*(?:path\.(?:resolve|join)\(\s*__dirname\s*,\s*((?:["'][^"']+["']\s*,?\s*)+)\)|fileURLToPath\(\s*new URL\(\s*["']([^"']+)["']\s*,\s*import\.meta\.url\s*\)\s*\)|["']([^"']+)["'])/g;
+const JEST_MODULE_NAME_MAPPER_BLOCK_PATTERN = /moduleNameMapper\s*:\s*\{([\s\S]*?)\}/g;
+const JEST_MODULE_NAME_MAPPER_ENTRY_PATTERN = /["']([^"']+)["']\s*:\s*["']([^"']+)["']/g;
 const WEBPACK_MODULES_BLOCK_PATTERN = /modules\s*:\s*\[([\s\S]*?)\]/g;
 const WEBPACK_PATH_CALL_PATTERN =
   /path\.(?:resolve|join)\(\s*__dirname\s*,\s*((?:["'][^"']+["']\s*,?\s*)+)\)/g;
-const WEBPACK_STRING_LITERAL_PATTERN = /["']([^"']+)["']/g;
+const STRING_LITERAL_PATTERN = /["']([^"']+)["']/g;
 
 const TSCONFIG_FILENAMES = [
   "tsconfig.json",
@@ -223,19 +315,19 @@ const isInsideDirectory = (filePath: string, directory: string): boolean => {
 const extractQuotedSegments = (value: string): string[] => {
   const segments: string[] = [];
   let segmentMatch: RegExpExecArray | null;
-  WEBPACK_STRING_LITERAL_PATTERN.lastIndex = 0;
-  while ((segmentMatch = WEBPACK_STRING_LITERAL_PATTERN.exec(value)) !== null) {
+  STRING_LITERAL_PATTERN.lastIndex = 0;
+  while ((segmentMatch = STRING_LITERAL_PATTERN.exec(value)) !== null) {
     segments.push(segmentMatch[1]);
   }
   return segments;
 };
 
-const resolveWebpackPathValue = (value: string, configDirectory: string): string => {
+const resolveConfigPathValue = (value: string, configDirectory: string): string => {
   if (isAbsolute(value)) return value;
   return resolve(configDirectory, value);
 };
 
-const findWebpackConfigScope = (configPath: string, rootDir: string): string => {
+const findConfigScope = (configPath: string, rootDir: string): string => {
   let currentDirectory = dirname(configPath);
   const absoluteRoot = resolve(rootDir);
 
@@ -251,34 +343,78 @@ const findWebpackConfigScope = (configPath: string, rootDir: string): string => 
   return absoluteRoot;
 };
 
-const extractWebpackAliases = (content: string, configDirectory: string): WebpackAlias[] => {
-  const aliases: WebpackAlias[] = [];
+const extractBundlerAliases = (content: string, configDirectory: string): BundlerAlias[] => {
+  const aliases: BundlerAlias[] = [];
   let aliasBlockMatch: RegExpExecArray | null;
-  WEBPACK_ALIAS_BLOCK_PATTERN.lastIndex = 0;
+  ALIAS_BLOCK_PATTERN.lastIndex = 0;
 
-  while ((aliasBlockMatch = WEBPACK_ALIAS_BLOCK_PATTERN.exec(content)) !== null) {
+  while ((aliasBlockMatch = ALIAS_BLOCK_PATTERN.exec(content)) !== null) {
     const aliasBlock = aliasBlockMatch[1];
     let aliasEntryMatch: RegExpExecArray | null;
-    WEBPACK_ALIAS_ENTRY_PATTERN.lastIndex = 0;
+    ALIAS_ENTRY_PATTERN.lastIndex = 0;
 
-    while ((aliasEntryMatch = WEBPACK_ALIAS_ENTRY_PATTERN.exec(aliasBlock)) !== null) {
+    while ((aliasEntryMatch = ALIAS_ENTRY_PATTERN.exec(aliasBlock)) !== null) {
       const rawName = aliasEntryMatch[1];
       const pathCallSegments = aliasEntryMatch[2];
-      const stringTarget = aliasEntryMatch[3];
-      if (!pathCallSegments && !stringTarget) continue;
+      const fileUrlTarget = aliasEntryMatch[3];
+      const stringTarget = aliasEntryMatch[4];
       const isExact = rawName.endsWith("$");
       const name = isExact ? rawName.slice(0, -1) : rawName.replace(/\/$/, "");
 
       let targetDirectory: string;
       if (pathCallSegments) {
         targetDirectory = resolve(configDirectory, ...extractQuotedSegments(pathCallSegments));
+      } else if (fileUrlTarget) {
+        targetDirectory = resolve(configDirectory, fileUrlTarget);
       } else if (stringTarget) {
-        targetDirectory = resolveWebpackPathValue(stringTarget, configDirectory);
+        targetDirectory = resolveConfigPathValue(stringTarget, configDirectory);
       } else {
         continue;
       }
 
       aliases.push({ name, targetDirectory, isExact });
+    }
+  }
+
+  return aliases;
+};
+
+const compileJestModuleNameMapperAlias = (
+  pattern: string,
+  target: string,
+  configDirectory: string,
+): BundlerAlias | undefined => {
+  if (!target.includes("<rootDir>")) return undefined;
+
+  const isWildcard = pattern.includes("(.*)") || pattern.includes("(.+)");
+  const aliasName = pattern
+    .replace(/^\^/, "")
+    .replace(/\$$/, "")
+    .replace(/\\(.)/g, "$1")
+    .replace(/\/?\((?:\.\*|\.\+)\)$/, "")
+    .replace(/\/$/, "");
+  if (!aliasName) return undefined;
+
+  const targetDirectory = target.replace(/<rootDir>/g, configDirectory).replace(/\/?\$\d+$/, "");
+
+  return { name: aliasName, targetDirectory: resolve(targetDirectory), isExact: !isWildcard };
+};
+
+const extractJestModuleNameMapperAliases = (
+  content: string,
+  configDirectory: string,
+): BundlerAlias[] => {
+  const aliases: BundlerAlias[] = [];
+  let blockMatch: RegExpExecArray | null;
+  JEST_MODULE_NAME_MAPPER_BLOCK_PATTERN.lastIndex = 0;
+
+  while ((blockMatch = JEST_MODULE_NAME_MAPPER_BLOCK_PATTERN.exec(content)) !== null) {
+    const block = blockMatch[1];
+    let entryMatch: RegExpExecArray | null;
+    JEST_MODULE_NAME_MAPPER_ENTRY_PATTERN.lastIndex = 0;
+    while ((entryMatch = JEST_MODULE_NAME_MAPPER_ENTRY_PATTERN.exec(block)) !== null) {
+      const alias = compileJestModuleNameMapperAlias(entryMatch[1], entryMatch[2], configDirectory);
+      if (alias) aliases.push(alias);
     }
   }
 
@@ -299,43 +435,82 @@ const extractWebpackModuleDirectories = (content: string, configDirectory: strin
     }
 
     let stringMatch: RegExpExecArray | null;
-    WEBPACK_STRING_LITERAL_PATTERN.lastIndex = 0;
-    while ((stringMatch = WEBPACK_STRING_LITERAL_PATTERN.exec(modulesBlock)) !== null) {
+    STRING_LITERAL_PATTERN.lastIndex = 0;
+    while ((stringMatch = STRING_LITERAL_PATTERN.exec(modulesBlock)) !== null) {
       const moduleDirectory = stringMatch[1];
       if (moduleDirectory === "node_modules") continue;
-      moduleDirectories.push(resolveWebpackPathValue(moduleDirectory, configDirectory));
+      moduleDirectories.push(resolveConfigPathValue(moduleDirectory, configDirectory));
     }
   }
 
   return [...new Set(moduleDirectories)];
 };
 
-const loadWebpackResolverConfigs = (rootDir: string): WebpackResolverConfig[] => {
-  const configPaths = fg.sync(WEBPACK_CONFIG_GLOBS, {
-    cwd: rootDir,
-    absolute: true,
-    onlyFiles: true,
-    ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
-    deep: 4,
-  });
+const isJestConfigPath = (configPath: string): boolean =>
+  /(?:^|[\\/])jest\.config\.[^\\/]+$/.test(configPath);
 
-  const configs: WebpackResolverConfig[] = [];
+const isWebpackConfigPath = (configPath: string): boolean => /webpack/.test(configPath);
+
+const extractPackageJsonJestAliases = (rootDir: string): BundlerAlias[] => {
+  try {
+    const packageJson = JSON.parse(cachedReadFileSync(join(rootDir, "package.json")));
+    const moduleNameMapper = packageJson?.jest?.moduleNameMapper;
+    if (!moduleNameMapper || typeof moduleNameMapper !== "object") return [];
+    const aliases: BundlerAlias[] = [];
+    for (const [pattern, target] of Object.entries(moduleNameMapper)) {
+      if (typeof target !== "string") continue;
+      const alias = compileJestModuleNameMapperAlias(pattern, target, rootDir);
+      if (alias) aliases.push(alias);
+    }
+    return aliases;
+  } catch {
+    return [];
+  }
+};
+
+const loadBundlerAliasConfigs = (rootDir: string): BundlerAliasConfig[] => {
+  const configPaths = fg.sync(
+    [...WEBPACK_CONFIG_GLOBS, ...VITE_CONFIG_GLOBS, ...BABEL_CONFIG_GLOBS, ...JEST_CONFIG_GLOBS],
+    {
+      cwd: rootDir,
+      absolute: true,
+      onlyFiles: true,
+      ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
+      deep: 4,
+    },
+  );
+
+  const configs: BundlerAliasConfig[] = [];
   for (const configPath of configPaths) {
     try {
       const content = cachedReadFileSync(configPath);
       const configDirectory = dirname(configPath);
-      const aliases = extractWebpackAliases(content, configDirectory);
-      const moduleDirectories = extractWebpackModuleDirectories(content, configDirectory);
+      const aliases = extractBundlerAliases(content, configDirectory);
+      if (isJestConfigPath(configPath)) {
+        aliases.push(...extractJestModuleNameMapperAliases(content, configDirectory));
+      }
+      const moduleDirectories = isWebpackConfigPath(configPath)
+        ? extractWebpackModuleDirectories(content, configDirectory)
+        : [];
       if (aliases.length === 0 && moduleDirectories.length === 0) continue;
 
       configs.push({
-        scopeDirectory: findWebpackConfigScope(configPath, rootDir),
+        scopeDirectory: findConfigScope(configPath, rootDir),
         aliases,
         moduleDirectories,
       });
     } catch {
       continue;
     }
+  }
+
+  const packageJsonJestAliases = extractPackageJsonJestAliases(rootDir);
+  if (packageJsonJestAliases.length > 0) {
+    configs.push({
+      scopeDirectory: resolve(rootDir),
+      aliases: packageJsonJestAliases,
+      moduleDirectories: [],
+    });
   }
 
   return configs;
@@ -395,12 +570,49 @@ export const createResolver = (
     workspaceNameToDirectory.set(workspacePackage.name, workspacePackage.directory);
   }
 
-  const webpackConfigRoots =
+  const structuralAliasToDirectory = new Map<string, string>();
+  const workspaceScopes = new Set<string>();
+  for (const workspacePackage of workspacePackages) {
+    if (!workspacePackage.name.startsWith("@")) continue;
+    const slashIndex = workspacePackage.name.indexOf("/");
+    if (slashIndex !== -1) workspaceScopes.add(workspacePackage.name.slice(0, slashIndex));
+  }
+  if (workspaceScopes.size > 0) {
+    const ambiguousStructuralKeys = new Set<string>();
+    const registerStructuralAlias = (aliasKey: string, directory: string): void => {
+      if (workspaceNameToDirectory.has(aliasKey)) return;
+      const existing = structuralAliasToDirectory.get(aliasKey);
+      if (existing !== undefined && existing !== directory) {
+        ambiguousStructuralKeys.add(aliasKey);
+        return;
+      }
+      structuralAliasToDirectory.set(aliasKey, directory);
+    };
+    for (const workspacePackage of workspacePackages) {
+      const directoryBasename = basename(workspacePackage.directory);
+      const slashIndex = workspacePackage.name.indexOf("/");
+      const unscopedName =
+        workspacePackage.name.startsWith("@") && slashIndex !== -1
+          ? workspacePackage.name.slice(slashIndex + 1)
+          : workspacePackage.name;
+      for (const scope of workspaceScopes) {
+        registerStructuralAlias(`${scope}/${directoryBasename}`, workspacePackage.directory);
+        if (unscopedName && unscopedName !== directoryBasename) {
+          registerStructuralAlias(`${scope}/${unscopedName}`, workspacePackage.directory);
+        }
+      }
+    }
+    for (const ambiguousKey of ambiguousStructuralKeys) {
+      structuralAliasToDirectory.delete(ambiguousKey);
+    }
+  }
+
+  const bundlerConfigRoots =
     options.monorepoRoot && options.monorepoRoot !== config.rootDir
       ? [config.rootDir, options.monorepoRoot]
       : [config.rootDir];
-  const webpackResolverConfigs = webpackConfigRoots
-    .flatMap(loadWebpackResolverConfigs)
+  const bundlerAliasConfigs = bundlerConfigRoots
+    .flatMap(loadBundlerAliasConfigs)
     .sort(
       (leftConfig, rightConfig) =>
         rightConfig.scopeDirectory.length - leftConfig.scopeDirectory.length,
@@ -427,6 +639,7 @@ export const createResolver = (
 
   const tsconfigPathCache = new Map<string, string | undefined>();
   const tsconfigPathAliasCache = new Map<string, Map<string, string[]>>();
+  const tsconfigCompiledAliasCache = new Map<string, CompiledPathMapping[]>();
 
   const findTsconfigForFile = (filePath: string): string | undefined => {
     const fileDir = dirname(filePath);
@@ -640,55 +853,18 @@ export const createResolver = (
     return aliasMap;
   };
 
+  const getCompiledPathAliases = (tsconfigFile: string): CompiledPathMapping[] => {
+    const cached = tsconfigCompiledAliasCache.get(tsconfigFile);
+    if (cached) return cached;
+    const compiled = compilePathMappings(getPathAliases(tsconfigFile));
+    tsconfigCompiledAliasCache.set(tsconfigFile, compiled);
+    return compiled;
+  };
+
   const tryResolveViaPathAlias = (specifier: string, fromFile: string): string | undefined => {
     const tsconfigFile = findTsconfigForFile(fromFile);
     if (!tsconfigFile) return undefined;
-
-    const aliases = getPathAliases(tsconfigFile);
-    for (const [pattern, targetPatterns] of aliases) {
-      const wildcardIndex = pattern.indexOf("*");
-      if (wildcardIndex === -1) {
-        if (specifier === pattern) {
-          for (const targetPattern of targetPatterns) {
-            const candidate = targetPattern.replace("*", "");
-            if (existsAsFile(candidate)) return candidate;
-            for (const ext of RESOLVER_EXTENSIONS) {
-              if (cachedExistsSync(candidate + ext)) return candidate + ext;
-            }
-            const indexCandidate = join(candidate, "index");
-            for (const ext of RESOLVER_EXTENSIONS) {
-              if (cachedExistsSync(indexCandidate + ext)) return indexCandidate + ext;
-            }
-          }
-        }
-        continue;
-      }
-
-      const prefix = pattern.slice(0, wildcardIndex);
-      const suffix = pattern.slice(wildcardIndex + 1);
-      if (!specifier.startsWith(prefix) || !specifier.endsWith(suffix)) continue;
-
-      const matchedWildcard = specifier.slice(prefix.length, specifier.length - suffix.length);
-      for (const targetPattern of targetPatterns) {
-        const resolvedTarget = targetPattern.replace("*", matchedWildcard);
-        if (existsAsFile(resolvedTarget)) return resolvedTarget;
-        for (const ext of RESOLVER_EXTENSIONS) {
-          if (cachedExistsSync(resolvedTarget + ext)) return resolvedTarget + ext;
-        }
-        const strippedTarget = resolvedTarget.replace(/\.[cm]?js$/, "");
-        if (strippedTarget !== resolvedTarget) {
-          for (const ext of RESOLVER_EXTENSIONS) {
-            if (cachedExistsSync(strippedTarget + ext)) return strippedTarget + ext;
-          }
-        }
-        const indexCandidate = join(resolvedTarget, "index");
-        for (const ext of RESOLVER_EXTENSIONS) {
-          if (cachedExistsSync(indexCandidate + ext)) return indexCandidate + ext;
-        }
-      }
-    }
-
-    return undefined;
+    return matchCompiledMapping(specifier, getCompiledPathAliases(tsconfigFile));
   };
 
   const tryResolveFromDirectory = (directory: string, specifier: string): string | undefined => {
@@ -697,14 +873,14 @@ export const createResolver = (
     return undefined;
   };
 
-  const tryResolveViaWebpackConfig = (specifier: string, fromFile: string): string | undefined => {
-    if (webpackResolverConfigs.length === 0) return undefined;
+  const tryResolveViaBundlerAlias = (specifier: string, fromFile: string): string | undefined => {
+    if (bundlerAliasConfigs.length === 0) return undefined;
     if (!isBareSpecifier(specifier)) return undefined;
 
-    for (const webpackConfig of webpackResolverConfigs) {
-      if (!isInsideDirectory(fromFile, webpackConfig.scopeDirectory)) continue;
+    for (const bundlerConfig of bundlerAliasConfigs) {
+      if (!isInsideDirectory(fromFile, bundlerConfig.scopeDirectory)) continue;
 
-      for (const alias of webpackConfig.aliases) {
+      for (const alias of bundlerConfig.aliases) {
         if (alias.isExact && specifier !== alias.name) continue;
 
         const suffix =
@@ -719,7 +895,7 @@ export const createResolver = (
         if (aliasCandidate) return aliasCandidate;
       }
 
-      for (const moduleDirectory of webpackConfig.moduleDirectories) {
+      for (const moduleDirectory of bundlerConfig.moduleDirectories) {
         const moduleCandidate = tryResolveFromDirectory(moduleDirectory, specifier);
         if (moduleCandidate) return moduleCandidate;
       }
@@ -728,9 +904,163 @@ export const createResolver = (
     return undefined;
   };
 
+  const compiledConfigPaths = config.paths
+    ? compilePathMappings(
+        Object.entries(config.paths).map(([pattern, targets]) => [
+          pattern,
+          targets.map((target) => resolve(config.rootDir, target)),
+        ]),
+      )
+    : [];
+
+  const tryResolveViaConfigPaths = (specifier: string): string | undefined =>
+    compiledConfigPaths.length === 0
+      ? undefined
+      : matchCompiledMapping(specifier, compiledConfigPaths);
+
+  const resolveWorkspaceSubpath = (
+    workspaceDirectory: string,
+    subpath: string,
+  ): string | undefined => {
+    const workspacePackageJsonPath = join(workspaceDirectory, "package.json");
+    try {
+      const workspacePackageContent = cachedReadFileSync(workspacePackageJsonPath);
+      const workspacePackageJson = JSON.parse(workspacePackageContent);
+
+      let resolvedEntryPath: string | undefined;
+      if (subpath && workspacePackageJson.exports) {
+        const exportKey = `./${subpath}`;
+        const exportValue = workspacePackageJson.exports[exportKey];
+        if (typeof exportValue === "string") {
+          const candidatePath = resolvePathWithExtensionFallback(
+            resolve(workspaceDirectory, exportValue),
+          );
+          resolvedEntryPath = existsAsFile(candidatePath)
+            ? candidatePath
+            : trySourceFallback(candidatePath);
+        } else if (typeof exportValue === "object" && exportValue !== null) {
+          const conditionValue =
+            exportValue.import ?? exportValue.require ?? exportValue.default ?? exportValue.types;
+          if (typeof conditionValue === "string") {
+            const candidatePath = resolvePathWithExtensionFallback(
+              resolve(workspaceDirectory, conditionValue),
+            );
+            resolvedEntryPath = existsAsFile(candidatePath)
+              ? candidatePath
+              : trySourceFallback(candidatePath);
+          }
+        }
+
+        if (!resolvedEntryPath) {
+          for (const [wildcardPattern, wildcardTarget] of Object.entries(
+            workspacePackageJson.exports,
+          )) {
+            if (typeof wildcardPattern !== "string" || !wildcardPattern.includes("*")) continue;
+            const wildcardTargetRecord =
+              typeof wildcardTarget === "object" && wildcardTarget !== null
+                ? (wildcardTarget as Record<string, unknown>)
+                : undefined;
+            const wildcardTargetValue =
+              typeof wildcardTarget === "string"
+                ? wildcardTarget
+                : wildcardTargetRecord
+                  ? String(
+                      wildcardTargetRecord["import"] ??
+                        wildcardTargetRecord["require"] ??
+                        wildcardTargetRecord["default"] ??
+                        wildcardTargetRecord["types"] ??
+                        "",
+                    )
+                  : undefined;
+            if (typeof wildcardTargetValue !== "string") continue;
+
+            const wildcardPrefix = wildcardPattern.slice(0, wildcardPattern.indexOf("*"));
+            const wildcardSuffix = wildcardPattern.slice(wildcardPattern.indexOf("*") + 1);
+            if (exportKey.startsWith(wildcardPrefix) && exportKey.endsWith(wildcardSuffix)) {
+              const matchedSegment = exportKey.slice(
+                wildcardPrefix.length,
+                exportKey.length - wildcardSuffix.length || undefined,
+              );
+              const expandedTarget = wildcardTargetValue.replace("*", matchedSegment);
+              const candidateWildcardPath = resolve(workspaceDirectory, expandedTarget);
+              const candidatePath = resolvePathWithExtensionFallback(candidateWildcardPath);
+              resolvedEntryPath = existsAsFile(candidatePath)
+                ? candidatePath
+                : trySourceFallback(candidatePath);
+              break;
+            }
+          }
+        }
+      }
+
+      if (subpath && !resolvedEntryPath) {
+        const subpathCandidates = [
+          resolve(workspaceDirectory, subpath),
+          resolve(workspaceDirectory, "src", subpath),
+        ];
+        for (const directSubpath of subpathCandidates) {
+          for (const candidateExtension of RESOLVER_EXTENSIONS) {
+            const candidate = directSubpath + candidateExtension;
+            if (cachedExistsSync(candidate)) {
+              resolvedEntryPath = candidate;
+              break;
+            }
+          }
+          if (resolvedEntryPath) break;
+          for (const candidateExtension of RESOLVER_EXTENSIONS) {
+            const indexCandidate = join(directSubpath, `index${candidateExtension}`);
+            if (cachedExistsSync(indexCandidate)) {
+              resolvedEntryPath = indexCandidate;
+              break;
+            }
+          }
+          if (resolvedEntryPath) break;
+        }
+      }
+
+      if (!subpath) {
+        const mainField = workspacePackageJson.main ?? workspacePackageJson.module;
+        if (typeof mainField === "string") {
+          resolvedEntryPath = resolve(workspaceDirectory, mainField);
+        }
+        if (!resolvedEntryPath && workspacePackageJson.exports?.["."]) {
+          const dotExport = workspacePackageJson.exports["."];
+          if (typeof dotExport === "string") {
+            resolvedEntryPath = resolve(workspaceDirectory, dotExport);
+          } else if (typeof dotExport === "object" && dotExport !== null) {
+            const conditionValue =
+              dotExport.import ?? dotExport.require ?? dotExport.default ?? dotExport.types;
+            if (typeof conditionValue === "string") {
+              resolvedEntryPath = resolve(workspaceDirectory, conditionValue);
+            }
+          }
+        }
+      }
+
+      if (resolvedEntryPath) {
+        const sourcePath = resolveSourcePath(resolvedEntryPath, workspaceDirectory);
+        const finalPath = sourcePath ?? resolvedEntryPath;
+        if (cachedExistsSync(finalPath)) return finalPath;
+        const sourceFallbackPath = trySourceFallback(resolvedEntryPath);
+        if (sourceFallbackPath) return sourceFallbackPath;
+      }
+    } catch {}
+    return undefined;
+  };
+
+  const tryResolveViaWorkspaceStructure = (specifier: string): string | undefined => {
+    if (structuralAliasToDirectory.size === 0) return undefined;
+    if (!isBareSpecifier(specifier)) return undefined;
+    const packageKey = extractPackageNameFromSpecifier(specifier);
+    const directory = structuralAliasToDirectory.get(packageKey);
+    if (!directory) return undefined;
+    const subpath =
+      specifier.length > packageKey.length ? specifier.slice(packageKey.length + 1) : "";
+    return resolveWorkspaceSubpath(directory, subpath);
+  };
+
   const resolveModule = (specifier: string, fromFile: string): ResolvedImport => {
-    const queryIndex = specifier.indexOf("?");
-    const cleanedSpecifier = queryIndex !== -1 ? specifier.slice(0, queryIndex) : specifier;
+    const cleanedSpecifier = sanitizeImportSpecifier(specifier);
     const fromDir = dirname(fromFile);
     const cacheKey = `${fromDir}::${cleanedSpecifier}`;
     const cached = resolveResultCache.get(cacheKey);
@@ -766,149 +1096,19 @@ export const createResolver = (
       const packageName = extractPackageNameFromSpecifier(cleanedSpecifier);
       const workspaceDirectory = workspaceNameToDirectory.get(packageName);
       if (workspaceDirectory) {
-        const subpath = cleanedSpecifier.slice(packageName.length + 1);
-        const workspacePackageJsonPath = join(workspaceDirectory, "package.json");
-        try {
-          const workspacePackageContent = cachedReadFileSync(workspacePackageJsonPath);
-          const workspacePackageJson = JSON.parse(workspacePackageContent);
-
-          let resolvedEntryPath: string | undefined;
-          if (subpath && workspacePackageJson.exports) {
-            const exportKey = `./${subpath}`;
-            const exportValue = workspacePackageJson.exports[exportKey];
-            if (typeof exportValue === "string") {
-              const candidatePath = resolvePathWithExtensionFallback(
-                resolve(workspaceDirectory, exportValue),
-              );
-              resolvedEntryPath = existsAsFile(candidatePath)
-                ? candidatePath
-                : trySourceFallback(candidatePath);
-            } else if (typeof exportValue === "object" && exportValue !== null) {
-              const conditionValue =
-                exportValue.import ??
-                exportValue.require ??
-                exportValue.default ??
-                exportValue.types;
-              if (typeof conditionValue === "string") {
-                const candidatePath = resolvePathWithExtensionFallback(
-                  resolve(workspaceDirectory, conditionValue),
-                );
-                resolvedEntryPath = existsAsFile(candidatePath)
-                  ? candidatePath
-                  : trySourceFallback(candidatePath);
-              }
-            }
-
-            if (!resolvedEntryPath) {
-              for (const [wildcardPattern, wildcardTarget] of Object.entries(
-                workspacePackageJson.exports,
-              )) {
-                if (typeof wildcardPattern !== "string" || !wildcardPattern.includes("*")) continue;
-                const wildcardTargetRecord =
-                  typeof wildcardTarget === "object" && wildcardTarget !== null
-                    ? (wildcardTarget as Record<string, unknown>)
-                    : undefined;
-                const wildcardTargetValue =
-                  typeof wildcardTarget === "string"
-                    ? wildcardTarget
-                    : wildcardTargetRecord
-                      ? String(
-                          wildcardTargetRecord["import"] ??
-                            wildcardTargetRecord["require"] ??
-                            wildcardTargetRecord["default"] ??
-                            wildcardTargetRecord["types"] ??
-                            "",
-                        )
-                      : undefined;
-                if (typeof wildcardTargetValue !== "string") continue;
-
-                const wildcardPrefix = wildcardPattern.slice(0, wildcardPattern.indexOf("*"));
-                const wildcardSuffix = wildcardPattern.slice(wildcardPattern.indexOf("*") + 1);
-                if (exportKey.startsWith(wildcardPrefix) && exportKey.endsWith(wildcardSuffix)) {
-                  const matchedSegment = exportKey.slice(
-                    wildcardPrefix.length,
-                    exportKey.length - wildcardSuffix.length || undefined,
-                  );
-                  const expandedTarget = wildcardTargetValue.replace("*", matchedSegment);
-                  const candidateWildcardPath = resolve(workspaceDirectory, expandedTarget);
-                  const candidatePath = resolvePathWithExtensionFallback(candidateWildcardPath);
-                  resolvedEntryPath = existsAsFile(candidatePath)
-                    ? candidatePath
-                    : trySourceFallback(candidatePath);
-                  break;
-                }
-              }
-            }
-          }
-
-          if (subpath && !resolvedEntryPath) {
-            const subpathCandidates = [
-              resolve(workspaceDirectory, subpath),
-              resolve(workspaceDirectory, "src", subpath),
-            ];
-            for (const directSubpath of subpathCandidates) {
-              for (const candidateExtension of RESOLVER_EXTENSIONS) {
-                const candidate = directSubpath + candidateExtension;
-                if (cachedExistsSync(candidate)) {
-                  resolvedEntryPath = candidate;
-                  break;
-                }
-              }
-              if (resolvedEntryPath) break;
-              for (const candidateExtension of RESOLVER_EXTENSIONS) {
-                const indexCandidate = join(directSubpath, `index${candidateExtension}`);
-                if (cachedExistsSync(indexCandidate)) {
-                  resolvedEntryPath = indexCandidate;
-                  break;
-                }
-              }
-              if (resolvedEntryPath) break;
-            }
-          }
-
-          if (!subpath) {
-            const mainField = workspacePackageJson.main ?? workspacePackageJson.module;
-            if (typeof mainField === "string") {
-              resolvedEntryPath = resolve(workspaceDirectory, mainField);
-            }
-            if (!resolvedEntryPath && workspacePackageJson.exports?.["."]) {
-              const dotExport = workspacePackageJson.exports["."];
-              if (typeof dotExport === "string") {
-                resolvedEntryPath = resolve(workspaceDirectory, dotExport);
-              } else if (typeof dotExport === "object" && dotExport !== null) {
-                const conditionValue =
-                  dotExport.import ?? dotExport.require ?? dotExport.default ?? dotExport.types;
-                if (typeof conditionValue === "string") {
-                  resolvedEntryPath = resolve(workspaceDirectory, conditionValue);
-                }
-              }
-            }
-          }
-
-          if (resolvedEntryPath) {
-            const sourcePath = resolveSourcePath(resolvedEntryPath, workspaceDirectory);
-            const finalPath = sourcePath ?? resolvedEntryPath;
-            if (cachedExistsSync(finalPath)) {
-              const resolvedResult: ResolvedImport = {
-                resolvedPath: finalPath,
-                isExternal: false,
-                packageName: undefined,
-              };
-              resolveResultCache.set(cacheKey, resolvedResult);
-              return resolvedResult;
-            }
-            const sourceFallbackPath = trySourceFallback(resolvedEntryPath);
-            if (sourceFallbackPath) {
-              const resolvedResult: ResolvedImport = {
-                resolvedPath: sourceFallbackPath,
-                isExternal: false,
-                packageName: undefined,
-              };
-              resolveResultCache.set(cacheKey, resolvedResult);
-              return resolvedResult;
-            }
-          }
-        } catch {}
+        const resolvedWorkspacePath = resolveWorkspaceSubpath(
+          workspaceDirectory,
+          cleanedSpecifier.slice(packageName.length + 1),
+        );
+        if (resolvedWorkspacePath) {
+          const resolvedResult: ResolvedImport = {
+            resolvedPath: resolvedWorkspacePath,
+            isExternal: false,
+            packageName: undefined,
+          };
+          resolveResultCache.set(cacheKey, resolvedResult);
+          return resolvedResult;
+        }
       }
     }
 
@@ -962,10 +1162,32 @@ export const createResolver = (
       return resolvedResult;
     }
 
-    const webpackResolved = tryResolveViaWebpackConfig(cleanedSpecifier, fromFile);
-    if (webpackResolved) {
+    const configPathResolved = tryResolveViaConfigPaths(cleanedSpecifier);
+    if (configPathResolved) {
       const resolvedResult: ResolvedImport = {
-        resolvedPath: webpackResolved,
+        resolvedPath: configPathResolved,
+        isExternal: false,
+        packageName: undefined,
+      };
+      resolveResultCache.set(cacheKey, resolvedResult);
+      return resolvedResult;
+    }
+
+    const bundlerAliasResolved = tryResolveViaBundlerAlias(cleanedSpecifier, fromFile);
+    if (bundlerAliasResolved) {
+      const resolvedResult: ResolvedImport = {
+        resolvedPath: bundlerAliasResolved,
+        isExternal: false,
+        packageName: undefined,
+      };
+      resolveResultCache.set(cacheKey, resolvedResult);
+      return resolvedResult;
+    }
+
+    const structuralResolved = tryResolveViaWorkspaceStructure(cleanedSpecifier);
+    if (structuralResolved) {
+      const resolvedResult: ResolvedImport = {
+        resolvedPath: structuralResolved,
         isExternal: false,
         packageName: undefined,
       };

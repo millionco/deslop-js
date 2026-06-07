@@ -269,6 +269,7 @@ export const defineConfig = (
   ignorePatterns: options.ignorePatterns ?? [],
   includeExtensions: options.includeExtensions ?? DEFAULT_EXTENSIONS,
   tsConfigPath: options.tsConfigPath,
+  paths: options.paths,
   reportTypes: options.reportTypes ?? false,
   includeEntryExports: options.includeEntryExports ?? false,
   reportRedundancy: options.reportRedundancy ?? true,

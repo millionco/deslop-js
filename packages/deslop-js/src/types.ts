@@ -650,6 +650,7 @@ export interface DeslopConfig {
   ignorePatterns: string[];
   includeExtensions: string[];
   tsConfigPath: string | undefined;
+  paths: Record<string, string[]> | undefined;
   reportTypes: boolean;
   includeEntryExports: boolean;
   reportRedundancy: boolean;

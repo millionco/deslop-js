@@ -51,6 +51,9 @@ deslop --extensions .ts .tsx
 # resolve path aliases via tsconfig
 deslop --tsconfig ./tsconfig.json
 
+# add explicit path aliases (in addition to the auto-detected ones)
+deslop --paths "@app/*=src/*" --paths "@lib/*=packages/lib/*"
+
 # include type-only exports in results
 deslop --report-types
 
@@ -150,17 +153,20 @@ const config = defineConfig({
 });
 ```
 
-| Option                | Type                  | Default                                                          | Description                                              |
-| --------------------- | --------------------- | ---------------------------------------------------------------- | -------------------------------------------------------- |
-| `rootDir`             | `string`              | required                                                         | Project root directory                                   |
-| `entryPatterns`       | `string[]`            | auto-detected                                                    | Entry point glob patterns                                |
-| `ignorePatterns`      | `string[]`            | `[]`                                                             | Glob patterns to exclude from analysis                   |
-| `includeExtensions`   | `string[]`            | `[".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".cjs", ".cts"]` | File extensions to scan                                  |
-| `tsConfigPath`        | `string \| undefined` | `undefined`                                                      | Path to tsconfig.json for path alias resolution          |
-| `reportTypes`         | `boolean`             | `false`                                                          | Include type-only exports in `unusedExports`             |
-| `includeEntryExports` | `boolean`             | `false`                                                          | Report unused exports from entry files                   |
-| `reportRedundancy`    | `boolean`             | `true`                                                           | Emit the redundancy / DRY findings listed above          |
-| `semantic`            | `SemanticConfig`      | `undefined`                                                      | Opt-in TypeScript type-aware analysis (see below)        |
+| Option                | Type                  | Default                                                          | Description                                       |
+| --------------------- | --------------------- | ---------------------------------------------------------------- | ------------------------------------------------- |
+| `rootDir`             | `string`              | required                                                         | Project root directory                            |
+| `entryPatterns`       | `string[]`            | auto-detected                                                    | Entry point glob patterns                         |
+| `ignorePatterns`      | `string[]`            | `[]`                                                             | Glob patterns to exclude from analysis            |
+| `includeExtensions`   | `string[]`            | `[".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".cjs", ".cts"]` | File extensions to scan                           |
+| `tsConfigPath`        | `string \| undefined` | `undefined`                                                      | Path to tsconfig.json for path alias resolution   |
+| `paths`               | `Record<string, string[]> \| undefined` | `undefined`                                   | Explicit path-alias mappings (e.g. `{ "@app/*": ["src/*"] }`), resolved alongside auto-detected aliases |
+| `reportTypes`         | `boolean`             | `false`                                                          | Include type-only exports in `unusedExports`      |
+| `includeEntryExports` | `boolean`             | `false`                                                          | Report unused exports from entry files            |
+| `reportRedundancy`    | `boolean`             | `true`                                                           | Emit the redundancy / DRY findings listed above   |
+| `semantic`            | `SemanticConfig`      | `undefined`                                                      | Opt-in TypeScript type-aware analysis (see below) |
+
+Path aliases are auto-detected by default — from `tsconfig` `paths`, Vite (`resolve.alias`), webpack, Babel (`module-resolver`), and Jest (`moduleNameMapper`) configs, plus the workspace layout (a `@scope/<dir>` import resolves to the matching workspace package even when its `package.json` name differs). Use `paths` / `--paths` only for mappings none of those cover.
 
 ### Semantic (type-aware) analysis
 
@@ -181,16 +187,15 @@ const config = defineConfig({
 });
 ```
 
-| Option                            | Default      | Notes                                                                                                                                                          |
-| --------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`                         | `false`      | Master switch; semantic analysis loads the TS program and adds ~1–3s per scan                                                                                  |
-| `reportUnusedTypes`               | `true`       | Type aliases / interfaces / type-only exports never referenced                                                                                                 |
-| `reportUnusedEnumMembers`         | `true`       | Enum members no reference site reads or writes                                                                                                                 |
-| `reportUnusedClassMembers`        | **`false`**  | Subclass overrides, framework method-by-name invocation (`@HttpGet`, lifecycle hooks) produce too many stylistic FPs to enable by default. Opt in selectively. |
-| `reportMisclassifiedDependencies` | `true`       | `dependencies` packages used only via `import type`                                                                                                            |
-| `reportRedundantVariableAliases`  | `true`       | Local aliases like `const X = Y; export { X }`                                                                                                                 |
-| `reportRoundTripAliases`          | `true`       | `import { X as Y } from "./a"; export { Y as X }`                                                                                                              |
-
+| Option                            | Default     | Notes                                                                                                                                                          |
+| --------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                         | `false`     | Master switch; semantic analysis loads the TS program and adds ~1–3s per scan                                                                                  |
+| `reportUnusedTypes`               | `true`      | Type aliases / interfaces / type-only exports never referenced                                                                                                 |
+| `reportUnusedEnumMembers`         | `true`      | Enum members no reference site reads or writes                                                                                                                 |
+| `reportUnusedClassMembers`        | **`false`** | Subclass overrides, framework method-by-name invocation (`@HttpGet`, lifecycle hooks) produce too many stylistic FPs to enable by default. Opt in selectively. |
+| `reportMisclassifiedDependencies` | `true`      | `dependencies` packages used only via `import type`                                                                                                            |
+| `reportRedundantVariableAliases`  | `true`      | Local aliases like `const X = Y; export { X }`                                                                                                                 |
+| `reportRoundTripAliases`          | `true`      | `import { X as Y } from "./a"; export { Y as X }`                                                                                                              |
 
 ### Duplicate blocks (token-based copy-paste detection)
 
@@ -218,7 +223,7 @@ Surfaces in three result fields:
 
 ### Feature flag inventory
 
-On by default. Scans the codebase for every place a feature flag is *read* and produces a finding per use. The detector recognizes three families:
+On by default. Scans the codebase for every place a feature flag is _read_ and produces a finding per use. The detector recognizes three families:
 
 1. **Env-var flags** — `process.env.X` whose name starts with one of the built-in prefixes `FEATURE_`, `NEXT_PUBLIC_FEATURE_`, `REACT_APP_FEATURE_`, `VITE_FEATURE_`, `NUXT_PUBLIC_FEATURE_`, `ENABLE_`, `FF_`, `FLAG_`, `TOGGLE_` (extend with `extraEnvPrefixes`).
 2. **SDK calls** with provider attribution — LaunchDarkly (`useFlag`/`variation`/...), Statsig (`useGate`/`checkGate`/...), Unleash (`isEnabled`/`getVariant`), GrowthBook (`isOn`/`isOff`/`getFeatureValue`), Split (`getTreatment`), PostHog (`useFeatureFlagEnabled`/...), ConfigCat, Flagsmith, Optimizely, Eppo, and Vercel Flags (`flag()` / `evaluate()` from `flags` or `@vercel/flags`).
@@ -260,7 +265,6 @@ const config = defineConfig({
 });
 ```
 
-
 ### TypeScript code smells
 
 On by default. Four families of TypeScript-specific patterns surfaced at high or medium confidence — no extra config required.
@@ -272,12 +276,12 @@ result.commonjsInEsm; // CommonJS forms inside ESM modules
 result.typeScriptEscapeHatches; // @ts-ignore / @ts-nocheck / undocumented @ts-expect-error
 ```
 
-| Finding                              | Kinds                                                                                                                                                                  |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `result.unnecessaryAssertions`       | `redundant-double-assertion` (`x as unknown as T`), `assertion-to-any`, `redundant-non-null-on-literal` (`"foo"!`), `double-non-null` (`x!!`), `angle-bracket-assertion` (`<T>x`) |
-| `result.lazyImportsAtTopLevel`       | `top-level-await-import`, `top-level-then-import`                                                                                                                      |
-| `result.commonjsInEsm`               | `require`, `module-exports`, `exports-assignment`                                                                                                                      |
-| `result.typeScriptEscapeHatches`     | `ts-ignore`, `ts-nocheck`, `ts-expect-error-without-explanation`                                                                                                       |
+| Finding                          | Kinds                                                                                                                                                                             |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `result.unnecessaryAssertions`   | `redundant-double-assertion` (`x as unknown as T`), `assertion-to-any`, `redundant-non-null-on-literal` (`"foo"!`), `double-non-null` (`x!!`), `angle-bracket-assertion` (`<T>x`) |
+| `result.lazyImportsAtTopLevel`   | `top-level-await-import`, `top-level-then-import`                                                                                                                                 |
+| `result.commonjsInEsm`           | `require`, `module-exports`, `exports-assignment`                                                                                                                                 |
+| `result.typeScriptEscapeHatches` | `ts-ignore`, `ts-nocheck`, `ts-expect-error-without-explanation`                                                                                                                  |
 
 ESM detection follows the runtime rules: `.mts`/`.mjs` extensions are always ESM, `.cts`/`.cjs` are always CommonJS, and other files inherit from the nearest `package.json`'s `"type"` field.
 

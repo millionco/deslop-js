@@ -55,6 +55,7 @@ export const runAnalyze = async (
     ignorePatterns: options.ignore ?? [],
     includeExtensions: options.extensions,
     tsConfigPath: options.tsconfig,
+    paths: options.paths,
     reportTypes: options.reportTypes,
     includeEntryExports: options.includeEntryExports,
   });

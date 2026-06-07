@@ -2372,6 +2372,185 @@ test("should resolve @/ imports via Next.js default path alias when tsconfig is 
   );
 });
 
+describe("workspace-path-alias", () => {
+  it("should resolve imports via config paths when tsconfig has matching aliases", async () => {
+    const result = await scanFixture("workspace-path-alias");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-path-alias");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/core/utils.ts"),
+      `utils.ts should NOT be unused (imported via @project/core/utils), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should resolve imports via config paths option without tsconfig", async () => {
+    const result = await scanFixture("workspace-path-alias-no-tsconfig", {
+      paths: { "@project/core/*": ["packages/core/*"] },
+    });
+    const fixtureDir = resolve(
+      FIXTURES_DIR,
+      "workspace-path-alias-no-tsconfig",
+    );
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/core/utils.ts"),
+      `utils.ts should NOT be unused (resolved via config paths), got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag orphan files even with config paths", async () => {
+    const result = await scanFixture("workspace-path-alias", {
+      paths: { "@project/core/*": ["packages/core/*"] },
+    });
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-path-alias");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("packages/core/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("workspace-structural-alias", () => {
+  it("should auto-resolve @scope/<dir> imports from workspace layout without tsconfig or config", async () => {
+    const result = await scanFixture("workspace-structural-alias");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-structural-alias");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("packages/core/utils.ts"),
+      `utils.ts should resolve via @project/core structural alias, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should still flag genuinely unused files under a structurally-aliased package", async () => {
+    const result = await scanFixture("workspace-structural-alias");
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-structural-alias");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("packages/core/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("config-paths-only", () => {
+  it("should resolve imports only via the explicit `paths` option (no tsconfig, no bundler config)", async () => {
+    const result = await scanFixture("config-paths-only", {
+      paths: { "@custom/*": ["lib/*"] },
+    });
+    const fixtureDir = resolve(FIXTURES_DIR, "config-paths-only");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("lib/thing.ts"),
+      `thing.ts should resolve via config paths, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("lib/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should flag the aliased file as unused when `paths` is absent (proves the option drives resolution)", async () => {
+    const result = await scanFixture("config-paths-only");
+    const fixtureDir = resolve(FIXTURES_DIR, "config-paths-only");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      unusedFilePaths.includes("lib/thing.ts"),
+      `thing.ts should be unused without config paths, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("path-alias-specificity", () => {
+  it("should resolve via the most specific matching alias, not the first declared", async () => {
+    const result = await scanFixture("path-alias-specificity", {
+      paths: { "@x/*": ["general/*"], "@x/feature/*": ["special/*"] },
+    });
+    const fixtureDir = resolve(FIXTURES_DIR, "path-alias-specificity");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("special/thing.ts"),
+      `special/thing.ts should win via the more specific @x/feature/* alias, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("general/feature/thing.ts"),
+      `general/feature/thing.ts should be unused (less specific alias lost), got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("import-specifier-sanitize", () => {
+  it("should resolve targets through webpack loader prefixes, query strings, and hash fragments", async () => {
+    const result = await scanFixture("import-specifier-sanitize");
+    const fixtureDir = resolve(FIXTURES_DIR, "import-specifier-sanitize");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/worker.ts"),
+      `worker.ts should resolve through "worker-loader!./worker", got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/query.ts"),
+      `query.ts should resolve through "./query?raw", got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/frag.ts"),
+      `frag.ts should resolve through "./frag#section", got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("bundler-alias-resolution", () => {
+  it("should resolve vite resolve.alias entries (path.resolve and fileURLToPath) without tsconfig", async () => {
+    const result = await scanFixture("vite-resolve-alias");
+    const fixtureDir = resolve(FIXTURES_DIR, "vite-resolve-alias");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/lib/util.ts"),
+      `util.ts should resolve via @lib vite alias, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/widget.ts"),
+      `widget.ts should resolve via @ vite alias, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/lib/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should resolve jest moduleNameMapper aliases without tsconfig", async () => {
+    const result = await scanFixture("jest-module-name-mapper");
+    const fixtureDir = resolve(FIXTURES_DIR, "jest-module-name-mapper");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/value.ts"),
+      `value.ts should resolve via @app/* jest moduleNameMapper, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+
+  it("should resolve babel module-resolver aliases without tsconfig", async () => {
+    const result = await scanFixture("babel-module-resolver");
+    const fixtureDir = resolve(FIXTURES_DIR, "babel-module-resolver");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/components/button.ts"),
+      `button.ts should resolve via @components babel alias, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/components/orphan.ts"),
+      `orphan.ts should be unused, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("docusaurus-docs", () => {
   it("should exclude docs/ and blog/ content directories from file discovery", async () => {
     const result = await scanFixture("docusaurus-docs");
