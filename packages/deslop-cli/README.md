@@ -49,40 +49,41 @@ deslop ./my-app --fail-on-cycles
 
 The default scan emits the following finding categories (each grouped in human output, fully detailed in `--json`):
 
-| Category                  | What it catches                                                                  |
-| ------------------------- | -------------------------------------------------------------------------------- |
-| `unusedFiles`             | Files unreachable from any entry point                                           |
-| `unusedExports`           | Exported symbols never imported anywhere                                         |
-| `unusedDependencies`      | `package.json` deps not imported                                                 |
-| `circularDependencies`    | Import cycles                                                                    |
-| `redundantAliases`        | `import { x as x }`, useless re-export renames                                   |
-| `duplicateExports`        | Same name exported twice from one module                                         |
-| `duplicateImports`        | Same specifier imported on multiple lines (merge them)                           |
-| `redundantTypePatterns`   | `T & {}`, `Partial<Partial<T>>`, `Pick<T, keyof T>`, empty `extends`             |
-| `identityWrappers`        | `const wrap = (x) => fn(x)`, calls without transforming                          |
-| `duplicateTypeDefinitions`| Same structural type declared in multiple files                                  |
-| `duplicateInlineTypes`    | Anonymous `{ a, b, c }` shapes repeated across modules                           |
-| `simplifiableFunctions`   | `(x) => { return f(x) }`, `await x; return x;`, useless `async`                  |
-| `simplifiableExpressions` | `!!x`, `x ? x : y`, `cond ? true : false`, `x !== null && x !== undefined`       |
-| `duplicateConstants`      | Same literal value used in N files under different names                         |
-| `analysisErrors`          | Structured info / warning / error notes (parse failures, skipped files, etc.)    |
+| Category                   | What it catches                                                               |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| `unusedFiles`              | Files unreachable from any entry point                                        |
+| `unusedExports`            | Exported symbols never imported anywhere                                      |
+| `unusedDependencies`       | `package.json` deps not imported                                              |
+| `circularDependencies`     | Import cycles                                                                 |
+| `redundantAliases`         | `import { x as x }`, useless re-export renames                                |
+| `duplicateExports`         | Same name exported twice from one module                                      |
+| `duplicateImports`         | Same specifier imported on multiple lines (merge them)                        |
+| `redundantTypePatterns`    | `T & {}`, `Partial<Partial<T>>`, `Pick<T, keyof T>`, empty `extends`          |
+| `identityWrappers`         | `const wrap = (x) => fn(x)`, calls without transforming                       |
+| `duplicateTypeDefinitions` | Same structural type declared in multiple files                               |
+| `duplicateInlineTypes`     | Anonymous `{ a, b, c }` shapes repeated across modules                        |
+| `simplifiableFunctions`    | `(x) => { return f(x) }`, `await x; return x;`, useless `async`               |
+| `simplifiableExpressions`  | `!!x`, `x ? x : y`, `cond ? true : false`, `x !== null && x !== undefined`    |
+| `duplicateConstants`       | Same literal value used in N files under different names                      |
+| `analysisErrors`           | Structured info / warning / error notes (parse failures, skipped files, etc.) |
 
 Type-aware findings (`unusedTypes`, `unusedClassMembers`, `misclassifiedDependencies`, etc.) require enabling the semantic layer programmatically. See the [`deslop-js` README](https://github.com/aidenybai/deslop-js#semantic-type-aware-analysis). They are not exposed via CLI flags yet.
 
 ### Options
 
-| Option                    | Description                                                       |
-| ------------------------- | ----------------------------------------------------------------- |
-| `[root]`                  | Project root directory (default: `.`; must exist)                 |
-| `-e, --entry <pattern>`   | Entry point glob patterns                                         |
-| `-i, --ignore <pattern>`  | Glob patterns to exclude                                          |
-| `--extensions <ext>`      | File extensions to scan (e.g. `.ts` `.vue`)                       |
-| `--tsconfig <path>`       | Path to tsconfig.json for alias resolution                        |
-| `--report-types`          | Include type-only exports in results                              |
-| `--include-entry-exports` | Report unused exports from entry files                            |
-| `--json`                  | Output results as JSON                                            |
-| `--fail-on-issues`        | Exit 1 when unused files, exports, or dependencies are found      |
-| `--fail-on-cycles`        | Exit 1 when circular imports are found                            |
+| Option                    | Description                                                  |
+| ------------------------- | ------------------------------------------------------------ |
+| `[root]`                  | Project root directory (default: `.`; must exist)            |
+| `-e, --entry <pattern>`   | Entry point glob patterns                                    |
+| `-i, --ignore <pattern>`  | Glob patterns to exclude                                     |
+| `--extensions <ext>`      | File extensions to scan (e.g. `.ts` `.vue`)                  |
+| `--tsconfig <path>`       | Path to tsconfig.json for alias resolution                   |
+| `--paths <alias=target>`  | Explicit path-alias mappings (e.g. `@app/*=src/*`), repeatable |
+| `--report-types`          | Include type-only exports in results                         |
+| `--include-entry-exports` | Report unused exports from entry files                       |
+| `--json`                  | Output results as JSON                                       |
+| `--fail-on-issues`        | Exit 1 when unused files, exports, or dependencies are found |
+| `--fail-on-cycles`        | Exit 1 when circular imports are found                       |
 
 ### Exit codes
 

@@ -4,17 +4,19 @@ import type { AnalyzeOptions } from "./types.js";
 import { runAnalyze } from "./run-analyze.js";
 import { readPackageVersion } from "./utils/read-package-version.js";
 
-const parsePathsOption = (
-  rawPaths: string[] | undefined,
-): Record<string, string[]> | undefined => {
+const parsePathsOption = (rawPaths: string[] | undefined): Record<string, string[]> | undefined => {
   if (!rawPaths || rawPaths.length === 0) return undefined;
   const pathMap: Record<string, string[]> = {};
   for (const entry of rawPaths) {
     const separatorIndex = entry.indexOf("=");
-    if (separatorIndex === -1) continue;
-    const pattern = entry.slice(0, separatorIndex);
-    const target = entry.slice(separatorIndex + 1);
-    if (!pattern || !target) continue;
+    const pattern = separatorIndex === -1 ? "" : entry.slice(0, separatorIndex);
+    const target = separatorIndex === -1 ? "" : entry.slice(separatorIndex + 1);
+    if (!pattern || !target) {
+      process.stderr.write(
+        `deslop: ignoring malformed --paths entry "${entry}" (expected "alias=target", e.g. "@app/*=src/*")\n`,
+      );
+      continue;
+    }
     const existing = pathMap[pattern];
     if (existing) {
       existing.push(target);
@@ -57,10 +59,7 @@ const addAnalyzeOptions = (command: Command): Command =>
     .option("-i, --ignore <pattern...>", "glob patterns to exclude from analysis")
     .option("--extensions <extension...>", "file extensions to scan (e.g. .ts .vue)")
     .option("--tsconfig <path>", "path to tsconfig.json for path alias resolution")
-    .option(
-      "--paths <alias=target...>",
-      "path alias mappings (e.g. @lib/*=src/lib/*)",
-    )
+    .option("--paths <alias=target...>", "path alias mappings (e.g. @lib/*=src/lib/*)")
     .option("--report-types", "include type-only exports in results")
     .option("--include-entry-exports", "report unused exports from entry files")
     .option("--json", "output results as JSON")
