@@ -1,5 +1,11 @@
 # deslop-js
 
+## 0.0.22
+
+### Patch Changes
+
+- [#34](https://github.com/millionco/deslop-js/pull/34) [`3d2e8a1`](https://github.com/millionco/deslop-js/commit/3d2e8a1b755b6b11a9c627cecec96cf9d4706162) Thanks [@rayhanadev](https://github.com/rayhanadev)! - Add a `reason` field to each `unusedDependencies` finding that names the package and its declaring section (`dependencies` / `devDependencies`), so consumers can surface the specific unused dependency name instead of a generic grouped warning.
+
 ## 0.0.21
 
 ### Patch Changes
