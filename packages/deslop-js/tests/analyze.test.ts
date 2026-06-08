@@ -67,6 +67,15 @@ describe("simple-app", () => {
     assert.ok(deps.includes("unused-dep"), `unused-dep should be flagged, got: ${deps}`);
   });
 
+  it("should explain each unused dependency with a reason that names the package", async () => {
+    const result = await scanFixture("simple-app");
+    const unusedDep = result.unusedDependencies.find((dep) => dep.name === "unused-dep");
+    assert.ok(unusedDep, `unused-dep finding should exist, got: ${staleDependencyNames(result)}`);
+    assert.equal(unusedDep.isDevDependency, false);
+    assert.match(unusedDep.reason, /"unused-dep"/);
+    assert.match(unusedDep.reason, /declared in dependencies\b/);
+  });
+
   it("should not flag usedFunction as unused", async () => {
     const result = await scanFixture("simple-app");
     const allUnusedNames = deadExportNames(result);
@@ -143,6 +152,15 @@ describe("dependency-tooling", () => {
     assert.ok(deps.includes("unused-dep"), `unused-dep should be unused, got: ${deps}`);
     assert.ok(deps.includes("unused-tool"), `unused-tool should be unused, got: ${deps}`);
     assert.ok(deps.includes("redux-thunk"), `redux-thunk should be unused, got: ${deps}`);
+  });
+
+  it("should name the package and devDependencies section for unused dev dependencies", async () => {
+    const result = await scanFixture("dependency-tooling");
+    const unusedTool = result.unusedDependencies.find((dep) => dep.name === "unused-tool");
+    assert.ok(unusedTool, `unused-tool finding should exist, got: ${staleDependencyNames(result)}`);
+    assert.equal(unusedTool.isDevDependency, true);
+    assert.match(unusedTool.reason, /"unused-tool"/);
+    assert.match(unusedTool.reason, /declared in devDependencies\b/);
   });
 
   it("should keep pnpm-workspace override targets used", async () => {

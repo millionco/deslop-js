@@ -179,6 +179,7 @@ export interface UnusedExport {
 export interface UnusedDependency {
   name: string;
   isDevDependency: boolean;
+  reason: string;
 }
 
 export interface CircularDependency {

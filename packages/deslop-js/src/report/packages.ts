@@ -210,9 +210,11 @@ export const detectStalePackages = (
 
   for (const dependencyName of candidateUnused) {
     const isDevDependency = declaredDependencies.get(dependencyName) ?? false;
+    const dependencySection = isDevDependency ? "devDependencies" : "dependencies";
     unusedDependencies.push({
       name: dependencyName,
       isDevDependency,
+      reason: `"${dependencyName}" is declared in ${dependencySection} but is never imported or referenced by any source file, script, or config — remove it from package.json if it is genuinely unused`,
     });
   }
 
