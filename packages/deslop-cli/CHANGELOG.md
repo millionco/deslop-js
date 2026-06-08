@@ -1,5 +1,12 @@
 # deslop-cli
 
+## 0.0.22
+
+### Patch Changes
+
+- Updated dependencies [[`3d2e8a1`](https://github.com/millionco/deslop-js/commit/3d2e8a1b755b6b11a9c627cecec96cf9d4706162)]:
+  - deslop-js@0.0.22
+
 ## 0.0.21
 
 ### Patch Changes
