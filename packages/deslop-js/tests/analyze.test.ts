@@ -1222,6 +1222,24 @@ describe("config-mixed-formats", () => {
   });
 });
 
+describe("prettier-rc-plugins", () => {
+  it("should not flag plugins referenced in .prettierrc as unused", async () => {
+    const result = await scanFixture("prettier-rc-plugins");
+    const deps = staleDependencyNames(result);
+    assert.ok(
+      !deps.includes("@trivago/prettier-plugin-sort-imports"),
+      `@trivago/prettier-plugin-sort-imports is referenced in .prettierrc, got: ${deps}`,
+    );
+    assert.ok(!deps.includes("prettier"), `prettier should not be flagged, got: ${deps}`);
+  });
+
+  it("should still flag genuinely unused devDependencies", async () => {
+    const result = await scanFixture("prettier-rc-plugins");
+    const deps = staleDependencyNames(result);
+    assert.ok(deps.includes("unused-dev-dep"), `unused-dev-dep should be flagged, got: ${deps}`);
+  });
+});
+
 describe("test-runner-detect", () => {
   it("should treat .test.ts files as entry points", async () => {
     const result = await scanFixture("test-runner-detect");
