@@ -1,5 +1,11 @@
 # deslop-js
 
+## 0.0.23
+
+### Patch Changes
+
+- [#36](https://github.com/millionco/deslop-js/pull/36) [`ce34ef7`](https://github.com/millionco/deslop-js/commit/ce34ef770956bdb853309fc5abd62ce8572225c1) Thanks [@devin-ai-integration](https://github.com/apps/devin-ai-integration)! - Stop flagging dependencies referenced in prettier config files (`.prettierrc`, `.prettierrc.*`, `prettier.config.*`) as unused, e.g. scoped plugins like `@trivago/prettier-plugin-sort-imports`
+
 ## 0.0.22
 
 ### Patch Changes
