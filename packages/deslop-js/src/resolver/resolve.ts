@@ -521,6 +521,121 @@ export interface ModuleResolverOptions {
   monorepoRoot?: string;
 }
 
+const isExportConditionRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const EXPORT_CONDITION_PRIORITY = ["import", "require", "default", "types"];
+
+const resolveExportConditionTarget = (exportValue: unknown): string | undefined => {
+  if (typeof exportValue === "string") return exportValue;
+  if (!isExportConditionRecord(exportValue)) return undefined;
+  for (const condition of EXPORT_CONDITION_PRIORITY) {
+    const conditionTarget = resolveExportConditionTarget(exportValue[condition]);
+    if (conditionTarget) return conditionTarget;
+  }
+  return undefined;
+};
+
+export const resolveWorkspaceSubpath = (
+  workspaceDirectory: string,
+  subpath: string,
+): string | undefined => {
+  const workspacePackageJsonPath = join(workspaceDirectory, "package.json");
+  try {
+    const workspacePackageContent = cachedReadFileSync(workspacePackageJsonPath);
+    const workspacePackageJson = JSON.parse(workspacePackageContent);
+
+    let resolvedEntryPath: string | undefined;
+    if (subpath && workspacePackageJson.exports) {
+      const exportKey = `./${subpath}`;
+      const exactExportTarget = resolveExportConditionTarget(
+        workspacePackageJson.exports[exportKey],
+      );
+      if (exactExportTarget) {
+        const candidatePath = resolvePathWithExtensionFallback(
+          resolve(workspaceDirectory, exactExportTarget),
+        );
+        resolvedEntryPath = existsAsFile(candidatePath)
+          ? candidatePath
+          : trySourceFallback(candidatePath);
+      }
+
+      if (!resolvedEntryPath) {
+        for (const [wildcardPattern, wildcardTarget] of Object.entries(
+          workspacePackageJson.exports,
+        )) {
+          if (!wildcardPattern.includes("*")) continue;
+          const wildcardTargetValue = resolveExportConditionTarget(wildcardTarget);
+          if (!wildcardTargetValue) continue;
+
+          const wildcardPrefix = wildcardPattern.slice(0, wildcardPattern.indexOf("*"));
+          const wildcardSuffix = wildcardPattern.slice(wildcardPattern.indexOf("*") + 1);
+          if (exportKey.startsWith(wildcardPrefix) && exportKey.endsWith(wildcardSuffix)) {
+            const matchedSegment = exportKey.slice(
+              wildcardPrefix.length,
+              exportKey.length - wildcardSuffix.length || undefined,
+            );
+            const expandedTarget = wildcardTargetValue.split("*").join(matchedSegment);
+            const candidateWildcardPath = resolve(workspaceDirectory, expandedTarget);
+            const candidatePath = resolvePathWithExtensionFallback(candidateWildcardPath);
+            resolvedEntryPath = existsAsFile(candidatePath)
+              ? candidatePath
+              : trySourceFallback(candidatePath);
+            break;
+          }
+        }
+      }
+    }
+
+    if (subpath && !resolvedEntryPath) {
+      const subpathCandidates = [
+        resolve(workspaceDirectory, subpath),
+        resolve(workspaceDirectory, "src", subpath),
+      ];
+      for (const directSubpath of subpathCandidates) {
+        for (const candidateExtension of RESOLVER_EXTENSIONS) {
+          const candidate = directSubpath + candidateExtension;
+          if (cachedExistsSync(candidate)) {
+            resolvedEntryPath = candidate;
+            break;
+          }
+        }
+        if (resolvedEntryPath) break;
+        for (const candidateExtension of RESOLVER_EXTENSIONS) {
+          const indexCandidate = join(directSubpath, `index${candidateExtension}`);
+          if (cachedExistsSync(indexCandidate)) {
+            resolvedEntryPath = indexCandidate;
+            break;
+          }
+        }
+        if (resolvedEntryPath) break;
+      }
+    }
+
+    if (!subpath) {
+      const mainField = workspacePackageJson.main ?? workspacePackageJson.module;
+      if (typeof mainField === "string") {
+        resolvedEntryPath = resolve(workspaceDirectory, mainField);
+      }
+      if (!resolvedEntryPath && workspacePackageJson.exports?.["."]) {
+        const dotExportTarget = resolveExportConditionTarget(workspacePackageJson.exports["."]);
+        if (dotExportTarget) {
+          resolvedEntryPath = resolve(workspaceDirectory, dotExportTarget);
+        }
+      }
+    }
+
+    if (resolvedEntryPath) {
+      const sourcePath = resolveSourcePath(resolvedEntryPath, workspaceDirectory);
+      const finalPath = sourcePath ?? resolvedEntryPath;
+      if (cachedExistsSync(finalPath)) return finalPath;
+      const sourceFallbackPath = trySourceFallback(resolvedEntryPath);
+      if (sourceFallbackPath) return sourceFallbackPath;
+    }
+  } catch {}
+  return undefined;
+};
+
 export const createResolver = (
   config: DeslopConfig,
   workspacePackages: WorkspacePackageMap[] = [],
@@ -917,136 +1032,6 @@ export const createResolver = (
     compiledConfigPaths.length === 0
       ? undefined
       : matchCompiledMapping(specifier, compiledConfigPaths);
-
-  const resolveWorkspaceSubpath = (
-    workspaceDirectory: string,
-    subpath: string,
-  ): string | undefined => {
-    const workspacePackageJsonPath = join(workspaceDirectory, "package.json");
-    try {
-      const workspacePackageContent = cachedReadFileSync(workspacePackageJsonPath);
-      const workspacePackageJson = JSON.parse(workspacePackageContent);
-
-      let resolvedEntryPath: string | undefined;
-      if (subpath && workspacePackageJson.exports) {
-        const exportKey = `./${subpath}`;
-        const exportValue = workspacePackageJson.exports[exportKey];
-        if (typeof exportValue === "string") {
-          const candidatePath = resolvePathWithExtensionFallback(
-            resolve(workspaceDirectory, exportValue),
-          );
-          resolvedEntryPath = existsAsFile(candidatePath)
-            ? candidatePath
-            : trySourceFallback(candidatePath);
-        } else if (typeof exportValue === "object" && exportValue !== null) {
-          const conditionValue =
-            exportValue.import ?? exportValue.require ?? exportValue.default ?? exportValue.types;
-          if (typeof conditionValue === "string") {
-            const candidatePath = resolvePathWithExtensionFallback(
-              resolve(workspaceDirectory, conditionValue),
-            );
-            resolvedEntryPath = existsAsFile(candidatePath)
-              ? candidatePath
-              : trySourceFallback(candidatePath);
-          }
-        }
-
-        if (!resolvedEntryPath) {
-          for (const [wildcardPattern, wildcardTarget] of Object.entries(
-            workspacePackageJson.exports,
-          )) {
-            if (typeof wildcardPattern !== "string" || !wildcardPattern.includes("*")) continue;
-            const wildcardTargetRecord =
-              typeof wildcardTarget === "object" && wildcardTarget !== null
-                ? (wildcardTarget as Record<string, unknown>)
-                : undefined;
-            const wildcardTargetValue =
-              typeof wildcardTarget === "string"
-                ? wildcardTarget
-                : wildcardTargetRecord
-                  ? String(
-                      wildcardTargetRecord["import"] ??
-                        wildcardTargetRecord["require"] ??
-                        wildcardTargetRecord["default"] ??
-                        wildcardTargetRecord["types"] ??
-                        "",
-                    )
-                  : undefined;
-            if (typeof wildcardTargetValue !== "string") continue;
-
-            const wildcardPrefix = wildcardPattern.slice(0, wildcardPattern.indexOf("*"));
-            const wildcardSuffix = wildcardPattern.slice(wildcardPattern.indexOf("*") + 1);
-            if (exportKey.startsWith(wildcardPrefix) && exportKey.endsWith(wildcardSuffix)) {
-              const matchedSegment = exportKey.slice(
-                wildcardPrefix.length,
-                exportKey.length - wildcardSuffix.length || undefined,
-              );
-              const expandedTarget = wildcardTargetValue.replace("*", matchedSegment);
-              const candidateWildcardPath = resolve(workspaceDirectory, expandedTarget);
-              const candidatePath = resolvePathWithExtensionFallback(candidateWildcardPath);
-              resolvedEntryPath = existsAsFile(candidatePath)
-                ? candidatePath
-                : trySourceFallback(candidatePath);
-              break;
-            }
-          }
-        }
-      }
-
-      if (subpath && !resolvedEntryPath) {
-        const subpathCandidates = [
-          resolve(workspaceDirectory, subpath),
-          resolve(workspaceDirectory, "src", subpath),
-        ];
-        for (const directSubpath of subpathCandidates) {
-          for (const candidateExtension of RESOLVER_EXTENSIONS) {
-            const candidate = directSubpath + candidateExtension;
-            if (cachedExistsSync(candidate)) {
-              resolvedEntryPath = candidate;
-              break;
-            }
-          }
-          if (resolvedEntryPath) break;
-          for (const candidateExtension of RESOLVER_EXTENSIONS) {
-            const indexCandidate = join(directSubpath, `index${candidateExtension}`);
-            if (cachedExistsSync(indexCandidate)) {
-              resolvedEntryPath = indexCandidate;
-              break;
-            }
-          }
-          if (resolvedEntryPath) break;
-        }
-      }
-
-      if (!subpath) {
-        const mainField = workspacePackageJson.main ?? workspacePackageJson.module;
-        if (typeof mainField === "string") {
-          resolvedEntryPath = resolve(workspaceDirectory, mainField);
-        }
-        if (!resolvedEntryPath && workspacePackageJson.exports?.["."]) {
-          const dotExport = workspacePackageJson.exports["."];
-          if (typeof dotExport === "string") {
-            resolvedEntryPath = resolve(workspaceDirectory, dotExport);
-          } else if (typeof dotExport === "object" && dotExport !== null) {
-            const conditionValue =
-              dotExport.import ?? dotExport.require ?? dotExport.default ?? dotExport.types;
-            if (typeof conditionValue === "string") {
-              resolvedEntryPath = resolve(workspaceDirectory, conditionValue);
-            }
-          }
-        }
-      }
-
-      if (resolvedEntryPath) {
-        const sourcePath = resolveSourcePath(resolvedEntryPath, workspaceDirectory);
-        const finalPath = sourcePath ?? resolvedEntryPath;
-        if (cachedExistsSync(finalPath)) return finalPath;
-        const sourceFallbackPath = trySourceFallback(resolvedEntryPath);
-        if (sourceFallbackPath) return sourceFallbackPath;
-      }
-    } catch {}
-    return undefined;
-  };
 
   const tryResolveViaWorkspaceStructure = (specifier: string): string | undefined => {
     if (structuralAliasToDirectory.size === 0) return undefined;
