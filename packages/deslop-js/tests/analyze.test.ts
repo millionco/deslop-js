@@ -269,6 +269,39 @@ describe("monorepo-script-entry", () => {
   });
 });
 
+describe("workspace-subpath-import", () => {
+  it("should treat files imported by sibling workspaces via package subpaths as entry points", async () => {
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-subpath-import", "packages", "ui");
+    const config = defineConfig({ rootDir: fixtureDir });
+    const result = await analyze(config);
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("button.tsx"),
+      `button.tsx is imported by a sibling workspace via @subpath-fixture/ui/button and must not be flagged, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("utils.ts"),
+      `utils.ts is transitively reachable from button.tsx, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("orphan.ts"),
+      `orphan.ts is not imported anywhere and should still be flagged, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
+describe("vercel-config-app", () => {
+  it("should not flag vercel.ts as an unused file", async () => {
+    const result = await scanFixture("vercel-config-app");
+    const fixtureDir = resolve(FIXTURES_DIR, "vercel-config-app");
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("vercel.ts"),
+      `vercel.ts is a deploy-time config file and must not be flagged, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("duplicate-import-type-value", () => {
   it("should not flag a type-only import + a value import of the same module as duplicates", async () => {
     const result = await scanFixture("duplicate-import-type-value");
@@ -2423,10 +2456,7 @@ describe("workspace-path-alias", () => {
     const result = await scanFixture("workspace-path-alias-no-tsconfig", {
       paths: { "@project/core/*": ["packages/core/*"] },
     });
-    const fixtureDir = resolve(
-      FIXTURES_DIR,
-      "workspace-path-alias-no-tsconfig",
-    );
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-path-alias-no-tsconfig");
     const unusedFilePaths = orphanPaths(result, fixtureDir);
     assert.ok(
       !unusedFilePaths.includes("packages/core/utils.ts"),
