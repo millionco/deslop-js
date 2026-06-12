@@ -47,7 +47,7 @@ const existsAsFile = (filePath: string): boolean => {
   }
 };
 
-const trySourceFallback = (resolvedPath: string): string | undefined => {
+export const trySourceFallback = (resolvedPath: string): string | undefined => {
   const segments = resolvedPath.split(sep);
 
   const isOutputDirectory = (segment: string): boolean =>

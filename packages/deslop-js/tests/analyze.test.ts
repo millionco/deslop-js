@@ -290,6 +290,23 @@ describe("workspace-subpath-import", () => {
   });
 });
 
+describe("workspace-subpath-import-built", () => {
+  it("should map built dist subpath targets back to source files for sibling workspace imports", async () => {
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-subpath-import-built", "packages", "ui");
+    const config = defineConfig({ rootDir: fixtureDir });
+    const result = await analyze(config);
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/button.ts"),
+      `src/button.ts must not be flagged even when the built dist artifact exists on disk, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/orphan.ts"),
+      `src/orphan.ts is not imported anywhere and should still be flagged, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("workspace-subpath-wildcard-export", () => {
   it("should resolve sibling workspace subpath imports through wildcard exports patterns", async () => {
     const fixtureDir = resolve(FIXTURES_DIR, "workspace-subpath-wildcard-export", "packages", "ui");

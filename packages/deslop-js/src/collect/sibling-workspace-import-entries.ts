@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { findMonorepoRoot } from "../utils/find-monorepo-root.js";
 import { resolveWorkspaces } from "./workspaces.js";
-import { resolveWorkspaceSubpath } from "../resolver/resolve.js";
+import { resolveWorkspaceSubpath, trySourceFallback } from "../resolver/resolve.js";
 
 const IMPORT_SPECIFIER_PATTERN =
   /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)["']([^"'\n]+)["']/g;
@@ -73,7 +73,7 @@ export const extractSiblingWorkspaceImportEntries = (absoluteRoot: string): stri
         if (!subpath) continue;
         const resolvedEntry = resolveWorkspaceSubpath(absoluteRoot, subpath);
         if (resolvedEntry) {
-          importedEntries.push(resolvedEntry);
+          importedEntries.push(trySourceFallback(resolvedEntry) ?? resolvedEntry);
         }
       }
     }
