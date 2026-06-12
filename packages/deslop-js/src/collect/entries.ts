@@ -21,6 +21,7 @@ import { resolveSourcePath } from "../resolver/source-path.js";
 import { findMonorepoRoot } from "../utils/find-monorepo-root.js";
 import { extractConfigStringReferencedEntries } from "./config-string-entries.js";
 import { extractSectionsModuleEntries } from "./sections-module-entries.js";
+import { extractSiblingWorkspaceImportEntries } from "./sibling-workspace-import-entries.js";
 import {
   resolveEntryPathWithExtensions,
   resolveEntryWithExtensions,
@@ -267,6 +268,8 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
 
   const sectionsModuleEntries = extractSectionsModuleEntries(absoluteRoot);
 
+  const siblingWorkspaceImportEntries = extractSiblingWorkspaceImportEntries(absoluteRoot);
+
   const wranglerEntries = extractWranglerEntries(absoluteRoot);
   for (const workspacePackage of entryEligiblePackages) {
     wranglerEntries.push(...extractWranglerEntries(workspacePackage.directory));
@@ -309,6 +312,7 @@ export const resolveEntries = async (config: DeslopConfig): Promise<ResolvedEntr
         ...configStringEntries,
         ...expoConfigPluginEntries,
         ...sectionsModuleEntries,
+        ...siblingWorkspaceImportEntries,
         ...wranglerEntries,
         ...pluginFileEntries,
         ...toolingDiscovery.entryFiles,

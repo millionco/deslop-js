@@ -113,6 +113,7 @@ export const KNOWN_CONFIG_PREFIXES = [
   "rspack.config.",
   "rsbuild.config.",
   "module-federation.config.",
+  "vercel.",
   "next-env.d.",
   "env.d.",
   "vite-env.d.",
