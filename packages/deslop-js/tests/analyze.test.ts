@@ -290,6 +290,27 @@ describe("workspace-subpath-import", () => {
   });
 });
 
+describe("workspace-subpath-wildcard-export", () => {
+  it("should resolve sibling workspace subpath imports through wildcard exports patterns", async () => {
+    const fixtureDir = resolve(FIXTURES_DIR, "workspace-subpath-wildcard-export", "packages", "ui");
+    const config = defineConfig({ rootDir: fixtureDir });
+    const result = await analyze(config);
+    const unusedFilePaths = orphanPaths(result, fixtureDir);
+    assert.ok(
+      !unusedFilePaths.includes("src/components/button.tsx"),
+      `src/components/button.tsx is imported via the "./*" exports pattern (dist target mapped back to src) and must not be flagged, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      !unusedFilePaths.includes("src/components/helpers.ts"),
+      `src/components/helpers.ts is transitively reachable from button.tsx, got: ${unusedFilePaths}`,
+    );
+    assert.ok(
+      unusedFilePaths.includes("src/components/orphan.ts"),
+      `src/components/orphan.ts is not imported anywhere and should still be flagged, got: ${unusedFilePaths}`,
+    );
+  });
+});
+
 describe("vercel-config-app", () => {
   it("should not flag vercel.ts as an unused file", async () => {
     const result = await scanFixture("vercel-config-app");
